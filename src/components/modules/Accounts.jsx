@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 import { Trash2, Edit2, Package, Plus, Calendar, CreditCard, Clock, FileText, CheckCircle, Download, Check, X, Phone, Save, Link2, Settings, AlertCircle, ArrowUp, ArrowDown, LayoutGrid } from 'lucide-react'
@@ -139,10 +139,26 @@ export default function Accounts({ session, profile }) {
   const [activeTab, setActiveTab] = useState(isB2C ? 'services' : 'contacts')
   const { t } = useTranslation()
   const location = useLocation()
+  const navigate = useNavigate()
 
   const [customFieldConfigs, setCustomFieldConfigs] = useState([])
   const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
   const [contactPopupData, setContactPopupData] = useState(null)
+  const [viewContactsModal, setViewContactsModal] = useState(null) // { account, contacts }
+  const [viewContactsLoading, setViewContactsLoading] = useState(false)
+
+  const handleViewContacts = async (e, acc) => {
+    e.stopPropagation()
+    setViewContactsLoading(true)
+    setViewContactsModal({ account: acc, contacts: [] })
+    const { data } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('account_id', acc.id)
+      .order('created_at', { ascending: true })
+    setViewContactsModal({ account: acc, contacts: data || [] })
+    setViewContactsLoading(false)
+  }
   
   // Form State
   const [formData, setFormData] = useState({
@@ -1023,6 +1039,16 @@ export default function Accounts({ session, profile }) {
                     )
                   })}
                   <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                    {!isB2C && (
+                      <button
+                        className="btn btn-sm btn-secondary"
+                        style={{ marginRight: 8, fontSize: 12, padding: '4px 10px' }}
+                        onClick={(e) => handleViewContacts(e, acc)}
+                        title="View Contacts"
+                      >
+                        👥 Contacts
+                      </button>
+                    )}
                     <button className="btn-icon" onClick={() => handleOpenModal(acc)} title="Edit"><Edit2 size={16} /></button>
                     <button className="btn-icon text-danger" onClick={() => handleDeleteAccount(acc)} title="Delete"><Trash2 size={16} /></button>
                   </td>
@@ -1150,6 +1176,53 @@ export default function Accounts({ session, profile }) {
               </div>
             </div>
             <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => setContactPopupData(null)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* View Contacts Modal (B2B Accounts list) */}
+      {viewContactsModal && (
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="modal" style={{ maxWidth: 560 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Contacts — {viewContactsModal.account.account_name}</h2>
+              <button className="modal-close" onClick={() => setViewContactsModal(null)}>✕</button>
+            </div>
+            <div style={{ padding: '0 24px 24px' }}>
+              {viewContactsLoading ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
+                  <div className="spinner" style={{ margin: '0 auto 12px' }} />
+                  Loading contacts...
+                </div>
+              ) : viewContactsModal.contacts.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 48, color: '#94a3b8' }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>👥</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: '#64748b' }}>No contacts added yet for this account.</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {viewContactsModal.contacts.map((c, i) => (
+                    <div key={c.id} onClick={() => { setViewContactsModal(null); navigate('/dashboard/contacts', { state: { openId: c.id } }) }} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'border-color 0.15s, background 0.15s' }} onMouseEnter={e => { e.currentTarget.style.background = '#fff5f0'; e.currentTarget.style.borderColor = '#f37a23' }} onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0' }}>
+                      <div style={{ width: 42, height: 42, borderRadius: 12, background: 'linear-gradient(135deg, #f37a23, #ff8c42)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 900, flexShrink: 0 }}>
+                        {(c.name || c.email || '#')[0]?.toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: '#1e293b', marginBottom: 2 }}>{c.name || '—'}</div>
+                        <div style={{ fontSize: 12, color: '#64748b', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                          {c.phone && <span>📞 {c.phone}</span>}
+                          {c.email && <span>✉️ {c.email}</span>}
+                          {c.designation && <span>💼 {c.designation}</span>}
+                          {c.role && !c.designation && <span>💼 {c.role}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ marginTop: 24, textAlign: 'right' }}>
+                <button className="btn btn-secondary" onClick={() => setViewContactsModal(null)}>Close</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
