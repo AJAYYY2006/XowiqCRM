@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 import {
   X, User, Mail, Phone, Shield, Lock, Eye, EyeOff,
-  Save, Edit3, ChevronRight, KeyRound, CheckCircle2
+  Save, Edit3, ChevronRight, KeyRound, CheckCircle2, Briefcase
 } from 'lucide-react'
 
 export default function ProfileModal({ session, profile, onClose, onProfileUpdate }) {
@@ -25,6 +25,7 @@ export default function ProfileModal({ session, profile, onClose, onProfileUpdat
   const email = session?.user?.email || ''
   const initials = (profile?.name || email)?.[0]?.toUpperCase() || '?'
   const isAdmin = role === 'admin'
+  const isB2C = session.user.user_metadata?.companyType === 'B2C'
 
   // Slide-in animation on mount
   useEffect(() => {
@@ -176,6 +177,21 @@ export default function ProfileModal({ session, profile, onClose, onProfileUpdat
 
         {/* ─── Body ────────────────────────────────────── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+
+          {/* ── Company Mode (read-only) ── */}
+          <FieldLabel icon={<Briefcase size={13} color="#ff5900" />} label="Company Mode" />
+          <div style={readonlyFieldStyle}>
+            <span style={{ flex: 1, color: '#444', fontWeight: 600 }}>
+              {isB2C ? '🛍️ B2C Enterprise Mode' : '🏢 B2B Enterprise Mode'}
+            </span>
+            <span style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: '0.05em',
+              background: '#fef3ec', color: '#ff5900', borderRadius: 6,
+              padding: '2px 8px', border: '1px solid #ffe0cc', flexShrink: 0,
+            }}>
+              STATIC
+            </span>
+          </div>
 
           {/* ── Email (read-only) ── */}
           <FieldLabel icon={<Mail size={13} color="#ff5900" />} label="Email Address" />

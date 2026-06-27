@@ -203,7 +203,7 @@ export default function Tickets({ session, profile }) {
   }
 
   const handleDeleteTicket = async (id, subject) => {
-    if (!window.confirm(`Are you sure you want to delete ticket "${subject}"?`)) return
+    if (!window.confirm(`Are you sure you want to delete ticket "${subject}"?`)) return false
     const toastId = toast.loading('Deleting ticket...')
     try {
       const { error } = await supabase
@@ -221,14 +221,342 @@ export default function Tickets({ session, profile }) {
       
       toast.success('Ticket deleted', { id: toastId })
       fetchData()
+      return true
     } catch (error) {
       toast.error(`Error deleting ticket: ${error.message}`, { id: toastId })
+      return false
     }
   }
+
+  const [selectedTicket, setSelectedTicket] = useState(null)
 
   if (loading) return <div className="loading-container"><div className="spinner"/></div>
   
   const isAdmin = ['admin', 'administrator'].includes(profile?.role?.toLowerCase())
+
+  const TICKET_STAGES = ['open', 'pending', 'closed']
+  const TICKET_STAGE_LABELS = { open: 'Open', pending: 'Pending', closed: 'Closed' }
+
+  if (selectedTicket) {
+    const currentStageIdx = TICKET_STAGES.indexOf(selectedTicket.status)
+
+    const handleStageClick = (stage) => {
+      if (stage === selectedTicket.status) return
+      handleStatusChange(selectedTicket.id, stage)
+      setSelectedTicket(prev => ({ ...prev, status: stage }))
+    }
+
+    return (
+      <div className="ticket-detail-view anim-fade-in">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+          <button className="btn btn-secondary" onClick={() => setSelectedTicket(null)} style={{ borderRadius: '20px', padding: '8px 16px' }}>
+            <span style={{ fontSize: '18px', marginRight: '8px' }}>←</span> Back to Tickets
+          </button>
+          <div className="flex gap-2">
+            <button className="btn btn-primary" onClick={() => handleOpenModal(selectedTicket)}>
+              <Edit2 size={16} /> Edit Ticket
+            </button>
+            <button className="btn btn-danger" onClick={async () => { await handleDeleteTicket(selectedTicket.id, selectedTicket.subject); setSelectedTicket(null); }}>
+              <Trash2 size={16} /> Delete Ticket
+            </button>
+          </div>
+        </div>
+
+        {/* Pipeline Stage Bar */}
+        <div className="card" style={{ marginBottom: 24, padding: '20px 24px' }}>
+          <div style={{ marginBottom: 10 }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Ticket Stage</span>
+            <div style={{ marginTop: 4, fontSize: '13px', fontWeight: 600 }}>
+              Step <span style={{ color: 'var(--accent)', fontWeight: 800 }}>{currentStageIdx + 1}</span> of {TICKET_STAGES.length}
+              {' '}&mdash; <span style={{ color: 'var(--accent)' }}>{TICKET_STAGE_LABELS[selectedTicket.status]}</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', width: '100%', gap: 0 }}>
+            {TICKET_STAGES.map((stage, idx) => {
+              const isDone = idx < currentStageIdx
+              const isCurrent = idx === currentStageIdx
+              const isFirst = idx === 0
+              const isLast = idx === TICKET_STAGES.length - 1
+              const bgColor = (isDone || isCurrent) ? 'var(--accent)' : 'var(--bg-primary, #f0f0f0)'
+              const textColor = (isDone || isCurrent) ? '#fff' : 'var(--text-muted)'
+              const borderColor = (isDone || isCurrent) ? 'var(--accent)' : 'var(--border-subtle)'
+              const clipLeft = isFirst ? 'polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%)'
+                : isLast ? 'polygon(14px 0, 100% 0, 100% 100%, 0 100%, 14px 50%)'
+                : 'polygon(14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%, 14px 50%)'
+
+              return (
+                <div
+                  key={stage}
+                  onClick={() => handleStageClick(stage)}
+                  title={`Move to ${TICKET_STAGE_LABELS[stage]}`}
+                  style={{
+                    flex: 1,
+                    clipPath: clipLeft,
+                    background: bgColor,
+                    color: textColor,
+                    border: `1.5px solid ${borderColor}`,
+                    padding: '11px 20px 11px ' + (isFirst ? '20px' : '28px'),
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontWeight: isCurrent ? 800 : 600,
+                    fontSize: '13px',
+                    cursor: isCurrent ? 'default' : 'pointer',
+                    transition: 'all 0.2s ease',
+                    marginLeft: idx === 0 ? 0 : '-13px',
+                    position: 'relative',
+                    zIndex: TICKET_STAGES.length - idx,
+                    opacity: isCurrent ? 1 : isDone ? 0.92 : 0.65,
+                    userSelect: 'none',
+                    boxShadow: isCurrent ? '0 2px 12px rgba(0,0,0,0.13)' : 'none',
+                  }}
+                  onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.opacity = '1' }}
+                  onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.opacity = isDone ? '0.92' : '0.65' }}
+                >
+                  {isDone && (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+                      <path d="M2.5 7L5.5 10L11.5 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                  {TICKET_STAGE_LABELS[stage]}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-2">
+            <div className="card" style={{ marginBottom: 24, borderLeft: '6px solid var(--accent)' }}>
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                  <span className="font-mono text-muted" style={{ fontSize: '14px' }}>{selectedTicket.ticket_no}</span>
+                  <span className={`badge badge-${selectedTicket.status}`}>{selectedTicket.status}</span>
+                </div>
+                <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 800 }}>{selectedTicket.subject}</h1>
+              </div>
+
+              <div style={{ marginBottom: 32 }}>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, display: 'block' }}>Description</label>
+                <p style={{ fontSize: '15px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                  {selectedTicket.description || 'No description provided for this ticket.'}
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '24px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Priority</label>
+                  <div style={{ marginTop: 4 }}>
+                    <span className={`badge badge-${selectedTicket.priority}`}>{selectedTicket.priority}</span>
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Owner</label>
+                  <div style={{ fontWeight: 600, marginTop: 4 }}>{selectedTicket.owner}</div>
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Opened On</label>
+                  <div style={{ fontWeight: 600, marginTop: 4 }}>
+                    {new Date(selectedTicket.created_at).toLocaleDateString()} at {new Date(selectedTicket.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="md:col-span-1">
+            <div className="card">
+              <h3 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 20 }}>Related Information</h3>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Customer / Account</label>
+                  {selectedTicket.contacts?.accounts?.account_name ? (
+                    <div 
+                      className="fw-bold" 
+                      style={{ color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline' }}
+                      onClick={() => navigate('/dashboard/accounts', { state: { openId: selectedTicket.contacts.account_id } })}
+                    >
+                      {selectedTicket.contacts.accounts.account_name}
+                    </div>
+                  ) : (
+                    <div className="text-muted">No linked account</div>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Primary Contact</label>
+                  <div className="fw-bold">{selectedTicket.contacts?.name || 'No linked contact'}</div>
+                </div>
+
+                <div style={{ marginTop: 8, padding: 16, background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0 }}>
+                     Need to update the status quickly?
+                   </p>
+                   <select 
+                    value={selectedTicket.status} 
+                    onChange={(e) => {
+                      handleStatusChange(selectedTicket.id, e.target.value);
+                      setSelectedTicket(prev => ({...prev, status: e.target.value}));
+                    }}
+                    className={`badge badge-${selectedTicket.status}`}
+                    style={{ marginTop: 12, width: '100%', border: '1.5px solid var(--border-subtle)', borderRadius: 8 }}
+                  >
+                    <option value="open">Open</option>
+                    <option value="pending">Pending</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {isModalOpen && renderModal()}
+      </div>
+    )
+  }
+
+  function renderModal() {
+    return (
+      <div className="modal-overlay">
+        <div className="modal">
+          <div className="modal-header">
+            <h2 className="modal-title">{editingTicket ? 'Edit Ticket' : 'Create Support Ticket'}</h2>
+            <button className="modal-close" onClick={() => { setIsModalOpen(false); setEditingTicket(null); }}>✕</button>
+          </div>
+          
+          <form onSubmit={handleSubmit}>
+            <div className="form-grid">
+              <div className="form-group full-width">
+                <label className="form-label">Subject *</label>
+                <input required className="form-input" value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} placeholder="Cannot access billing page" />
+              </div>
+              <div className="form-group" style={{ position: 'relative' }} ref={accRef}>
+                <label className="form-label">Related Account</label>
+                <input 
+                  className="form-input"
+                  placeholder="Search accounts..."
+                  value={accSearch || (formData.account_id ? accounts.find(a => a.id === formData.account_id)?.account_name : '') || ''}
+                  onChange={(e) => {
+                    setAccSearch(e.target.value)
+                    setShowAccResults(true)
+                    if (!e.target.value) {
+                      setFormData(prev => ({ ...prev, account_id: '', contact_id: '' }))
+                    }
+                  }}
+                  onFocus={() => setShowAccResults(true)}
+                />
+                {showAccResults && (
+                  <div className="search-dropdown dropdown-animation" style={{ top: '100%', left: 0, right: 0, minWidth: '100%', maxHeight: '200px' }}>
+                    <div className="search-results-list">
+                      <div 
+                        className="search-result-item clickable-row" 
+                        onClick={() => {
+                          setFormData(prev => ({ ...prev, account_id: '', contact_id: '' }))
+                          setAccSearch('')
+                          setShowAccResults(false)
+                        }}
+                        style={{ padding: '8px 12px', color: 'var(--text-muted)' }}
+                      >
+                        -- No Account --
+                      </div>
+                      {accounts
+                        .filter(acc => !accSearch || acc.account_name.toLowerCase().includes(accSearch.toLowerCase()))
+                        .map(acc => (
+                          <div 
+                            key={acc.id} 
+                            className="search-result-item clickable-row" 
+                            onClick={() => {
+                              setFormData(prev => ({ 
+                                ...prev, 
+                                account_id: acc.id,
+                                contact_id: contacts.find(c => c.id === prev.contact_id)?.account_id !== acc.id ? '' : prev.contact_id
+                              }))
+                              setAccSearch(acc.account_name)
+                              setShowAccResults(false)
+                            }}
+                            style={{ padding: '8px 12px' }}
+                          >
+                            {acc.account_name}
+                          </div>
+                        ))
+                      }
+                      {accSearch && accounts.filter(acc => acc.account_name.toLowerCase().includes(accSearch.toLowerCase())).length === 0 && (
+                        <div style={{ padding: '12px', fontSize: '13px', color: 'var(--text-muted)' }}>No accounts found.</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Related Contact</label>
+                <select className="form-input" value={formData.contact_id} onChange={e => setFormData({...formData, contact_id: e.target.value})}>
+                  <option value="">-- No Contact --</option>
+                  {contacts
+                    .filter(c => !formData.account_id || c.account_id === formData.account_id)
+                    .map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))
+                  }
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Owner</label>
+                <input className="form-input" value={formData.owner} onChange={e => setFormData({...formData, owner: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Priority</label>
+                <select className="form-input" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value})}>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Initial Status</label>
+                <select className="form-input" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
+                  <option value="open">Open</option>
+                  <option value="pending">Pending</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+              <div className="form-group full-width">
+                <label className="form-label">Description</label>
+                <textarea 
+                  className="form-input" 
+                  rows="3" 
+                  value={formData.description} 
+                  onChange={e => setFormData({...formData, description: e.target.value})} 
+                  placeholder="Provide more details about the issue..."
+                  style={{ resize: 'vertical' }}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="form-actions">
+              {editingTicket && (
+                <button 
+                  type="button" 
+                  className="btn btn-danger" 
+                  style={{ marginRight: 'auto' }}
+                  onClick={async () => { 
+                    if (await handleDeleteTicket(editingTicket.id, editingTicket.subject)) {
+                      setIsModalOpen(false); setEditingTicket(null); setSelectedTicket(null); 
+                    }
+                  }}
+                >
+                  <Trash2 size={16} style={{ marginRight: 8 }} /> Delete Ticket
+                </button>
+              )}
+              <button type="button" className="btn btn-secondary" onClick={() => { setIsModalOpen(false); setEditingTicket(null); }}>Cancel</button>
+              <button type="submit" className="btn btn-primary">{editingTicket ? 'Save Changes' : 'Create Ticket'}</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -288,9 +616,9 @@ export default function Tickets({ session, profile }) {
                 </tr>
               ) : (
                 tickets.map(ticket => (
-                  <tr key={ticket.id} id={`ticket-row-${ticket.id}`}>
+                  <tr key={ticket.id} id={`ticket-row-${ticket.id}`} className="clickable-row" onClick={() => setSelectedTicket(ticket)}>
                     <td className="font-mono text-muted">{ticket.ticket_no}</td>
-                    <td className="fw-bold">{ticket.subject}</td>
+                    <td className="fw-bold" style={{ color: 'var(--accent)' }}>{ticket.subject}</td>
                     <td className="text-muted" style={{ fontSize: '12px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ticket.description}>
                       {ticket.description || '-'}
                     </td>
@@ -314,7 +642,7 @@ export default function Tickets({ session, profile }) {
                     <td>
                       <select 
                         value={ticket.priority} 
-                        onChange={(e) => handlePriorityChange(ticket.id, e.target.value)}
+                        onChange={(e) => { e.stopPropagation(); handlePriorityChange(ticket.id, e.target.value); }}
                         className={`badge badge-${ticket.priority}`}
                         style={{ border: 'none', fontWeight: 600, appearance: 'none', paddingRight: 16 }}
                       >
@@ -326,7 +654,7 @@ export default function Tickets({ session, profile }) {
                     <td>
                       <select 
                         value={ticket.status} 
-                        onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
+                        onChange={(e) => { e.stopPropagation(); handleStatusChange(ticket.id, e.target.value); }}
                         className={`badge badge-${ticket.status}`}
                         style={{ border: 'none', fontWeight: 600, appearance: 'none', paddingRight: 16 }}
                       >
@@ -342,23 +670,19 @@ export default function Tickets({ session, profile }) {
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                         <button
-                          className="btn btn-secondary btn-sm"
-                          style={{ padding: '6px' }}
-                          onClick={() => handleOpenModal(ticket)}
+                          className="btn-icon text-primary"
+                          onClick={(e) => { e.stopPropagation(); handleOpenModal(ticket); }}
                           title="Edit Ticket"
                         >
-                          <Edit2 size={14} />
+                          <Edit2 size={16} />
                         </button>
-                        {isAdmin && (
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            style={{ padding: '6px', color: 'var(--danger)' }}
-                            onClick={() => handleDeleteTicket(ticket.id, ticket.subject)}
-                            title="Delete Ticket"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
+                        <button
+                          className="btn-icon text-danger"
+                          onClick={(e) => { e.stopPropagation(); handleDeleteTicket(ticket.id, ticket.subject); }}
+                          title="Delete Ticket"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -369,130 +693,7 @@ export default function Tickets({ session, profile }) {
         </div>
       </div>
 
-      {isModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h2 className="modal-title">{editingTicket ? 'Edit Ticket' : 'Create Support Ticket'}</h2>
-              <button className="modal-close" onClick={() => setIsModalOpen(false)}>✕</button>
-            </div>
-            
-            <form onSubmit={handleSubmit}>
-              <div className="form-grid">
-                <div className="form-group full-width">
-                  <label className="form-label">Subject *</label>
-                  <input required className="form-input" value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} placeholder="Cannot access billing page" />
-                </div>
-                <div className="form-group" style={{ position: 'relative' }} ref={accRef}>
-                  <label className="form-label">Related Account</label>
-                  <input 
-                    className="form-input"
-                    placeholder="Search accounts..."
-                    value={accSearch || (formData.account_id ? accounts.find(a => a.id === formData.account_id)?.account_name : '') || ''}
-                    onChange={(e) => {
-                      setAccSearch(e.target.value)
-                      setShowAccResults(true)
-                      if (!e.target.value) {
-                        setFormData(prev => ({ ...prev, account_id: '', contact_id: '' }))
-                      }
-                    }}
-                    onFocus={() => setShowAccResults(true)}
-                  />
-                  {showAccResults && (
-                    <div className="search-dropdown dropdown-animation" style={{ top: '100%', left: 0, right: 0, minWidth: '100%', maxHeight: '200px' }}>
-                      <div className="search-results-list">
-                        <div 
-                          className="search-result-item clickable-row" 
-                          onClick={() => {
-                            setFormData(prev => ({ ...prev, account_id: '', contact_id: '' }))
-                            setAccSearch('')
-                            setShowAccResults(false)
-                          }}
-                          style={{ padding: '8px 12px', color: 'var(--text-muted)' }}
-                        >
-                          -- No Account --
-                        </div>
-                        {accounts
-                          .filter(acc => !accSearch || acc.account_name.toLowerCase().includes(accSearch.toLowerCase()))
-                          .map(acc => (
-                            <div 
-                              key={acc.id} 
-                              className="search-result-item clickable-row" 
-                              onClick={() => {
-                                setFormData(prev => ({ 
-                                  ...prev, 
-                                  account_id: acc.id,
-                                  contact_id: contacts.find(c => c.id === prev.contact_id)?.account_id !== acc.id ? '' : prev.contact_id
-                                }))
-                                setAccSearch(acc.account_name)
-                                setShowAccResults(false)
-                              }}
-                              style={{ padding: '8px 12px' }}
-                            >
-                              {acc.account_name}
-                            </div>
-                          ))
-                        }
-                        {accSearch && accounts.filter(acc => acc.account_name.toLowerCase().includes(accSearch.toLowerCase())).length === 0 && (
-                          <div style={{ padding: '12px', fontSize: '13px', color: 'var(--text-muted)' }}>No accounts found.</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Related Contact</label>
-                  <select className="form-input" value={formData.contact_id} onChange={e => setFormData({...formData, contact_id: e.target.value})}>
-                    <option value="">-- No Contact --</option>
-                    {contacts
-                      .filter(c => !formData.account_id || c.account_id === formData.account_id)
-                      .map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))
-                    }
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Owner</label>
-                  <input className="form-input" value={formData.owner} onChange={e => setFormData({...formData, owner: e.target.value})} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Priority</label>
-                  <select className="form-input" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value})}>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Initial Status</label>
-                  <select className="form-input" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
-                    <option value="open">Open</option>
-                    <option value="pending">Pending</option>
-                    <option value="closed">Closed</option>
-                  </select>
-                </div>
-                <div className="form-group full-width">
-                  <label className="form-label">Description</label>
-                  <textarea 
-                    className="form-input" 
-                    rows="3" 
-                    value={formData.description} 
-                    onChange={e => setFormData({...formData, description: e.target.value})} 
-                    placeholder="Provide more details about the issue..."
-                    style={{ resize: 'vertical' }}
-                  ></textarea>
-                </div>
-              </div>
-              
-              <div className="form-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => { setIsModalOpen(false); setEditingTicket(null) }}>Cancel</button>
-                <button type="submit" className="btn btn-primary">{editingTicket ? 'Save Changes' : 'Create Ticket'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {isModalOpen && renderModal()}
     </div>
   )
 }

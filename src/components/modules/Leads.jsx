@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { Trash2, Edit2 } from 'lucide-react'
+import { Trash2, Edit2, ArrowRightCircle, Settings, Plus, LayoutGrid } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 import toast from 'react-hot-toast'
+import FieldBuilderModal from '../ui/FieldBuilderModal'
 
 export default function Leads({ session, profile }) {
+  const companyType = session.user.user_metadata?.companyType || 'B2B'
+  const isB2C = companyType === 'B2C'
   const [leads, setLeads] = useState([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -20,12 +23,65 @@ export default function Leads({ session, profile }) {
   const [editingTaskId, setEditingTaskId] = useState(null)
   const location = useLocation()
   
+  const [customFieldConfigs, setCustomFieldConfigs] = useState([])
+  const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
+
   // Form State
   const [formData, setFormData] = useState({
-    name: '', company: '', email: '', lead_owner: '', status: 'new'
+    name: '', company: '', email: '', lead_owner: '', status: 'new',
+    custom_data: {}
   })
 
-  useEffect(() => { fetchLeads() }, [session])
+  useEffect(() => { 
+    fetchLeads() 
+    fetchCustomConfigs()
+  }, [session])
+
+  const fetchCustomConfigs = async () => {
+    try {
+      const { data: existing, error } = await supabase
+        .from('custom_field_configs')
+        .select('*')
+        .eq('business_id', session.user.id)
+        .eq('module', 'lead')
+        .order('display_order', { ascending: true })
+      
+      if (error) throw error
+
+      const coreFieldsTarget = [
+        { label: 'Lead Name', field_key: 'lead_name', field_type: 'text', is_core: true, order: 0 },
+        { label: 'Contact Number', field_key: 'contact_number', field_type: 'text', is_core: true, order: 1 },
+        { label: 'Email Address', field_key: 'email', field_type: 'text', is_core: true, order: 2 },
+        { label: 'Company Name', field_key: 'company', field_type: 'text', is_core: true, order: 3 }
+      ]
+
+      let finalData = existing || []
+      const missingCore = coreFieldsTarget.filter(t => !finalData.find(f => f.field_key === t.field_key))
+
+      if (missingCore.length > 0) {
+        const toInsert = missingCore.map(c => ({
+          business_id: session.user.id,
+          module: 'lead',
+          field_key: c.field_key,
+          label: c.label,
+          field_type: c.field_type,
+          options: c.options || null,
+          is_core: true,
+          display_order: c.order,
+          is_required: c.field_key === 'lead_name' || c.field_key === 'contact_number',
+          show_in_list: true
+        }))
+        const { data: inserted } = await supabase.from('custom_field_configs').insert(toInsert).select()
+        if (inserted) {
+          finalData = [...finalData, ...inserted].sort((a,b) => (a.display_order || 0) - (b.display_order || 0))
+        }
+      }
+
+      setCustomFieldConfigs(finalData.filter(f => !f.is_archived))
+    } catch (err) {
+      console.error('Error loading custom fields:', err)
+    }
+  }
 
   useEffect(() => {
     if (leads.length > 0 && location.state?.openId) {
@@ -123,14 +179,25 @@ export default function Leads({ session, profile }) {
         company: lead.company || '',
         email: lead.email || '',
         lead_owner: lead.lead_owner || '',
-        status: lead.status
+        status: lead.status,
+        custom_data: lead.custom_data || {
+          lead_name: lead.name || '',
+          email: lead.email || '',
+          company: lead.company || '',
+          contact_number: lead.contact_number || ''
+        }
       })
     } else {
       setEditingLead(null)
+      // Initialize with core field keys
+      const initialCustom = {}
+      customFieldConfigs.forEach(f => { initialCustom[f.field_key] = '' })
+
       setFormData({
         name: '', company: '', email: '',
         lead_owner: profile?.name || session.user.email,
-        status: 'new'
+        status: 'new',
+        custom_data: initialCustom
       })
     }
     setIsModalOpen(true)
@@ -164,6 +231,17 @@ export default function Leads({ session, profile }) {
       
     if (cErr) throw cErr
 
+    // B2C: Also create an Opportunity linked to the new account
+    if (isB2C && accountId) {
+      await supabase.from('opportunities').insert([{
+        name: `Opportunity: ${leadData.name}`,
+        account_id: accountId,
+        amount: 0,
+        stage: 'prospecting',
+        user_id: session.user.id
+      }])
+    }
+
     const { error: lErr } = await supabase
       .from('leads')
       .update({ status: 'converted' })
@@ -174,7 +252,7 @@ export default function Leads({ session, profile }) {
     await supabase.from('activities').insert([{
       user_id: session.user.id,
       type: 'Lead Converted',
-      description: `Lead ${leadData.name} was converted to a Contact`
+      description: `Lead ${leadData.name} was converted to ${isB2C ? 'Customer Profile + Opportunity' : 'a Contact'}`
     }])
   }
 
@@ -238,6 +316,17 @@ export default function Leads({ session, profile }) {
     e.preventDefault()
     let toastId;
     
+    // Strip custom_data from formData — the leads table has no custom_data column.
+    // Map custom_data values to top-level columns instead.
+    const { custom_data, ...dbFields } = formData
+    const dbSafe = {
+      ...dbFields,
+      name: custom_data?.lead_name || dbFields.name,
+      email: custom_data?.email || dbFields.email,
+      company: custom_data?.company || dbFields.company,
+      contact_number: custom_data?.contact_number || dbFields.contact_number || ''
+    }
+
     try {
       if (editingLead) {
         const isConverting = formData.status === 'converted' && editingLead.status !== 'converted';
@@ -250,7 +339,7 @@ export default function Leads({ session, profile }) {
         toastId = toast.loading('Updating lead...')
 
         if (isConverting) {
-          const { status, ...otherFields } = formData;
+          const { status, ...otherFields } = dbSafe;
           const { error: updateErr } = await supabase
             .from('leads')
             .update(otherFields)
@@ -258,11 +347,11 @@ export default function Leads({ session, profile }) {
             
           if (updateErr) throw updateErr
 
-          await convertLeadAction({ ...editingLead, ...formData })
+          await convertLeadAction({ ...editingLead, ...dbSafe })
         } else {
           const { error: updateErr } = await supabase
             .from('leads')
-            .update(formData)
+            .update(dbSafe)
             .eq('id', editingLead.id)
             
           if (updateErr) throw updateErr
@@ -270,7 +359,7 @@ export default function Leads({ session, profile }) {
           await supabase.from('activities').insert([{
             user_id: session.user.id,
             type: 'Lead Updated',
-            description: `Updated details for ${formData.name}`
+            description: `Updated details for ${dbSafe.name}`
           }])
         }
       } else {
@@ -278,23 +367,27 @@ export default function Leads({ session, profile }) {
         if (formData.status === 'converted') {
            const { data: newLead, error } = await supabase
             .from('leads')
-            .insert([{ ...formData, status: 'new', user_id: session.user.id }])
+            .insert([{ ...dbSafe, status: 'new', user_id: session.user.id }])
             .select()
             .single()
             
            if (error) throw error
-           await convertLeadAction({ ...newLead, ...formData })
+           await convertLeadAction({ ...newLead, ...dbSafe })
         } else {
+          const payload = {
+            ...dbSafe,
+            user_id: session.user.id
+          }
           const { error } = await supabase
             .from('leads')
-            .insert([{ ...formData, user_id: session.user.id }])
+            .insert([payload])
             
           if (error) throw error
 
           await supabase.from('activities').insert([{
             user_id: session.user.id,
             type: 'New Lead',
-            description: `Added new lead: ${formData.name}`
+            description: `Added new lead: ${payload.name}`
           }])
         }
       }
@@ -435,9 +528,14 @@ export default function Leads({ session, profile }) {
               <h1 className="page-title">Leads Hub</h1>
               <p className="page-subtitle">Manage and convert your prospective clients.</p>
             </div>
-            <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-              <span style={{ fontSize: 18 }}>+</span> Add New Lead
-            </button>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button className="btn btn-secondary" onClick={() => setIsFieldBuilderOpen(true)}>
+                <Settings size={18} style={{ marginRight: 6 }} /> Edit fields
+              </button>
+              <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+                <Plus size={18} style={{ marginRight: 6 }} /> Add New Lead
+              </button>
+            </div>
           </div>
 
           <div className="table-container">
@@ -467,6 +565,9 @@ export default function Leads({ session, profile }) {
                     <th>Unique ID</th>
                     <th>Owner</th>
                     <th>Status</th>
+                    {customFieldConfigs.filter(f => f.show_in_list && !['lead_name', 'email', 'company'].includes(f.field_key)).map(f => (
+                      <th key={f.id}>{f.label}</th>
+                    ))}
                     <th>Created</th>
                     <th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
@@ -508,9 +609,27 @@ export default function Leads({ session, profile }) {
                             <option value="lost">Lost</option>
                           </select>
                         </td>
+                        {customFieldConfigs.filter(f => f.show_in_list && !['lead_name', 'email', 'company'].includes(f.field_key)).map(f => (
+                          <td key={f.id} className="text-muted" style={{ fontSize: 13 }}>
+                            {lead[f.field_key] || lead.custom_data?.[f.field_key] || '-'}
+                          </td>
+                        ))}
                         <td className="text-muted">{new Date(lead.created_at).toLocaleDateString()}</td>
                         <td style={{ textAlign: 'right' }}>
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                            {isB2C && lead.status !== 'converted' && (
+                              <button 
+                                className="btn btn-primary btn-sm" 
+                                style={{ padding: '4px 8px', fontSize: 11 }}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleStatusChange(lead.id, 'converted', lead)
+                                }}
+                                title="Convert to Opportunity"
+                              >
+                                <ArrowRightCircle size={13} style={{ marginRight: 3 }} /> Convert
+                              </button>
+                            )}
                             <button 
                               className="btn btn-secondary btn-sm" 
                               style={{ padding: '6px' }}
@@ -522,7 +641,6 @@ export default function Leads({ session, profile }) {
                             >
                               <Edit2 size={14} />
                             </button>
-                            {isAdmin && (
                               <button 
                                 className="btn-secondary btn-sm" 
                                 style={{ padding: '6px', color: 'var(--danger)' }}
@@ -534,7 +652,6 @@ export default function Leads({ session, profile }) {
                               >
                                 <Trash2 size={14} />
                               </button>
-                            )}
                           </div>
                         </td>
                       </tr>
@@ -601,31 +718,98 @@ export default function Leads({ session, profile }) {
             
             <form onSubmit={handleSubmit}>
               <div className="form-grid">
-                <div className="form-group">
-                  <label className="form-label">Full Name *</label>
-                  <input required className="form-input" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Jane Doe" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Email Address</label>
-                  <input type="email" className="form-input" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="jane@example.com" />
-                </div>
-                <div className="form-group full-width">
-                  <label className="form-label">Company Name</label>
-                  <input className="form-input" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})} placeholder="Acme Corp" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Lead Owner</label>
-                  <input className="form-input" value={formData.lead_owner} onChange={e => setFormData({...formData, lead_owner: e.target.value})} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Initial Status</label>
-                  <select className="form-input" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
-                    <option value="new">New</option>
-                    <option value="contacted">Contacted</option>
-                    <option value="working">Working</option>
-                    <option value="converted">Converted</option>
-                  </select>
-                </div>
+                {customFieldConfigs.length > 0 ? (
+                  customFieldConfigs.map(f => (
+                    <div key={f.id} className={`form-group ${f.field_type === 'long_text' ? 'full-width' : ''}`}>
+                      <label className="form-label">{f.label} {f.is_required && <span style={{ color: '#ef4444' }}>*</span>}</label>
+                      {f.field_type === 'dropdown' ? (
+                        <select 
+                          required={f.is_required}
+                          className="form-input"
+                          value={formData.custom_data?.[f.field_key] || ''}
+                          onChange={e => setFormData({
+                            ...formData, 
+                            custom_data: { ...formData.custom_data, [f.field_key]: e.target.value } 
+                          })}
+                        >
+                          <option value="">Select {f.label}</option>
+                          {(f.options || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                      ) : f.field_type === 'long_text' ? (
+                        <textarea 
+                          required={f.is_required}
+                          className="form-input"
+                          rows={3}
+                          value={formData.custom_data?.[f.field_key] || ''}
+                          onChange={e => setFormData({
+                            ...formData, 
+                            custom_data: { ...formData.custom_data, [f.field_key]: e.target.value } 
+                          })}
+                          placeholder={`Enter ${f.label.toLowerCase()}...`}
+                        />
+                      ) : (
+                        <input 
+                          type={f.field_type === 'number' ? 'number' : f.field_type === 'date' ? 'date' : 'text'}
+                          required={f.is_required}
+                          className="form-input"
+                          value={formData.custom_data?.[f.field_key] || ''}
+                          onChange={e => setFormData({
+                            ...formData, 
+                            custom_data: { ...formData.custom_data, [f.field_key]: e.target.value } 
+                          })}
+                          placeholder={`Enter ${f.label.toLowerCase()}...`}
+                        />
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  /* Fallback core fields when custom field configs haven't loaded */
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Lead Name <span style={{ color: '#ef4444' }}>*</span></label>
+                      <input 
+                        type="text"
+                        required
+                        className="form-input"
+                        value={formData.name || formData.custom_data?.lead_name || ''}
+                        onChange={e => setFormData({
+                          ...formData,
+                          name: e.target.value,
+                          custom_data: { ...formData.custom_data, lead_name: e.target.value }
+                        })}
+                        placeholder="Enter lead name..."
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Company Name</label>
+                      <input 
+                        type="text"
+                        className="form-input"
+                        value={formData.company || formData.custom_data?.company || ''}
+                        onChange={e => setFormData({
+                          ...formData,
+                          company: e.target.value,
+                          custom_data: { ...formData.custom_data, company: e.target.value }
+                        })}
+                        placeholder="Enter company name..."
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Contact Number <span style={{ color: '#ef4444' }}>*</span></label>
+                      <input 
+                        type="text"
+                        required
+                        className="form-input"
+                        value={formData.custom_data?.contact_number || ''}
+                        onChange={e => setFormData({
+                          ...formData,
+                          custom_data: { ...formData.custom_data, contact_number: e.target.value }
+                        })}
+                        placeholder="Enter contact number..."
+                      />
+                    </div>
+                  </>
+                )}
               </div>
               
               <div className="form-actions">
@@ -636,6 +820,16 @@ export default function Leads({ session, profile }) {
           </div>
         </div>
       )}
+
+      <FieldBuilderModal 
+        module="lead"
+        businessId={session.user.id}
+        isOpen={isFieldBuilderOpen}
+        onClose={() => {
+          setIsFieldBuilderOpen(false)
+          fetchCustomConfigs()
+        }}
+      />
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Toaster } from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import { supabase } from './lib/supabase'
 import LandingPage from './pages/LandingPage'
 import Login from './pages/Login'
@@ -13,6 +14,7 @@ function ProtectedRoute({ session, children }) {
 }
 
 export default function App() {
+  const { t } = useTranslation()
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -31,7 +33,7 @@ export default function App() {
     return (
       <div className="loading-container" style={{ minHeight: '100vh' }}>
         <div className="spinner" />
-        <span>Loading NexusCRM...</span>
+        <span>{t('loading')}</span>
       </div>
     )
   }

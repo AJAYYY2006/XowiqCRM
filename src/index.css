@@ -958,9 +958,25 @@ textarea.form-input {
   position: relative;
 }
 
+.pricing-card:hover {
+  transform: translateY(-12px);
+  border-color: var(--accent);
+  box-shadow: 0 24px 48px -12px rgba(255, 89, 0, 0.25);
+}
+
+.pricing-card:hover .btn-primary {
+  transform: scale(1.05);
+  box-shadow: 0 8px 32px rgba(255, 89, 0, 0.4);
+}
+
 .pricing-card.popular {
   border-color: var(--accent);
   box-shadow: var(--shadow-accent);
+  transform: scale(1.02);
+}
+
+.pricing-card.popular:hover {
+  transform: translateY(-12px) scale(1.05);
 }
 
 .popular-badge {
@@ -1320,3 +1336,624 @@ textarea.form-input {
   color: var(--text-muted);
   font-size: 14px;
 }
+
+/* ===== Language Switcher Animation ===== */
+@keyframes langDropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Kanban Board Styles */
+.kanban-board-container {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 8px 4px 16px 4px;
+  min-height: 500px;
+}
+.kanban-column {
+  min-width: 280px;
+  width: 280px;
+  background-color: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+.kanban-column-hover {
+  border-color: #f59e0b;
+  border-style: dashed;
+  background-color: rgba(245, 158, 11, 0.05);
+}
+.kanban-column-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 600;
+}
+.kanban-column-title {
+  font-size: 14px;
+  margin: 0;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  border-left: 3px solid transparent;
+  padding-left: 8px;
+}
+.kanban-column-count {
+  background-color: var(--bg-tertiary);
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+.kanban-column-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+/* Kanban Cards */
+/* ===== Kanban View Toggles ===== */
+.view-toggle-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-subtle);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.view-toggle {
+  display: flex;
+  background: var(--bg-primary);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+}
+
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  transition: var(--transition);
+}
+
+.toggle-btn:hover {
+  color: var(--text-primary);
+}
+
+.toggle-btn.active {
+  background: var(--bg-card);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ===== Kanban Board Layout ===== */
+.kanban-board-wrapper {
+  padding: 24px;
+  overflow-x: auto;
+  min-height: calc(100vh - 250px);
+  background: var(--bg-primary);
+}
+
+.kanban-board {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  min-width: min-content;
+}
+
+.kanban-column {
+  width: 280px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+  transition: var(--transition);
+  border: 1px solid transparent;
+}
+
+.kanban-column.highlight {
+  border: 2px dashed var(--accent);
+  background: var(--accent-light);
+}
+
+.kanban-column-header {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: inherit;
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+}
+
+.kanban-column-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.kanban-column-count {
+  background: var(--bg-card);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--border-subtle);
+}
+
+.kanban-column-list {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.kanban-empty-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100px;
+  border: 2px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ===== Kanban Card ===== */
+.kanban-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  cursor: grab;
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  touch-action: manipulation;
+}
+
+.kanban-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.kanban-card:active {
+  cursor: grabbing;
+}
+
+.kanban-card-content {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kanban-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.kanban-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.kanban-card-edit {
+  opacity: 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.kanban-card:hover .kanban-card-edit {
+  opacity: 1;
+}
+
+.kanban-card-account {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ff5900;
+  background: rgba(255, 89, 0, 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+
+.kanban-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.kanban-card-amount {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--success);
+}
+
+.kanban-card-owner {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.kanban-card-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Card Borders based on Stage */
+.kanban-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+
+.kanban-column:nth-child(1) .kanban-card::before { background: #818cf8; } /* Prospecting */
+.kanban-column:nth-child(2) .kanban-card::before { background: #60a5fa; } /* Scoping */
+.kanban-column:nth-child(3) .kanban-card::before { background: #fbbf24; } /* Negotiation */
+.kanban-column:nth-child(4) .kanban-card::before { background: #c084fc; } /* Legal */
+.kanban-column:nth-child(5) .kanban-card::before { background: #22d3ee; } /* Contract */
+.kanban-column:nth-child(6) .kanban-card::before { background: #34d399; } /* Closed */
+
+/* Drag Overlay Styling */
+.kanban-card.overlay {
+  box-shadow: var(--shadow-lg);
+  cursor: grabbing;
+  transform: rotate(3deg);
+  opacity: 0.9;
+  z-index: 1000;
+}
+
+/* ===== Deal Runway ===== */
+.deal-runway-container {
+  margin-top: 32px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.runway-heading {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* 1. Runway Strip */
+.runway-strip {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+.runway-lane {
+  flex: 1;
+  min-width: 130px;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid var(--border-subtle);
+}
+.lane-strip-top {
+  height: 4px;
+  width: 100%;
+  background: var(--border-subtle);
+  transition: background 0.2s;
+}
+.lane-content {
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lane-icon {
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+.lane-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.lane-status {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+/* Completed Stage */
+.runway-lane.completed {
+  background: #fff8f1;
+  border-color: #ffd8bd;
+}
+.runway-lane.completed .lane-strip-top { background: #E05A00; }
+.runway-lane.completed .lane-icon { color: #E05A00; background: rgba(224, 90, 0, 0.1); }
+.runway-lane.completed .lane-status { color: #E05A00; }
+
+/* Active Stage */
+.runway-lane.active {
+  background: #fff8f1;
+  border: 2px solid #E05A00;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+.runway-lane.active .lane-strip-top { background: #E05A00; height: 0; }
+.runway-lane.active .lane-icon { color: #E05A00; background: rgba(224, 90, 0, 0.1); }
+.runway-lane.active .lane-title { font-weight: 700; color: var(--text-primary); }
+.runway-lane.active .lane-status { color: #E05A00; }
+
+/* Future Stage */
+.runway-lane.future {
+  background: var(--bg-tertiary);
+}
+
+/* 2. Vitals Row */
+.vitals-row {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+.vital-card {
+  flex: 1;
+  background: var(--bg-tertiary);
+  padding: 16px;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.vital-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.vital-value {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.vital-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* 3. Signal Ring */
+.signal-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 0;
+  border-top: 1px dashed var(--border-subtle);
+  border-bottom: 1px dashed var(--border-subtle);
+}
+.signal-ring-wrap {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+}
+.signal-prob {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #E05A00;
+}
+.signal-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.signal-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.signal-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* 4. Task Checklist */
+.checklist-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.checklist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.checklist-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.checklist-badge {
+  background: #fff8f1;
+  color: #E05A00;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid #ffd8bd;
+}
+.checklist-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.check-item:hover {
+  background: var(--bg-tertiary);
+}
+.check-item.checked {
+  opacity: 0.7;
+}
+.check-item.checked .check-box {
+  background: #E05A00;
+  border-color: #E05A00;
+}
+.check-item.checked .check-title {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+.check-box {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-subtle);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.check-title {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: color 0.2s;
+}
+.priority-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.priority-badge.high { background: #fee2e2; color: #ef4444; }
+.priority-badge.med { background: #fef3c7; color: #f59e0b; }
+.priority-badge.low { background: #dcfce3; color: #10b981; }
+
+/* 5. Runway Actions */
+.runway-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+.btn-runway-back {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-runway-back:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.btn-runway-back:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-runway-advance {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #E05A00;
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-runway-advance:hover {
+  background: #cc5200;
+}
+.btn-runway-advance.closed {
+  background: #10b981;
+  cursor: default;
+}
+

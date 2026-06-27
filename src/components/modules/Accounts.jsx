@@ -2,8 +2,105 @@ import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
-import { Trash2, Edit2 } from 'lucide-react'
+import { Trash2, Edit2, Package, Plus, Calendar, CreditCard, Clock, FileText, CheckCircle, Download, Check, X, Phone, Save, Link2, Settings, AlertCircle, ArrowUp, ArrowDown, LayoutGrid } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
+import FieldBuilderModal from '../ui/FieldBuilderModal'
+import { useTranslation } from 'react-i18next'
+import { jsPDF } from 'jspdf'
+import 'jspdf-autotable'
+
+const labelStyle = { color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }
+const detailFieldStyle = { fontSize: '14px', color: '#1e293b' }
+
+async function handleFileUpload(file, businessId) {
+  const fileName = `${businessId}/${Date.now()}-${file.name}`
+  const { data, error } = await supabase.storage
+    .from('customer-docs')
+    .upload(fileName, file)
+  
+  if (error) {
+    if (error.message.includes('bucket not found')) {
+      toast.error('Storage bucket "customer-docs" not found. Please create it in Supabase.')
+    }
+    throw error
+  }
+  
+  const { data: { publicUrl } } = supabase.storage.from('customer-docs').getPublicUrl(fileName)
+  return publicUrl
+}
+
+function renderCustomFieldInput(config, value, onChange, businessId) {
+  const commonProps = {
+    required: config.is_required,
+    className: 'form-input',
+    value: value || '',
+    onChange: (e) => onChange(e.target.value)
+  }
+
+  switch (config.field_type) {
+    case 'number': return <input type="number" {...commonProps} />
+    case 'date': return <input type="date" {...commonProps} />
+    case 'checkbox': return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 42 }}>
+        <input type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)} style={{ width: 18, height: 18 }} />
+        <span style={{ fontSize: 13, color: '#64748b' }}>Check if applicable</span>
+      </div>
+    )
+    case 'dropdown': 
+      return (
+        <select {...commonProps}>
+          <option value="">-- Select Option --</option>
+          {(config.options || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      )
+    case 'multi_select':
+      return (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: 10, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+          {(config.options || []).map(opt => {
+            const selected = Array.isArray(value) ? value.includes(opt) : false
+            return (
+              <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '4px 10px', background: selected ? '#fff5f0' : '#f8fafc', border: `1px solid ${selected ? '#f37a23' : '#e2e8f0'}`, borderRadius: 16, cursor: 'pointer' }}>
+                <input type="checkbox" checked={selected} style={{ display: 'none' }} onChange={() => {
+                  const newVal = selected ? (value || []).filter(v => v !== opt) : [...(value || []), opt]
+                  onChange(newVal)
+                }} />
+                {opt}
+              </label>
+            )
+          })}
+        </div>
+      )
+    case 'long_text': return <textarea {...commonProps} style={{ minHeight: 80 }} />
+    case 'url': return <input type="url" {...commonProps} placeholder="https://" />
+    case 'file_upload':
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <input 
+            type="file" 
+            className="form-input" 
+            onChange={async (e) => {
+              const file = e.target.files[0]
+              if (!file) return
+              const tid = toast.loading('Uploading file...')
+              try {
+                const url = await handleFileUpload(file, businessId)
+                onChange(url)
+                toast.success('Upload complete', { id: tid })
+              } catch (err) {
+                toast.error('Upload failed: ' + err.message, { id: tid })
+              }
+            }} 
+          />
+          {value && (
+            <a href={value} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#f37a23', fontWeight: 700 }}>
+              View uploaded file
+            </a>
+          )}
+        </div>
+      )
+    default: return <input type="text" {...commonProps} />
+  }
+}
 
 export default function Accounts({ session, profile }) {
   const [accounts, setAccounts] = useState([])
@@ -11,41 +108,119 @@ export default function Accounts({ session, profile }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedAccount, setSelectedAccount] = useState(null)
   const [editingAccount, setEditingAccount] = useState(null)
-  const [activeTab, setActiveTab] = useState('contacts')
-  const location = useLocation()
   
-  // Account Detail Data
-  const [accContacts, setAccContacts] = useState([])
-  const [accOpps, setAccOpps] = useState([])
-  const [accActs, setAccActs] = useState([])
-  const [accTickets, setAccTickets] = useState([])
-  const [accTasks, setAccTasks] = useState([])
+  const companyType = session.user.user_metadata?.companyType || 'B2B'
+  const isB2C = companyType === 'B2C'
+  const isStageTrackingEnabled = session.user.user_metadata?.b2cStageTrackingEnabled === true
 
+  const [b2cStages, setB2cStages] = useState([])
+
+  const [accContacts, setAccContacts] = useState([])
+  const [accTasks, setAccTasks] = useState([])
+  const [accServices, setAccServices] = useState([])
+  const [accInvoices, setAccInvoices] = useState([])
+  const [availableServices, setAvailableServices] = useState([])
+  const [accActs, setAccActs] = useState([])
+  
+  const [isServiceModalOpen, setIsServiceModalOpen] = useState(false)
+  const [editingServiceEntry, setEditingServiceEntry] = useState(null)
+  const [serviceEntryTab, setServiceEntryTab] = useState('quick')
+  const [serviceAssignForm, setServiceAssignForm] = useState({ 
+    service_id: '', 
+    price: 0, 
+    service_date: new Date().toISOString().split('T')[0],
+    reminder_days: 7,
+    payment_status: 'Unpaid',
+    notes: '',
+    stage_notes: '',
+    next_follow_up_date: ''
+  })
+  
+  const [activeTab, setActiveTab] = useState(isB2C ? 'services' : 'contacts')
+  const { t } = useTranslation()
+  const location = useLocation()
+
+  const [customFieldConfigs, setCustomFieldConfigs] = useState([])
+  const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
+  const [contactPopupData, setContactPopupData] = useState(null)
+  
   // Form State
   const [formData, setFormData] = useState({
-    account_name: '', domain: '', account_owner: '', status: 'active'
+    account_name: '', 
+    domain: '', 
+    account_owner: profile?.name || session.user.email, 
+    status: 'New', 
+    phone: '', 
+    email: '', 
+    address: '',
+    gender: '',
+    date_of_birth: '',
+    notes: '',
+    custom_data: {},
+    contact_id: null
   })
 
-  // Nested Creation States
-  const [isContactModalOpen, setIsContactModalOpen] = useState(false)
-  const [contactFormData, setContactFormData] = useState({ name: '', email: '', phone: '' })
-  const [editingContactId, setEditingContactId] = useState(null)
-
-  const [isOppModalOpen, setIsOppModalOpen] = useState(false)
-  const [oppFormData, setOppFormData] = useState({ name: '', stage: 'prospecting', amount: 0, closed_date: '' })
-  const [editingOppId, setEditingOppId] = useState(null)
-
-  const [isTicketModalOpen, setIsTicketModalOpen] = useState(false)
-  const [ticketFormData, setTicketFormData] = useState({ subject: '', priority: 'medium', status: 'open' })
-  const [editingTicketId, setEditingTicketId] = useState(null)
-
-  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
-  const [taskFormData, setTaskFormData] = useState({ title: '', task_type: 'Call', status: 'Open', due_date: '', owner: '' })
-  const [editingTaskId, setEditingTaskId] = useState(null)
-
-  useEffect(() => {
+  useEffect(() => { 
     fetchAccounts()
+    fetchCustomConfigs()
+    if (isB2C && isStageTrackingEnabled) {
+      fetchB2CStages()
+    }
   }, [session])
+
+  const fetchB2CStages = async () => {
+    const { data } = await supabase.from('b2c_stages').select('*').order('order_index', { ascending: true })
+    setB2cStages(data || [])
+  }
+
+  const fetchCustomConfigs = async () => {
+    try {
+      const { data: existing, error } = await supabase
+        .from('custom_field_configs')
+        .select('*')
+        .eq('business_id', session.user.id)
+        .eq('module', 'customer_profile')
+        .order('display_order', { ascending: true })
+      
+      if (error) throw error
+
+      const coreFieldsTarget = [
+        { label: 'Customer Name', field_key: 'customer_name', field_type: 'text', is_core: true, order: 0 },
+        { label: 'Contact Number', field_key: 'contact_number', field_type: 'text', is_core: true, order: 1 },
+        { label: 'Email ID', field_key: 'email_id', field_type: 'text', is_core: true, order: 2 },
+        { label: 'Gender', field_key: 'gender', field_type: 'dropdown', options: ['Male', 'Female', 'Other'], is_core: true, order: 3 },
+        { label: 'Notes', field_key: 'notes', field_type: 'long_text', is_core: true, order: 4 }
+      ]
+
+      let finalData = existing || []
+      const missingCore = coreFieldsTarget.filter(t => !finalData.find(f => f.field_key === t.field_key))
+
+      if (missingCore.length > 0) {
+        const toInsert = missingCore.map(c => ({
+          business_id: session.user.id,
+          module: 'customer_profile',
+          field_key: c.field_key,
+          label: c.label,
+          field_type: c.field_type,
+          options: c.options || null,
+          is_core: true,
+          display_order: c.order,
+          is_required: c.field_key === 'customer_name' || c.field_key === 'contact_number',
+          show_in_list: true
+        }))
+        const { data: inserted } = await supabase.from('custom_field_configs').insert(toInsert).select()
+        if (inserted) {
+          finalData = [...finalData, ...inserted].sort((a,b) => (a.display_order || 0) - (b.display_order || 0))
+        }
+      }
+
+      setCustomFieldConfigs(finalData.filter(f => !f.is_archived))
+    } catch (err) {
+      console.error('Error loading custom fields:', err)
+    }
+  }
+
+  const handleOpenFieldModal = () => setIsFieldBuilderOpen(true)
 
   useEffect(() => {
     if (accounts.length > 0 && location.state?.openId) {
@@ -66,49 +241,43 @@ export default function Accounts({ session, profile }) {
       setLoading(true)
       const { data, error } = await supabase
         .from('accounts')
-        .select('*')
+        .select('*, contacts(phone, email, id)')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
       
       if (error) throw error
       setAccounts(data || [])
     } catch (error) {
-      toast.error('Failed to load accounts')
+      toast.error('Failed to load customers')
     } finally {
       setLoading(false)
     }
   }
 
   const fetchAccountDetails = async (id, accName) => {
-    const { data: cData } = await supabase.from('contacts').select('*').eq('account_id', id)
-    const { data: oData } = await supabase.from('opportunities').select('*').eq('account_id', id)
-    const { data: tskData } = await supabase.from('tasks').select('*').eq('related_to', 'accounts').eq('related_id', id)
-    
-    let tData = []
-    if (cData && cData.length > 0) {
-      const cIds = cData.map(c => c.id)
-      const { data } = await supabase.from('tickets').select('*').in('contact_id', cIds)
-      tData = data || []
-    }
-    
-    const { data: aData } = await supabase.from('activities').select('*').eq('user_id', session.user.id)
-    
+    const [cRes, iRes, tRes, csRes, sRes, aRes] = await Promise.all([
+      supabase.from('contacts').select('*').eq('account_id', id),
+      supabase.from('quotes').select('*').eq('account_id', id).order('created_at', { ascending: false }),
+      supabase.from('tasks').select('*').eq('account_id', id).order('due_date', { ascending: true }),
+      supabase.from('customer_services').select('*, services(service_name, reminder_days)').eq('account_id', id).order('assigned_date', { ascending: false }),
+      supabase.from('services').select('*').eq('user_id', session.user.id).eq('status', 'active'),
+      supabase.from('activities').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false })
+    ])
+
+    setAccContacts(cRes.data || [])
+    setAccInvoices(iRes.data || [])
+    setAccTasks(tRes.data || [])
+    setAccServices(csRes.data || [])
+    setAvailableServices(sRes.data || [])
+
     const nameLower = (accName || '').toLowerCase()
-    const filteredActs = (aData || []).filter(a => {
+    const filteredActs = (aRes.data || []).filter(a => {
       if (!a.description) return false
       const d = a.description.toLowerCase()
-      if (nameLower && d.includes(nameLower)) return true
-      if (cData?.some(c => c.name && d.includes(c.name.toLowerCase()))) return true
-      if (oData?.some(o => o.name && d.includes(o.name.toLowerCase()))) return true
-      if (tData?.some(t => t.subject && d.includes(t.subject.toLowerCase()))) return true
-      return false
+      const n = nameLower.toLowerCase()
+      return d.includes(n)
     })
-
-    setAccContacts(cData || [])
-    setAccOpps(oData || [])
-    setAccTickets(tData || [])
-    setAccTasks(tskData || [])
-    setAccActs(filteredActs.sort((x, y) => new Date(y.created_at) - new Date(x.created_at)))
+    setAccActs(filteredActs)
   }
 
   const handleOpenModal = (account = null) => {
@@ -117,337 +286,377 @@ export default function Accounts({ session, profile }) {
       setFormData({
         account_name: account.account_name, 
         domain: account.domain || '', 
-        account_owner: account.account_owner || '', 
-        status: account.status
+        account_owner: account.account_owner || profile?.name || session.user.email, 
+        status: account.status || 'Active',
+        phone: account.phone || account.contacts?.[0]?.phone || '', 
+        email: account.email || account.contacts?.[0]?.email || '', 
+        address: account.address || '',
+        b2c_stage_id: account.b2c_stage_id || '',
+        gender: account.gender || '',
+        date_of_birth: account.date_of_birth || '',
+        notes: account.notes || '',
+        custom_data: account.custom_data || {},
+        contact_id: account.contacts?.[0]?.id || null
       })
     } else {
       setEditingAccount(null)
-      setFormData({
-        account_name: '', domain: '', 
-        account_owner: profile?.name || session.user.email, status: 'active'
+      setFormData({ 
+        account_name: '', 
+        domain: '', 
+        account_owner: profile?.name || session.user.email, 
+        status: 'Active', 
+        phone: '', 
+        email: '', 
+        address: '',
+        b2c_stage_id: '',
+        gender: '',
+        date_of_birth: '',
+        notes: '',
+        custom_data: {},
+        contact_id: null 
       })
     }
     setIsModalOpen(true)
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    const toastId = toast.loading(editingAccount ? 'Updating account...' : 'Adding account...')
-    
-    try {
-      if (editingAccount) {
-        const { error } = await supabase
-          .from('accounts')
-          .update(formData)
-          .eq('id', editingAccount.id)
-        if (error) throw error
-        toast.success('Account updated', { id: toastId })
-      } else {
-        const { error } = await supabase
-          .from('accounts')
-          .insert([{ ...formData, user_id: session.user.id }])
-        if (error) throw error
-
-        await supabase.from('activities').insert([{
-          user_id: session.user.id,
-          type: 'New Account',
-          description: `Created account: ${formData.account_name}`
-        }])
-        toast.success('Account added', { id: toastId })
-      }
-      
-      setIsModalOpen(false)
-      fetchAccounts()
-      if (selectedAccount && editingAccount && selectedAccount.id === editingAccount.id) {
-        const updated = { ...selectedAccount, ...formData }
-        setSelectedAccount(updated)
-        fetchAccountDetails(updated.id, updated.account_name)
-      }
-    } catch (error) {
-      toast.error(error.message, { id: toastId })
+  const handleOpenServiceModal = (entry = null) => {
+    if (entry) {
+      setEditingServiceEntry(entry)
+      setServiceEntryTab(entry.stage_notes || entry.next_follow_up_date || entry.accounts?.b2c_stage_id ? 'stage' : 'quick')
+      setServiceAssignForm({
+        service_id: entry.service_id,
+        price: entry.price || 0,
+        service_date: new Date(entry.assigned_date).toISOString().split('T')[0],
+        reminder_days: entry.services?.reminder_days || 7,
+        payment_status: accInvoices.find(i => i.id === entry.quote_id)?.status || 'Unpaid',
+        b2c_stage_id: selectedAccount?.b2c_stage_id || '',
+        notes: entry.notes || '',
+        stage_notes: entry.stage_notes || '',
+        next_follow_up_date: entry.next_follow_up_date ? new Date(entry.next_follow_up_date).toISOString().split('T')[0] : ''
+      })
+    } else {
+      setEditingServiceEntry(null)
+      setServiceEntryTab('quick')
+      setServiceAssignForm({ 
+        service_id: '', 
+        price: 0, 
+        service_date: new Date().toISOString().split('T')[0], 
+        reminder_days: 7, 
+        payment_status: 'Unpaid',
+        b2c_stage_id: selectedAccount?.b2c_stage_id || '',
+        notes: '',
+        stage_notes: '',
+        next_follow_up_date: ''
+      })
     }
+    setIsServiceModalOpen(true)
   }
 
-  const handleDeleteAccount = async (id, name) => {
-    if (!window.confirm(`Are you sure you want to delete account "${name}"? This will NOT delete associated records (RLS permitting).`)) return
-    const toastId = toast.loading('Deleting account...')
+  const handleStatusToggle = async (invoice) => {
+    const statuses = ['Unpaid', 'Paid', 'Overdue']
+    const nextIdx = (statuses.indexOf(invoice.status) + 1) % statuses.length
+    const nextStatus = statuses[nextIdx]
     try {
-      const { error } = await supabase
-        .from('accounts')
-        .delete()
-        .eq('id', id)
+      await supabase.from('quotes').update({ status: nextStatus }).eq('id', invoice.id)
+      toast.success(`Invoice marked as ${nextStatus}`)
+      fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
+    } catch { toast.error('Failed to update status') }
+  }
+
+  const handleAssignService = async (e) => {
+    e.preventDefault()
+    if (!serviceAssignForm.service_id) return
+    const toastId = toast.loading(editingServiceEntry ? 'Updating service & syncing invoice...' : 'Processing service entry & automations...')
+    
+    try {
+      const selectedSvc = availableServices.find(s => s.id === serviceAssignForm.service_id)
+      const invNo = editingServiceEntry?.invoice_number || `INV-${Date.now().toString().slice(-6)}`
+      let quoteId = editingServiceEntry?.quote_id
+      let taskId = editingServiceEntry?.task_id
+
+      // 1. SYNC INVOICE (Quote)
+      const quotePayload = {
+        user_id: session.user.id,
+        account_id: selectedAccount.id,
+        quote_name: `Service Invoice: ${selectedSvc.service_name}`,
+        total_price: serviceAssignForm.price,
+        status: serviceAssignForm.payment_status,
+        invoice_number: invNo,
+        created_at: serviceAssignForm.service_date
+      }
+
+      if (quoteId) {
+        await supabase.from('quotes').update(quotePayload).eq('id', quoteId)
+      } else {
+        const { data: q, error: qErr } = await supabase.from('quotes').insert([quotePayload]).select().single()
+        if (qErr) throw qErr
+        quoteId = q.id
+      }
+
+      // 2. SYNC REMINDER (Task)
+      const sDate = new Date(serviceAssignForm.service_date)
+      const reminderDate = new Date(sDate)
+      reminderDate.setDate(reminderDate.getDate() + Number(serviceAssignForm.reminder_days))
       
-      if (error) throw error
+      const taskPayload = {
+        user_id: session.user.id,
+        account_id: selectedAccount.id,
+        title: `Service Reminder: ${selectedSvc.service_name} for ${selectedAccount.account_name}`,
+        task_type: 'Renewal',
+        due_date: reminderDate.toISOString(),
+        status: 'Pending'
+      }
+
+      if (taskId) {
+        await supabase.from('tasks').update(taskPayload).eq('id', taskId)
+      } else {
+        const { data: t, error: tErr } = await supabase.from('tasks').insert([taskPayload]).select().single()
+        if (tErr) throw tErr
+        taskId = t.id
+      }
+
+      // 3. CREATE/UPDATE SERVICE ENTRY
+      const csPayload = {
+        user_id: session.user.id,
+        account_id: selectedAccount.id,
+        service_id: serviceAssignForm.service_id,
+        price: serviceAssignForm.price,
+        assigned_date: serviceAssignForm.service_date,
+        notes: serviceAssignForm.notes,
+        quote_id: quoteId,
+        task_id: taskId,  // Link for future syncs
+        status: 'Active',
+        stage_notes: serviceEntryTab === 'stage' ? serviceAssignForm.stage_notes : null,
+        next_follow_up_date: serviceEntryTab === 'stage' ? (serviceAssignForm.next_follow_up_date || null) : null
+      }
+
+      if (editingServiceEntry) {
+        await supabase.from('customer_services').update(csPayload).eq('id', editingServiceEntry.id)
+        toast.success('Service, Invoice & Reminder synced!', { id: toastId })
+      } else {
+        await supabase.from('customer_services').insert([csPayload])
+        toast.success('Service entry saved! Invoice and Reminder generated.', { id: toastId })
+      }
+      
+      if (isB2C && isStageTrackingEnabled && serviceEntryTab === 'stage' && serviceAssignForm.b2c_stage_id) {
+        await supabase.from('accounts').update({ b2c_stage_id: serviceAssignForm.b2c_stage_id }).eq('id', selectedAccount.id)
+      }
+
+      setIsServiceModalOpen(false)
+      fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
       
       await supabase.from('activities').insert([{
         user_id: session.user.id,
-        type: 'Account Deleted',
-        description: `Deleted account: ${name}`
+        type: editingServiceEntry ? 'Service Updated' : 'Service Added',
+        description: `${editingServiceEntry ? 'Updated' : 'Added'} "${selectedSvc.service_name}" service for ${selectedAccount.account_name} (Invoice Synced)`
       }])
+    } catch (err) {
+      toast.error(err.message, { id: toastId })
+    }
+  }
+
+  const handleDeleteServiceEntry = async (entry) => {
+    if (!confirm('Delete this service entry and its linked invoice?')) return
+    const toastId = toast.loading('Deleting service, invoice, and reminder...')
+    try {
+      // 1. Delete linked Invoice
+      if (entry.quote_id) { await supabase.from('quotes').delete().eq('id', entry.quote_id) }
+      // 2. Delete linked Reminder
+      if (entry.task_id) { await supabase.from('tasks').delete().eq('id', entry.task_id) }
+      // 3. Delete the Entry
+      await supabase.from('customer_services').delete().eq('id', entry.id)
       
-      toast.success('Account deleted', { id: toastId })
-      fetchAccounts()
-    } catch (error) {
-      toast.error(`Error deleting account: ${error.message}`, { id: toastId })
-    }
-  }
-
-  const handleSaveContact = async (e) => {
-    e.preventDefault()
-    const toastId = toast.loading(editingContactId ? 'Updating contact...' : 'Creating contact...')
-    try {
-      if (editingContactId) {
-        const { error } = await supabase.from('contacts').update({
-          name: contactFormData.name,
-          email: contactFormData.email,
-          phone: contactFormData.phone
-        }).eq('id', editingContactId)
-        if (error) throw error
-        await supabase.from('activities').insert([{
-          user_id: session.user.id,
-          type: 'Contact Updated',
-          description: `${profile?.name || session.user.email} updated contact ${contactFormData.name} for ${selectedAccount.account_name}`
-        }])
-        toast.success('Contact updated', { id: toastId })
-      } else {
-        const { error } = await supabase.from('contacts').insert([{
-          ...contactFormData,
-          unique_id: `CON-${Math.floor(Math.random() * 10000)}`,
-          account_id: selectedAccount.id,
-          contact_owner: profile?.name || session.user.email,
-          user_id: session.user.id
-        }])
-        if (error) throw error
-        await supabase.from('activities').insert([{
-          user_id: session.user.id,
-          type: 'Contact Added',
-          description: `${profile?.name || session.user.email} added contact ${contactFormData.name} to ${selectedAccount.account_name}`
-        }])
-        toast.success('Contact created', { id: toastId })
-      }
-      setIsContactModalOpen(false)
-      setContactFormData({ name: '', email: '', phone: '' })
-      setEditingContactId(null)
+      toast.success('Service, Invoice, and Reminder removed', { id: toastId })
       fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
-    } catch (err) {
-      toast.error(err.message, { id: toastId })
-    }
+    } catch (err) { toast.error('Failed to remove entry', { id: toastId }) }
   }
 
-  const handleSaveOpp = async (e) => {
-    e.preventDefault()
-    const toastId = toast.loading(editingOppId ? 'Updating opportunity...' : 'Creating opportunity...')
+  const handleDeleteAccount = async (acc) => {
+    if (!confirm(`Are you sure you want to delete "${acc.account_name}"? All service history and invoices will be permanently removed.`)) return
+    const toastId = toast.loading('Deleting customer profile...')
     try {
-      if (editingOppId) {
-        const { error } = await supabase.from('opportunities').update({
-          name: oppFormData.name,
-          amount: oppFormData.amount,
-          stage: oppFormData.stage,
-          closed_date: oppFormData.closed_date
-        }).eq('id', editingOppId)
-        if (error) throw error
-        await supabase.from('activities').insert([{
-          user_id: session.user.id,
-          type: 'Opportunity Updated',
-          description: `${profile?.name || session.user.email} updated opportunity ${oppFormData.name} for ${selectedAccount.account_name}`
-        }])
-        toast.success('Opportunity updated', { id: toastId })
-      } else {
-        const { error } = await supabase.from('opportunities').insert([{
-          ...oppFormData,
-          account_id: selectedAccount.id,
-          owner: profile?.name || session.user.email,
-          user_id: session.user.id
-        }])
-        if (error) throw error
-        await supabase.from('activities').insert([{
-          user_id: session.user.id,
-          type: 'Opportunity Created',
-          description: `${profile?.name || session.user.email} created opportunity ${oppFormData.name} for ${selectedAccount.account_name}`
-        }])
-        toast.success('Opportunity created', { id: toastId })
-      }
-      setIsOppModalOpen(false)
-      setOppFormData({ name: '', stage: 'prospecting', amount: 0, closed_date: '' })
-      setEditingOppId(null)
-      fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
-    } catch (err) {
-      toast.error(err.message, { id: toastId })
-    }
-  }
-
-  const handleSaveTicket = async (e) => {
-    e.preventDefault()
-    const toastId = toast.loading(editingTicketId ? 'Updating ticket...' : 'Creating ticket...')
-    try {
-      if (editingTicketId) {
-        const { error } = await supabase.from('tickets').update({
-          subject: ticketFormData.subject,
-          priority: ticketFormData.priority,
-          status: ticketFormData.status
-        }).eq('id', editingTicketId)
-        if (error) throw error
-        await supabase.from('activities').insert([{
-          user_id: session.user.id,
-          type: 'Ticket Updated',
-          description: `${profile?.name || session.user.email} updated ticket ${ticketFormData.subject} for ${selectedAccount.account_name}`
-        }])
-        toast.success('Ticket updated', { id: toastId })
-      } else {
-        const ticket_no = `TKT-${Math.floor(Math.random() * 10000)}`
-        const fallbackContact = accContacts.length > 0 ? accContacts[0].id : null
-        const { error } = await supabase.from('tickets').insert([{
-          ...ticketFormData,
-          ticket_no,
-          contact_id: fallbackContact,
-          owner: profile?.name || session.user.email,
-          user_id: session.user.id
-        }])
-        if (error) throw error
-        await supabase.from('activities').insert([{
-          user_id: session.user.id,
-          type: 'Ticket Created',
-          description: `${profile?.name || session.user.email} created ticket ${ticketFormData.subject} for ${selectedAccount.account_name}`
-        }])
-        toast.success('Ticket created', { id: toastId })
-      }
-      setIsTicketModalOpen(false)
-      setTicketFormData({ subject: '', priority: 'medium', status: 'open' })
-      setEditingTicketId(null)
-      fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
-    } catch (err) {
-      toast.error(err.message, { id: toastId })
-    }
-  }
-
-  const handleSaveTask = async (e) => {
-    e.preventDefault()
-    const toastId = toast.loading(editingTaskId ? 'Updating task...' : 'Creating task...')
-    try {
-      const taskData = {
-        ...taskFormData,
-        related_to: 'accounts',
-        related_id: selectedAccount.id,
-        user_id: session.user.id
-      }
-
-      if (editingTaskId) {
-        const { error } = await supabase.from('tasks').update(taskData).eq('id', editingTaskId)
-        if (error) throw error
-        toast.success('Task updated', { id: toastId })
-      } else {
-        const { error } = await supabase.from('tasks').insert([taskData])
-        if (error) throw error
-        toast.success('Task created', { id: toastId })
-      }
-      
-      setIsTaskModalOpen(false)
-      fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
-    } catch (error) {
-      toast.error(error.message, { id: toastId })
-    }
-  }
-
-  const handleDeleteTask = async (id, title) => {
-    if (!window.confirm(`Delete task "${title}"?`)) return
-    const toastId = toast.loading('Deleting task...')
-    try {
-      const { error } = await supabase.from('tasks').delete().eq('id', id)
+      const { error } = await supabase.from('accounts').delete().eq('id', acc.id)
       if (error) throw error
-      fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
-      toast.success('Task deleted', { id: toastId })
-    } catch (error) {
-      toast.error(error.message, { id: toastId })
+      toast.success('Profile deleted', { id: toastId })
+      fetchAccounts()
+    } catch (err) {
+      toast.error('Failed to delete profile: ' + err.message, { id: toastId })
     }
   }
 
-  if (loading) return <div className="loading-container"><div className="spinner"/></div>
-  
-  const isAdmin = ['admin', 'administrator'].includes(profile?.role?.toLowerCase())
+  const handleTaskAction = async (task, action) => {
+    try {
+      if (action === 'done') {
+        await supabase.from('tasks').update({ status: 'Completed' }).eq('id', task.id)
+        toast.success('Reminder cleared')
+      } else if (action === 'snooze') {
+        const nextDate = new Date()
+        nextDate.setDate(nextDate.getDate() + 1)
+        await supabase.from('tasks').update({ due_date: nextDate.toISOString(), status: 'Pending' }).eq('id', task.id)
+        toast.success('Snoozed to tomorrow')
+      }
+      fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
+    } catch { toast.error('Action failed') }
+  }
+
+  const downloadInvoicePDF = (inv) => {
+    const doc = new jsPDF()
+    const invNo = inv.invoice_number || `INV-${inv.id.slice(0,6).toUpperCase()}`
+    doc.setFillColor(243, 122, 35)
+    doc.rect(0, 0, 210, 40, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(24)
+    doc.setFont('helvetica', 'bold')
+    doc.text('TAX INVOICE', 14, 25)
+    doc.setFontSize(10)
+    doc.text(`Invoice #: ${invNo}`, 160, 20)
+    doc.text(`Date: ${new Date(inv.created_at).toLocaleDateString()}`, 160, 27)
+    doc.setTextColor(40, 40, 40)
+    doc.setFontSize(12)
+    doc.text('BILLED TO:', 14, 55)
+    doc.setFontSize(14)
+    doc.text(selectedAccount.account_name, 14, 63)
+    doc.setFontSize(10)
+    doc.setTextColor(100)
+    if (accContacts[0]?.email) doc.text(accContacts[0]?.email, 14, 70)
+    if (accContacts[0]?.phone) doc.text(accContacts[0]?.phone, 14, 75)
+    doc.autoTable({
+      startY: 85,
+      head: [['Description', 'Service Date', 'Rate', 'Total']],
+      body: [[inv.quote_name.replace('Service Invoice: ', ''), new Date(inv.created_at).toLocaleDateString(), `${profile?.currency || '$'}${Number(inv.total_price).toLocaleString()}`, `${profile?.currency || '$'}${Number(inv.total_price).toLocaleString()}`]],
+      theme: 'grid',
+      headStyles: { fillColor: [243, 122, 35], textColor: [255, 255, 255] },
+      styles: { fontSize: 10, cellPadding: 8 }
+    })
+    const finalY = doc.lastAutoTable.finalY
+    doc.setFontSize(12)
+    doc.setTextColor(0)
+    doc.text(`GRAND TOTAL: ${profile?.currency || '$'}${Number(inv.total_price).toLocaleString()}`, 145, finalY + 20)
+    doc.text(`Status: ${inv.status}`, 145, finalY + 28)
+    doc.save(`${invNo}_${selectedAccount.account_name.replace(' ', '_')}.pdf`)
+    toast.success('Invoice Downloaded')
+  }
+
+  if (loading) return <div className="loading-container"><div className="spinner" /></div>
 
   if (selectedAccount) {
+    const activeTasks = accTasks.filter(t => t.status !== 'Completed')
     return (
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <button className="back-btn" onClick={() => setSelectedAccount(null)} style={{ margin: 0 }}>
-            ← Back to Accounts
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => handleOpenModal(selectedAccount)}>
-            Edit Account Details
-          </button>
-        </div>
-        
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div className="detail-header">
-            <div className="detail-avatar" style={{ background: '#3b82f6', color: 'white' }}>
-              {selectedAccount.account_name.charAt(0).toUpperCase()}
-            </div>
-            <div className="detail-info">
-              <h1 className="detail-name">{selectedAccount.account_name}</h1>
-              <div className="detail-meta">{selectedAccount.domain || 'No domain'}</div>
-              <div className={`badge badge-${selectedAccount.status} mt-2`}>{selectedAccount.status}</div>
-            </div>
-          </div>
-
-          <div className="detail-grid">
-            <div className="detail-field">
-              <label>Account Owner</label>
-              <span>{selectedAccount.account_owner}</span>
-            </div>
-            <div className="detail-field">
-              <label>Created Date</label>
-              <span>{new Date(selectedAccount.created_at).toLocaleDateString()}</span>
-            </div>
+      <div className="customer-detail-view">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <button className="back-btn" onClick={() => setSelectedAccount(null)} style={{ margin: 0 }}>← All Customers</button>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button className="btn btn-secondary" onClick={() => handleOpenServiceModal()}><Plus size={16} /> Add Service Entry</button>
+            <button className="btn btn-primary" onClick={() => handleOpenModal(selectedAccount)}><Edit2 size={16} /> Edit Profile</button>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="tabs">
-          <button className={`tab ${activeTab === 'contacts' ? 'active' : ''}`} onClick={() => setActiveTab('contacts')}>
-            Contacts ({accContacts.length})
-          </button>
-          <button className={`tab ${activeTab === 'opportunities' ? 'active' : ''}`} onClick={() => setActiveTab('opportunities')}>
-            Opportunities ({accOpps.length})
-          </button>
-          <button className={`tab ${activeTab === 'tickets' ? 'active' : ''}`} onClick={() => setActiveTab('tickets')}>
-            Tickets
-          </button>
-          <button className={`tab ${activeTab === 'tasks' ? 'active' : ''}`} onClick={() => setActiveTab('tasks')}>
-            Tasks ({accTasks.length})
-          </button>
-          <button className={`tab ${activeTab === 'activities' ? 'active' : ''}`} onClick={() => setActiveTab('activities')}>
-            Activities
-          </button>
+        <div className="card" style={{ marginBottom: 24, padding: 30, borderLeft: '6px solid #f37a23', position: 'relative' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 300px', gap: 24, alignItems: 'start' }}>
+            <div style={{ width: 80, height: 80, borderRadius: 20, background: 'linear-gradient(135deg, #f37a23 0%, #ff8c42 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 32, fontWeight: 900 }}>
+              {selectedAccount?.account_name?.[0]?.toUpperCase() || '?'}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <h1 style={{ margin: 0, fontSize: 32, fontWeight: 900 }}>{selectedAccount.account_name}</h1>
+                <span className={`badge`} style={{ fontSize: 12, padding: '4px 12px', background: selectedAccount.status === 'Active' ? '#dcfce3' : '#f1f5f9', color: selectedAccount.status === 'Active' ? '#16a34a' : '#64748b' }}>{selectedAccount.status}</span>
+                {isB2C && isStageTrackingEnabled && (
+                  <select 
+                    style={{ marginLeft: 'auto', padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, fontWeight: 700, color: '#1e293b', background: b2cStages.find(s => s.id === selectedAccount.b2c_stage_id)?.color + '20' || '#f8fafc' }}
+                    value={selectedAccount.b2c_stage_id || ''}
+                    onChange={async (e) => {
+                      const newStageId = e.target.value
+                      await supabase.from('accounts').update({ b2c_stage_id: newStageId }).eq('id', selectedAccount.id)
+                      toast.success('Stage updated')
+                      fetchAccounts()
+                      fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
+                    }}
+                  >
+                    <option value="">-- Set Stage --</option>
+                    {b2cStages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                )}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px', marginTop: 15 }}>
+                <div style={detailFieldStyle}><span style={labelStyle}>Email:</span> {selectedAccount.email || selectedAccount.contacts?.[0]?.email || '—'}</div>
+                <div style={detailFieldStyle}><span style={labelStyle}>Phone:</span> {selectedAccount.phone || selectedAccount.contacts?.[0]?.phone || '—'}</div>
+                <div style={detailFieldStyle}><span style={labelStyle}>Gender:</span> {selectedAccount.gender || '—'}</div>
+                <div style={detailFieldStyle}><span style={labelStyle}>DOB:</span> {selectedAccount.date_of_birth ? new Date(selectedAccount.date_of_birth).toLocaleDateString() : '—'}</div>
+                <div style={{ ...detailFieldStyle, gridColumn: 'span 2' }}>
+                  <span style={labelStyle}>Address:</span>
+                  <div style={{ marginTop: 4, color: '#1e293b', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                    {selectedAccount.address || 'No address provided'}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style={{ textAlign: 'right', paddingLeft: 24, borderLeft: '1px solid #f1f5f9' }}>
+               <div style={{ fontSize: 14, color: '#64748b', marginBottom: 15 }}>
+                 <div style={{ marginBottom: 4 }}><span style={labelStyle}>Owner:</span> {selectedAccount.account_owner || 'Unassigned'}</div>
+                 <div><span style={labelStyle}>Joined:</span> {new Date(selectedAccount.created_at).toLocaleDateString()}</div>
+                 <div><span style={labelStyle}>Last Update:</span> {new Date(selectedAccount.updated_at || selectedAccount.created_at).toLocaleString()}</div>
+               </div>
+               
+               {/* Custom Fields Summary */}
+               {customFieldConfigs.filter(cf => !cf.is_core).length > 0 && (
+                 <div style={{ marginTop: 20, textAlign: 'left', borderTop: '1px solid #f1f5f9', paddingTop: 15 }}>
+                   <div style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 8 }}>Additional Details</div>
+                   <div style={{ display: 'grid', gap: 6 }}>
+                     {customFieldConfigs.filter(cf => !cf.is_core).map(cf => (
+                       <div key={cf.id} style={{ fontSize: 12 }}>
+                         <span style={labelStyle}>{cf.label}:</span> {selectedAccount.custom_data?.[cf.field_key]?.toString() || '—'}
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+               )}
+            </div>
+          </div>
+          {selectedAccount.notes && (
+            <div style={{ marginTop: 20, paddingTop: 15, borderTop: '1px solid #f1f5f9' }}>
+               <span style={labelStyle}>Internal Notes:</span>
+               <p style={{ marginTop: 6, fontSize: 13, color: '#475569', fontStyle: 'italic' }}>{selectedAccount.notes}</p>
+            </div>
+          )}
         </div>
 
-        {/* Tab Content */}
-        <div className="card" style={{ padding: 0 }}>
-          {activeTab === 'contacts' && (
-            <div style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
-                <h3 style={{ margin: 0, fontSize: '15px' }}>Contacts List</h3>
-                <button className="btn btn-secondary btn-sm" onClick={() => setIsContactModalOpen(true)}>+ New Contact</button>
+        <div className="tabs" style={{ marginBottom: 24 }}>
+          <button className={`tab ${activeTab === 'services' ? 'active' : ''}`} onClick={() => setActiveTab('services')}><Package size={16} /> Service History</button>
+          <button className={`tab ${activeTab === 'invoices' ? 'active' : ''}`} onClick={() => setActiveTab('invoices')}><CreditCard size={16} /> Invoices</button>
+          <button className={`tab ${activeTab === 'reminders' ? 'active' : ''}`} onClick={() => setActiveTab('reminders')}><Calendar size={16} /> Reminders {activeTasks.length > 0 && <span className="tab-badge">{activeTasks.length}</span>}</button>
+          <button className={`tab ${activeTab === 'interactions' ? 'active' : ''}`} onClick={() => setActiveTab('interactions')}><FileText size={16} /> Interactions</button>
+        </div>
+
+        <div className="tab-content">
+          {activeTab === 'services' && (
+            <div className="card" style={{ padding: 0 }}>
+              <div style={{ padding: 20, borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0 }}>Past Service Performance</h3>
+                <button className="btn btn-primary btn-sm" onClick={() => handleOpenServiceModal()}>Add Entry</button>
               </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table>
-                  <thead>
-                    <tr><th>Name</th><th>Email</th><th>Phone</th><th></th></tr>
-                  </thead>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc' }}>
+                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Service Name</th>
+                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Date</th>
+                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Price</th>
+                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Notes</th>
+                    <th style={{ padding: 15, textAlign: 'right', fontSize: 12 }}>Actions</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {accContacts.length === 0 ? (
-                    <tr><td colSpan="4" style={{ textAlign:'center', color:'var(--text-muted)' }}>No contacts found</td></tr>
+                  {accServices.length === 0 ? (
+                    <tr><td colSpan="5" style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No service history found.</td></tr>
                   ) : (
-                    accContacts.map(c => (
-                      <tr key={c.id}>
-                        <td className="fw-bold">{c.name}</td>
-                        <td>{c.email || '-'}</td>
-                        <td>{c.phone || '-'}</td>
-                        <td onClick={e => e.stopPropagation()}>
-                          <button className="btn btn-secondary btn-sm" onClick={() => {
-                            setEditingContactId(c.id)
-                            setContactFormData({ name: c.name, email: c.email || '', phone: c.phone || '' })
-                            setIsContactModalOpen(true)
-                          }}>Edit</button>
+                    accServices.map(s => (
+                      <tr key={s.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: 15, fontWeight: 700 }}>{s.services?.service_name}</td>
+                        <td style={{ padding: 15 }}>{new Date(s.assigned_date).toLocaleDateString()}</td>
+                        <td style={{ padding: 15, fontWeight: 800 }}>{profile?.currency || '$'}{Number(s.price).toLocaleString()}</td>
+                        <td style={{ padding: 15, color: '#64748b' }}>{s.notes || '-'}</td>
+                        <td style={{ padding: 15, textAlign: 'right' }}>
+                          <button className="btn-icon" onClick={() => handleOpenServiceModal(s)}><Edit2 size={14}/></button>
+                          <button className="btn-icon text-danger" onClick={() => handleDeleteServiceEntry(s)}><Trash2 size={14}/></button>
                         </td>
                       </tr>
                     ))
@@ -455,348 +664,291 @@ export default function Accounts({ session, profile }) {
                 </tbody>
               </table>
             </div>
-
-            {isContactModalOpen && (
-              <div className="modal-overlay">
-                <div className="modal">
-                  <div className="modal-header">
-                    <h2 className="modal-title">{editingContactId ? 'Edit Contact' : `Add Contact to ${selectedAccount.account_name}`}</h2>
-                    <button className="modal-close" onClick={() => setIsContactModalOpen(false)}>✕</button>
-                  </div>
-                  <form onSubmit={handleSaveContact}>
-                    <div className="form-grid">
-                      <div className="form-group full-width">
-                        <label className="form-label">Contact Name *</label>
-                        <input required className="form-input" value={contactFormData.name} onChange={e => setContactFormData({...contactFormData, name: e.target.value})} placeholder="John Doe" />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Email</label>
-                        <input type="email" className="form-input" value={contactFormData.email} onChange={e => setContactFormData({...contactFormData, email: e.target.value})} placeholder="john@example.com" />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Phone</label>
-                        <input className="form-input" value={contactFormData.phone} onChange={e => setContactFormData({...contactFormData, phone: e.target.value})} placeholder="555-1234" />
-                      </div>
-                    </div>
-                    <div className="form-actions">
-                      <button type="button" className="btn btn-secondary" onClick={() => setIsContactModalOpen(false)}>Cancel</button>
-                      <button type="submit" className="btn btn-primary">{editingContactId ? 'Save Contact' : 'Create Contact'}</button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-            </div>
           )}
 
-          {activeTab === 'opportunities' && (
-            <div style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
-                <h3 style={{ margin: 0, fontSize: '15px' }}>Opportunities List</h3>
-                <button className="btn btn-secondary btn-sm" onClick={() => setIsOppModalOpen(true)}>+ New Opportunity</button>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table>
-                  <thead>
-                    <tr><th>Name</th><th>Stage</th><th>Amount</th><th>Close Date</th><th></th></tr>
-                  </thead>
+          {activeTab === 'invoices' && (
+            <div className="card" style={{ padding: 0 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc' }}>
+                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Invoice ID</th>
+                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Service</th>
+                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Amount</th>
+                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Status</th>
+                    <th style={{ padding: 15, textAlign: 'right', fontSize: 12 }}>PDF</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {accOpps.length === 0 ? (
-                    <tr><td colSpan="5" style={{ textAlign:'center', color:'var(--text-muted)' }}>No opportunities found</td></tr>
-                  ) : (
-                    accOpps.map(o => (
-                      <tr key={o.id}>
-                        <td className="fw-bold">{o.name}</td>
-                        <td><span className={`badge badge-${o.stage}`}>{o.stage}</span></td>
-                        <td>${Number(o.amount).toLocaleString()}</td>
-                        <td>{new Date(o.closed_date).toLocaleDateString() || '-'}</td>
-                        <td onClick={e => e.stopPropagation()}>
-                          <button className="btn btn-secondary btn-sm" onClick={() => {
-                            setEditingOppId(o.id)
-                            setOppFormData({ name: o.name, amount: o.amount, stage: o.stage, closed_date: o.closed_date || '' })
-                            setIsOppModalOpen(true)
-                          }}>Edit</button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                  {accInvoices.map(inv => (
+                    <tr key={inv.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: 15, fontWeight: 600 }}>{inv.invoice_number || `INV-${inv.id.slice(0,6).toUpperCase()}`}</td>
+                      <td style={{ padding: 15 }}>{inv.quote_name.replace('Service Invoice: ', '')}</td>
+                      <td style={{ padding: 15, fontWeight: 800 }}>{profile?.currency || '$'}{Number(inv.total_price).toLocaleString()}</td>
+                      <td style={{ padding: 15 }}>
+                        <button onClick={() => handleStatusToggle(inv)} className={`badge`} style={{ border: 'none', cursor: 'pointer', background: inv.status === 'Paid' ? '#dcfce3' : inv.status === 'Overdue' ? '#fee2e2' : '#fef9c3', color: inv.status === 'Paid' ? '#166534' : inv.status === 'Overdue' ? '#991b1b' : '#854d0e', fontWeight: 800 }}>{inv.status || 'Unpaid'}</button>
+                      </td>
+                      <td style={{ padding: 15, textAlign: 'right' }}>
+                        <button className="btn-icon" onClick={() => downloadInvoicePDF(inv)}><Download size={18} /></button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-
-            {isOppModalOpen && (
-              <div className="modal-overlay">
-                <div className="modal">
-                  <div className="modal-header">
-                    <h2 className="modal-title">{editingOppId ? 'Edit Opportunity' : `Add Opportunity for ${selectedAccount.account_name}`}</h2>
-                    <button className="modal-close" onClick={() => setIsOppModalOpen(false)}>✕</button>
-                  </div>
-                  <form onSubmit={handleSaveOpp}>
-                    <div className="form-grid">
-                      <div className="form-group full-width">
-                        <label className="form-label">Opportunity Name *</label>
-                        <input required className="form-input" value={oppFormData.name} onChange={e => setOppFormData({...oppFormData, name: e.target.value})} placeholder="Q3 Upsell" />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Amount ($)</label>
-                        <input type="number" className="form-input" value={oppFormData.amount} onChange={e => setOppFormData({...oppFormData, amount: e.target.value})} />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Stage</label>
-                        <select className="form-input" value={oppFormData.stage} onChange={e => setOppFormData({...oppFormData, stage: e.target.value})}>
-                          <option value="prospecting">Prospecting</option>
-                          <option value="scoping">Scoping</option>
-                          <option value="negotiation">Negotiation</option>
-                          <option value="legal">Legal</option>
-                          <option value="contract">Contract</option>
-                          <option value="closed">Closed (Won)</option>
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Close Date</label>
-                        <input type="date" required className="form-input" value={oppFormData.closed_date} onChange={e => setOppFormData({...oppFormData, closed_date: e.target.value})} />
-                      </div>
-                    </div>
-                    <div className="form-actions">
-                      <button type="button" className="btn btn-secondary" onClick={() => setIsOppModalOpen(false)}>Cancel</button>
-                      <button type="submit" className="btn btn-primary">{editingOppId ? 'Save Opportunity' : 'Create Opportunity'}</button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-            </div>
           )}
 
-          {activeTab === 'tickets' && (
-            <div style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
-                <h3 style={{ margin: 0, fontSize: '15px' }}>Support Tickets</h3>
-                <button className="btn btn-secondary btn-sm" onClick={() => setIsTicketModalOpen(true)}>+ New Ticket</button>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table>
-                  <thead>
-                    <tr><th>Ticket #</th><th>Subject</th><th>Status</th><th>Priority</th><th></th></tr>
-                  </thead>
-                <tbody>
-                  {accTickets.length === 0 ? (
-                    <tr><td colSpan="5" style={{ textAlign:'center', color:'var(--text-muted)' }}>No tickets found</td></tr>
-                  ) : (
-                    accTickets.map(t => (
-                      <tr key={t.id}>
-                        <td className="font-mono">{t.ticket_no}</td>
-                        <td className="fw-bold">{t.subject}</td>
-                        <td><span className={`badge badge-${t.status}`}>{t.status}</span></td>
-                        <td><span className={`badge badge-${t.priority}`}>{t.priority}</span></td>
-                        <td onClick={e => e.stopPropagation()}>
-                          <button className="btn btn-secondary btn-sm" onClick={() => {
-                            setEditingTicketId(t.id)
-                            setTicketFormData({ subject: t.subject, priority: t.priority, status: t.status })
-                            setIsTicketModalOpen(true)
-                          }}>Edit</button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {isTicketModalOpen && (
-              <div className="modal-overlay">
-                <div className="modal">
-                  <div className="modal-header">
-                    <h2 className="modal-title">{editingTicketId ? 'Edit Support Ticket' : 'Add Support Ticket'}</h2>
-                    <button className="modal-close" onClick={() => setIsTicketModalOpen(false)}>✕</button>
-                  </div>
-                  <form onSubmit={handleSaveTicket}>
-                    <div className="form-grid">
-                      <div className="form-group full-width">
-                        <label className="form-label">Subject *</label>
-                        <input required className="form-input" value={ticketFormData.subject} onChange={e => setTicketFormData({...ticketFormData, subject: e.target.value})} placeholder="Login issue" />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Priority</label>
-                        <select className="form-input" value={ticketFormData.priority} onChange={e => setTicketFormData({...ticketFormData, priority: e.target.value})}>
-                          <option value="low">Low</option>
-                          <option value="medium">Medium</option>
-                          <option value="high">High</option>
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Status</label>
-                        <select className="form-input" value={ticketFormData.status} onChange={e => setTicketFormData({...ticketFormData, status: e.target.value})}>
-                          <option value="open">Open</option>
-                          <option value="pending">Pending</option>
-                          <option value="closed">Closed</option>
-                        </select>
-                      </div>
-                    </div>
-                    {accContacts.length === 0 && !editingTicketId && (
-                      <div style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: 12 }}>
-                        Warning: This account has no contacts. Ticket cannot be easily linked back to this account later unless a contact exists. Add a contact first if possible.
-                      </div>
-                    )}
-                    <div className="form-actions">
-                      <button type="button" className="btn btn-secondary" onClick={() => setIsTicketModalOpen(false)}>Cancel</button>
-                      <button type="submit" className="btn btn-primary">{editingTicketId ? 'Save Ticket' : 'Create Ticket'}</button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-            </div>
-          )}
-
-          {activeTab === 'tasks' && (
-            <div style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
-                <h3 style={{ margin: 0, fontSize: '15px' }}>Tasks List</h3>
-                <button className="btn btn-secondary btn-sm" onClick={() => {
-                  setEditingTaskId(null)
-                  setTaskFormData({ title: '', task_type: 'Call', status: 'Open', due_date: '', owner: profile?.name || session.user.email })
-                  setIsTaskModalOpen(true)
-                }}>+ New Task</button>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table>
-                  <thead>
-                    <tr><th>Title</th><th>Type</th><th>Status</th><th>Due Date</th><th>Owner</th><th></th></tr>
-                  </thead>
-                  <tbody>
-                    {accTasks.length === 0 ? (
-                      <tr><td colSpan="6" style={{ textAlign:'center', color:'var(--text-muted)' }}>No tasks found</td></tr>
-                    ) : (
-                      accTasks.map(t => (
-                        <tr key={t.id}>
-                          <td className="fw-bold">{t.title}</td>
-                          <td><span className="badge badge-normal">{t.task_type}</span></td>
-                          <td><span className="fw-bold" style={{ fontSize: '13px' }}>{t.status}</span></td>
-                          <td>{t.due_date ? new Date(t.due_date).toLocaleDateString() : 'No deadline'}</td>
-                          <td>{t.owner}</td>
-                          <td style={{ textAlign: 'right' }}>
-                            <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
-                              <button className="btn-icon text-primary" onClick={() => {
-                                setEditingTaskId(t.id)
-                                setTaskFormData({ title: t.title, task_type: t.task_type, status: t.status, due_date: t.due_date || '', owner: t.owner })
-                                setIsTaskModalOpen(true)
-                              }}><Edit2 size={14}/></button>
-                              {isAdmin && (
-                                <button className="btn-icon text-danger" onClick={() => handleDeleteTask(t.id, t.title)}>
-                                  <Trash2 size={14}/>
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'activities' && (
-            <div style={{ padding: 24 }}>
-              {accActs.length === 0 ? (
-                <div style={{ textAlign:'center', color:'var(--text-muted)', fontStyle: 'italic' }}>No activities found relating to {selectedAccount.account_name}</div>
+          {activeTab === 'reminders' && (
+            <div className="reminders-list" style={{ display: 'grid', gap: 16 }}>
+              {activeTasks.length === 0 ? (
+                <div className="card" style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>No active reminders.</div>
               ) : (
+                activeTasks.map(t => {
+                  const isOverdue = new Date(t.due_date) < new Date()
+                  return (
+                    <div key={t.id} className="card reminder-item" style={{ padding: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: `6px solid ${isOverdue ? '#ef4444' : '#f37a23'}`, backgroundColor: isOverdue ? '#fef2f2' : '#fff' }}>
+                      <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                        <div style={{ background: isOverdue ? '#fee2e2' : '#fff5f0', color: isOverdue ? '#ef4444' : '#f37a23', padding: 14, borderRadius: 12 }}>
+                          {isOverdue ? <AlertCircle size={24} /> : <Calendar size={24} />}
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontWeight: 800, fontSize: 16, color: '#1e293b' }}>{selectedAccount.account_name}</span>
+                            <span style={{ color: '#94a3b8' }}>•</span>
+                            <span style={{ fontWeight: 700, color: '#64748b' }}>{t.title.split(': ')[1]?.split(' for ')[0] || t.title}</span>
+                          </div>
+                          <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+                            <span style={{ color: isOverdue ? '#ef4444' : '#f37a23', fontWeight: 800 }}>⚡ Action Due: {new Date(t.due_date).toLocaleDateString()}</span>
+                            {isOverdue && <span className="badge badge-error" style={{ marginLeft: 8, fontSize: 10, background: '#ef4444', color: '#fff' }}>OVERDUE</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <button className="btn btn-sm btn-secondary" style={{ color: '#16a34a', background: '#f0fdf4', border: '1px solid #dcfce3', fontWeight: 700 }} onClick={() => handleTaskAction(t, 'done')}><Check size={14} /> Mark as Done</button>
+                        <button className="btn btn-sm btn-secondary" style={{ color: '#f37a23', background: '#fff9f5', border: '1px solid #ffedd5', fontWeight: 700 }} onClick={() => handleTaskAction(t, 'snooze')}><Clock size={14} /> Snooze (1d)</button>
+                        <button className="btn btn-sm btn-primary" style={{ background: '#f37a23', padding: '0 15px' }} onClick={() => { 
+                          setContactPopupData({
+                            name: selectedAccount.account_name,
+                            phone: accContacts[0]?.phone || selectedAccount.phone || 'No phone',
+                            email: accContacts[0]?.email || selectedAccount.email || 'No email'
+                          })
+                        }}><Phone size={14} /> Contact Customer</button>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          )}
+
+          {activeTab === 'interactions' && (
+             <div className="card" style={{ padding: 24 }}>
                 <div className="activity-list">
                   {accActs.map(a => (
-                    <div key={a.id} className="activity-item">
-                      <div className="activity-dot" />
-                      <div className="activity-content">
-                        <div className="activity-text"><strong>{a.type}</strong>: {a.description}</div>
-                        <div className="activity-time">{new Date(a.created_at).toLocaleDateString()}</div>
+                    <div key={a.id} className="activity-item" style={{ display: 'flex', gap: 15, marginBottom: 20 }}>
+                      <div className="activity-dot" style={{ marginTop: 5 }} />
+                      <div>
+                        <div style={{ fontWeight: 800, color: '#1e293b' }}>{a.type}</div>
+                        <div style={{ fontSize: 14, color: '#64748b' }}>{a.description}</div>
+                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{new Date(a.created_at).toLocaleString()}</div>
                       </div>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+             </div>
           )}
         </div>
 
-        {isTaskModalOpen && (
+        {isModalOpen && (
           <div className="modal-overlay">
-            <div className="modal" style={{ maxWidth: 500 }}>
+            <div className="modal" style={{ maxWidth: 800 }}>
               <div className="modal-header">
-                <h2 className="modal-title">{editingTaskId ? 'Edit Task' : 'Add New Task'}</h2>
-                <button className="modal-close" onClick={() => setIsTaskModalOpen(false)}>✕</button>
+                <h2 className="modal-title">{editingAccount ? 'Edit Profile' : 'Add New Customer'}</h2>
+                <button className="modal-close" onClick={() => setIsModalOpen(false)}>✕</button>
               </div>
-              <form onSubmit={handleSaveTask}>
-                <div className="form-group">
-                  <label className="form-label">Task Title *</label>
-                  <input required className="form-input" value={taskFormData.title} onChange={e => setTaskFormData({...taskFormData, title: e.target.value})} placeholder="e.g. Schedule follow up call" />
-                </div>
-                <div className="form-grid">
-                  <div className="form-group">
-                    <label className="form-label">Type</label>
-                    <select className="form-input" value={taskFormData.task_type} onChange={e => setTaskFormData({...taskFormData, task_type: e.target.value})}>
-                      {['Email', 'Message', 'Call', 'Demo Meeting', 'Events', 'Inperson Meeting'].map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Status</label>
-                    <select className="form-input" value={taskFormData.status} onChange={e => setTaskFormData({...taskFormData, status: e.target.value})}>
-                      {['Open', 'Working', 'Pending', 'Completed'].map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Due Date</label>
-                    <input type="date" className="form-input" value={taskFormData.due_date} onChange={e => setTaskFormData({...taskFormData, due_date: e.target.value})} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Owner</label>
-                    <input className="form-input" value={taskFormData.owner} onChange={e => setTaskFormData({...taskFormData, owner: e.target.value})} />
-                  </div>
-                </div>
-                <div className="form-actions" style={{ marginTop: 24 }}>
-                  <button type="button" className="btn btn-secondary" onClick={() => setIsTaskModalOpen(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary">{editingTaskId ? 'Save Changes' : 'Create Task'}</button>
-                </div>
+              <form onSubmit={async (e) => {
+                  e.preventDefault()
+                  const toastId = toast.loading('Saving profile...')
+                  try {
+                    const payload = { 
+                      account_name: formData.custom_data?.customer_name || formData.custom_data?.full_name || formData.account_name, 
+                      email: formData.custom_data?.email_id || (formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.email || null)),
+                      phone: formData.custom_data?.contact_number || (!formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.phone || null)),
+                      address: formData.address,
+                      gender: formData.gender,
+                      date_of_birth: formData.date_of_birth || null,
+                      notes: formData.notes,
+                      status: formData.status,
+                      account_owner: formData.account_owner,
+                      custom_data: formData.custom_data,
+                      user_id: session.user.id,
+                      updated_at: new Date().toISOString()
+                    }
+
+                    if (isB2C && isStageTrackingEnabled && b2cStages.length > 0 && !editingAccount) {
+                      payload.b2c_stage_id = b2cStages[0].id
+                    }
+                    
+                    let accountId
+                    if (editingAccount) {
+                      await supabase.from('accounts').update(payload).eq('id', editingAccount.id)
+                      accountId = editingAccount.id
+                      if (formData.contact_id) { 
+                        await supabase.from('contacts').update({ 
+                          phone: payload.phone, 
+                          email: payload.email, 
+                          name: payload.account_name 
+                        }).eq('id', formData.contact_id) 
+                      }
+                    } else {
+                      const { data: n, error: nErr } = await supabase.from('accounts').insert([payload]).select().single()
+                      if (nErr) throw nErr
+                      accountId = n.id
+                      await supabase.from('contacts').insert([{ 
+                        account_id: n.id, 
+                        phone: payload.phone, 
+                        email: payload.email, 
+                        name: payload.account_name, 
+                        user_id: session.user.id 
+                      }])
+                    }
+                    
+                    toast.success('Customer profile saved!', { id: toastId })
+                    setIsModalOpen(false)
+                    fetchAccounts()
+                    // Refresh the detail view with updated data
+                    if (editingAccount && selectedAccount) {
+                      const { data: updated } = await supabase
+                        .from('accounts')
+                        .select('*, contacts(phone, email, id)')
+                        .eq('id', editingAccount.id)
+                        .single()
+                      if (updated) setSelectedAccount(updated)
+                    }
+                  } catch (err) { toast.error(err.message, { id: toastId }) }
+              }}>
+                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                   <div className="form-group" style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '12px 20px', borderRadius: 12, border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label className="form-label" style={{ margin: 0 }}>Customer Relationship Status</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: formData.status === 'Active' ? '#16a34a' : '#64748b' }}>
+                          {formData.status.toUpperCase()}
+                        </span>
+                        <label style={{ position: 'relative', display: 'inline-block', width: 44, height: 24, cursor: 'pointer' }}>
+                          <input type="checkbox" className="sr-only" checked={formData.status === 'Active'} onChange={(e) => setFormData({...formData, status: e.target.checked ? 'Active' : 'Inactive'})} />
+                          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: formData.status === 'Active' ? '#dcfce3' : '#e2e8f0', borderRadius: 24, transition: '0.4s' }}></div>
+                          <div style={{ position: 'absolute', height: 18, width: 18, left: formData.status === 'Active' ? 22 : 3, bottom: 3, backgroundColor: formData.status === 'Active' ? '#16a34a' : '#94a3b8', borderRadius: '50%', transition: '0.4s' }}></div>
+                        </label>
+                      </div>
+                   </div>
+
+                   {customFieldConfigs.map(config => (
+                      <div key={config.id} className="form-group" style={{ gridColumn: (config.field_type === 'long_text' || config.field_type === 'file_upload') ? 'span 2' : 'auto' }}>
+                        <label className="form-label">{config.label} {config.is_required && <span className="text-danger">*</span>}</label>
+                        {renderCustomFieldInput(config, formData.custom_data[config.field_key], (val) => {
+                          setFormData({
+                            ...formData,
+                            custom_data: { ...formData.custom_data, [config.field_key]: val }
+                          })
+                        }, session.user.id)}
+                      </div>
+                    ))}
+                 </div>
+                 
+                 <div className="form-actions" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid #f1f5f9' }}>
+                    <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
+                    <button type="submit" className="btn btn-primary">{editingAccount ? 'Update Profile' : 'Create Customer'}</button>
+                 </div>
               </form>
             </div>
           </div>
         )}
 
-        {isModalOpen && (
+        {isServiceModalOpen && (
           <div className="modal-overlay">
-            <div className="modal">
+            <div className="modal" style={{ maxWidth: 450 }}>
               <div className="modal-header">
-                <h2 className="modal-title">{editingAccount ? 'Edit Account' : 'Add New Account'}</h2>
-                <button className="modal-close" onClick={() => setIsModalOpen(false)}>✕</button>
+                <h2 className="modal-title">{editingServiceEntry ? 'Edit Service Entry' : 'New Service Entry'}</h2>
+                <button className="modal-close" onClick={() => setIsServiceModalOpen(false)}>✕</button>
               </div>
-              
-              <form onSubmit={handleSubmit}>
-                <div className="form-grid">
-                  <div className="form-group full-width">
-                    <label className="form-label">Account Name *</label>
-                    <input required className="form-input" value={formData.account_name} onChange={e => setFormData({...formData, account_name: e.target.value})} placeholder="Acme Corp" />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Domain Name</label>
-                    <input className="form-input" value={formData.domain} onChange={e => setFormData({...formData, domain: e.target.value})} placeholder="acme.com" />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Status</label>
-                    <select className="form-input" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                      <option value="prospect">Prospect</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Account Owner</label>
-                    <input className="form-input" value={formData.account_owner} onChange={e => setFormData({...formData, account_owner: e.target.value})} />
-                  </div>
+
+              {isB2C && isStageTrackingEnabled && (
+                <div style={{ display: 'flex', gap: 10, padding: '0 24px', borderBottom: '1px solid #e2e8f0', marginBottom: 20 }}>
+                  <button 
+                    className={`nav-tab ${serviceEntryTab === 'quick' ? 'active' : ''}`}
+                    onClick={() => setServiceEntryTab('quick')}
+                    style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: serviceEntryTab === 'quick' ? '3px solid #f37a23' : '3px solid transparent', color: serviceEntryTab === 'quick' ? '#f37a23' : '#64748b', fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    ⚡ Quick Entry
+                  </button>
+                  <button 
+                    className={`nav-tab ${serviceEntryTab === 'stage' ? 'active' : ''}`}
+                    onClick={() => setServiceEntryTab('stage')}
+                    style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: serviceEntryTab === 'stage' ? '3px solid #f37a23' : '3px solid transparent', color: serviceEntryTab === 'stage' ? '#f37a23' : '#64748b', fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    🔄 Entry with Stages
+                  </button>
                 </div>
-                
+              )}
+
+              <form onSubmit={handleAssignService}>
+                <div className="form-group" style={{ marginBottom: 16 }}>
+                  <label className="form-label">Select Master Service *</label>
+                  <select required className="form-input" value={serviceAssignForm.service_id} 
+                    onChange={e => {
+                      const svc = availableServices.find(s => s.id === e.target.value)
+                      setServiceAssignForm({...serviceAssignForm, service_id: e.target.value, price: svc?.price || 0, reminder_days: svc?.reminder_days || 7})
+                    }}>
+                    <option value="">-- Choose From Catalog --</option>
+                    {availableServices.map(s => <option key={s.id} value={s.id}>{s.service_name}</option>)}
+                  </select>
+                </div>
+                <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                   <div className="form-group">
+                      <label className="form-label">Price ($)</label>
+                      <input type="number" className="form-input" value={serviceAssignForm.price} onChange={e => setServiceAssignForm({...serviceAssignForm, price: e.target.value})} />
+                   </div>
+                   <div className="form-group">
+                      <label className="form-label">Reminder (Days)</label>
+                      <input type="number" className="form-input" value={serviceAssignForm.reminder_days} onChange={e => setServiceAssignForm({...serviceAssignForm, reminder_days: e.target.value})} />
+                   </div>
+                </div>
+                <div className="form-group" style={{ marginBottom: 16 }}>
+                  <label className="form-label">Payment Status *</label>
+                  <select className="form-input" value={serviceAssignForm.payment_status} onChange={e => setServiceAssignForm({...serviceAssignForm, payment_status: e.target.value})}>
+                    <option value="Paid">✅ Paid</option>
+                    <option value="Unpaid">❌ Unpaid</option>
+                  </select>
+                </div>
+
+                {isB2C && isStageTrackingEnabled && serviceEntryTab === 'stage' && (
+                  <>
+                    <div className="form-group" style={{ marginBottom: 16 }}>
+                      <label className="form-label">Current Stage</label>
+                      <select required className="form-input" value={serviceAssignForm.b2c_stage_id} onChange={e => setServiceAssignForm({...serviceAssignForm, b2c_stage_id: e.target.value})}>
+                        <option value="">-- Assign Stage --</option>
+                        {b2cStages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 16 }}>
+                      <label className="form-label">Stage Notes</label>
+                      <textarea className="form-input" style={{ minHeight: 60 }} value={serviceAssignForm.stage_notes} onChange={e => setServiceAssignForm({...serviceAssignForm, stage_notes: e.target.value})} placeholder="Notes specific to this stage..." />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 16 }}>
+                      <label className="form-label">Next Follow Up Date</label>
+                      <input type="date" className="form-input" value={serviceAssignForm.next_follow_up_date} onChange={e => setServiceAssignForm({...serviceAssignForm, next_follow_up_date: e.target.value})} />
+                    </div>
+                  </>
+                )}
+
+                <div className="form-group" style={{ marginBottom: 24 }}>
+                  <label className="form-label">Notes / Observations</label>
+                  <textarea className="form-input" style={{ minHeight: 80 }} value={serviceAssignForm.notes} onChange={e => setServiceAssignForm({...serviceAssignForm, notes: e.target.value})} placeholder="Any specific notes for this visit..." />
+                </div>
                 <div className="form-actions">
-                  <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary">{editingAccount ? 'Save Changes' : 'Create Account'}</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setIsServiceModalOpen(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Save size={18} /> {editingServiceEntry ? 'Update & Sync' : 'Save & Generate'}
+                  </button>
                 </div>
               </form>
             </div>
@@ -810,145 +962,215 @@ export default function Accounts({ session, profile }) {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Accounts</h1>
-          <p className="page-subtitle">Manage companies and organizations.</p>
+          <h1 className="page-title">{isB2C ? 'Customer Profiles' : 'Accounts'}</h1>
+          <p className="page-subtitle">Manage your retail customers and track their service history.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-          <span style={{ fontSize: 18 }}>+</span> Add New Account
-        </button>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button className="btn btn-secondary" onClick={() => setIsFieldBuilderOpen(true)}>
+            <Settings size={16} /> Edit fields
+          </button>
+          <button className="btn btn-primary" onClick={() => handleOpenModal()}><Plus size={16} /> Add New Customer</button>
+        </div>
       </div>
 
-      <div className="table-container">
-        <div className="table-header">
-          <h2 className="table-title">All Accounts ({accounts.length})</h2>
-          <LocalSearch 
-             data={accounts} 
-             searchKeys={['account_name', 'domain']} 
-             onSelect={(item) => setSelectedAccount(item)} 
-             placeholder="Search accounts..." 
-             renderItem={(item) => (
-               <>
-                 <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{item.account_name}</div>
-                 <div className="text-muted" style={{ fontSize: '11px' }}>{item.domain}</div>
-               </>
-             )}
-          />
-        </div>
-        
+      <div className="table-container card">
+        <div style={{ padding: '0 24px' }}><LocalSearch data={accounts} searchKeys={['account_name', 'phone', 'email', 'address']} placeholder={"Search customers by name, phone, email..."} /></div>
         <div style={{ overflowX: 'auto' }}>
           <table>
             <thead>
               <tr>
-                <th>Account Name</th>
-                <th>Domain</th>
-                <th>Owner</th>
+                <th style={{ minWidth: 180 }}>Customer Profile</th>
                 <th>Status</th>
-                <th>Created</th>
-                <th></th>
+                {isB2C && isStageTrackingEnabled && <th>Stage</th>}
+                {customFieldConfigs.filter(c => c.show_in_list && !c.is_core).map(config => (
+                  <th key={config.id}>{config.label}</th>
+                ))}
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {accounts.length === 0 ? (
-                <tr>
-                  <td colSpan="5">
-                    <div className="empty-state">
-                      <div className="empty-state-icon"></div>
-                      <h3>No accounts yet</h3>
-                      <p>Add a company or convert a lead to get started.</p>
+              {accounts.map(acc => (
+                <tr key={acc.id} onClick={() => setSelectedAccount(acc)} className="clickable">
+                  <td className="fw-bold">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 12, background: 'linear-gradient(135deg, #f37a23, #ff8c42)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900 }}>
+                        {acc.account_name?.[0]?.toUpperCase() || '?'}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{acc.account_name}</div>
+                        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>{acc.phone || acc.email || 'No contact info'}</div>
+                      </div>
                     </div>
                   </td>
-                </tr>
-              ) : (
-                accounts.map(acc => (
-                  <tr 
-                    key={acc.id} 
-                    className="clickable-row"
-                    onClick={() => setSelectedAccount(acc)}
-                  >
-                    <td className="fw-bold">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 6, background: '#3b82f6', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                          {acc.account_name.charAt(0).toUpperCase()}
-                        </div>
-                        {acc.account_name}
-                      </div>
-                    </td>
-                    <td><a href={`https://${acc.domain}`} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>{acc.domain || '-'}</a></td>
-                    <td>{acc.account_owner}</td>
+                  <td>
+                    <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 12, background: acc.status === 'Active' ? '#dcfce3' : '#f1f5f9', color: acc.status === 'Active' ? '#16a34a' : '#64748b', fontWeight: 800 }}>{acc.status}</span>
+                  </td>
+                  {isB2C && isStageTrackingEnabled && (
                     <td>
-                      <span className={`badge badge-${acc.status}`}>{acc.status}</span>
+                      {acc.b2c_stage_id ? (
+                        <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 12, background: b2cStages.find(s => s.id === acc.b2c_stage_id)?.color + '20', color: b2cStages.find(s => s.id === acc.b2c_stage_id)?.color, fontWeight: 800 }}>
+                          {b2cStages.find(s => s.id === acc.b2c_stage_id)?.name || 'Untracked'}
+                        </span>
+                      ) : '-'}
                     </td>
-                    <td className="text-muted">{new Date(acc.created_at).toLocaleDateString()}</td>
-                    <td onClick={e => e.stopPropagation()} style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        <button 
-                          className="btn btn-secondary btn-sm" 
-                          style={{ padding: '6px' }}
-                          onClick={() => handleOpenModal(acc)}
-                          title="Edit Account"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        {isAdmin && (
-                          <button 
-                            className="btn btn-secondary btn-sm" 
-                            style={{ padding: '6px', color: 'var(--danger)' }}
-                            onClick={() => handleDeleteAccount(acc.id, acc.account_name)}
-                            title="Delete Account"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
+                  )}
+                  {customFieldConfigs.filter(c => c.show_in_list && !c.is_core).map(config => {
+                    const val = acc.custom_data?.[config.field_key]
+                    return (
+                      <td key={config.id} style={{ fontSize: 13, color: '#475569' }}>
+                        {config.field_type === 'checkbox' ? (val ? '✅' : '❌') : (val?.toString() || '-')}
+                      </td>
+                    )
+                  })}
+                  <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                    <button className="btn-icon" onClick={() => handleOpenModal(acc)} title="Edit"><Edit2 size={16} /></button>
+                    <button className="btn-icon text-danger" onClick={() => handleDeleteAccount(acc)} title="Delete"><Trash2 size={16} /></button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </div>
-
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="modal">
+          <div className="modal" style={{ maxWidth: 800 }}>
             <div className="modal-header">
-              <h2 className="modal-title">{editingAccount ? 'Edit Account' : 'Add New Account'}</h2>
+              <h2 className="modal-title">{editingAccount ? 'Edit Profile' : 'Add New Customer'}</h2>
               <button className="modal-close" onClick={() => setIsModalOpen(false)}>✕</button>
             </div>
-            
-            <form onSubmit={handleSubmit}>
-              <div className="form-grid">
-                <div className="form-group full-width">
-                  <label className="form-label">Account Name *</label>
-                  <input required className="form-input" value={formData.account_name} onChange={e => setFormData({...formData, account_name: e.target.value})} placeholder="Acme Corp" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Domain Name</label>
-                  <input className="form-input" value={formData.domain} onChange={e => setFormData({...formData, domain: e.target.value})} placeholder="acme.com" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Status</label>
-                  <select className="form-input" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="prospect">Prospect</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Account Owner</label>
-                  <input className="form-input" value={formData.account_owner} onChange={e => setFormData({...formData, account_owner: e.target.value})} />
-                </div>
-              </div>
-              
-              <div className="form-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">{editingAccount ? 'Save Changes' : 'Create Account'}</button>
-              </div>
+            <form onSubmit={async (e) => {
+                e.preventDefault()
+                const toastId = toast.loading('Saving profile...')
+                try {
+                  const payload = { 
+                    account_name: formData.custom_data?.customer_name || formData.custom_data?.full_name || formData.account_name, 
+                    email: formData.custom_data?.email_id || (formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.email || null)),
+                    phone: formData.custom_data?.contact_number || (!formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.phone || null)),
+                    address: formData.address, // Keep legacy columns for compatibility
+                    gender: formData.gender,
+                    date_of_birth: formData.date_of_birth || null,
+                    notes: formData.notes,
+                    status: formData.status,
+                    account_owner: formData.account_owner,
+                    custom_data: formData.custom_data,
+                    user_id: session.user.id,
+                    updated_at: new Date().toISOString()
+                  }
+
+                  if (isB2C && isStageTrackingEnabled && b2cStages.length > 0 && !editingAccount) {
+                    payload.b2c_stage_id = b2cStages[0].id
+                  }
+                  
+                  let accountId
+                  if (editingAccount) {
+                    await supabase.from('accounts').update(payload).eq('id', editingAccount.id)
+                    accountId = editingAccount.id
+                    if (formData.contact_id) { 
+                      await supabase.from('contacts').update({ 
+                        phone: payload.phone, 
+                        email: payload.email, 
+                        name: payload.account_name 
+                      }).eq('id', formData.contact_id) 
+                    }
+                  } else {
+                    const { data: n, error: nErr } = await supabase.from('accounts').insert([payload]).select().single()
+                    if (nErr) throw nErr
+                    accountId = n.id
+                    await supabase.from('contacts').insert([{ 
+                      account_id: n.id, 
+                      phone: payload.phone, 
+                      email: payload.email, 
+                      name: payload.account_name, 
+                      user_id: session.user.id 
+                    }])
+                  }
+                  
+                  toast.success('Customer profile saved!', { id: toastId })
+                  setIsModalOpen(false)
+                  fetchAccounts()
+                } catch (e) { toast.error(e.message, { id: toastId }) }
+            }}>
+               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                 {/* Status is a system-fixed field */}
+                 <div className="form-group" style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '12px 20px', borderRadius: 12, border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label className="form-label" style={{ margin: 0 }}>Customer Relationship Status</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: formData.status === 'Active' ? '#16a34a' : '#64748b' }}>
+                        {formData.status.toUpperCase()}
+                      </span>
+                      <label style={{ position: 'relative', display: 'inline-block', width: 44, height: 24, cursor: 'pointer' }}>
+                        <input type="checkbox" className="sr-only" checked={formData.status === 'Active'} onChange={(e) => setFormData({...formData, status: e.target.checked ? 'Active' : 'Inactive'})} />
+                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: formData.status === 'Active' ? '#dcfce3' : '#e2e8f0', borderRadius: 24, transition: '0.4s' }}></div>
+                        <div style={{ position: 'absolute', height: 18, width: 18, left: formData.status === 'Active' ? 22 : 3, bottom: 3, backgroundColor: formData.status === 'Active' ? '#16a34a' : '#94a3b8', borderRadius: '50%', transition: '0.4s' }}></div>
+                      </label>
+                    </div>
+                 </div>
+
+                 {/* Dynamic Fields Loop */}
+                 {customFieldConfigs.map(config => (
+                    <div key={config.id} className="form-group" style={{ gridColumn: (config.field_type === 'long_text' || config.field_type === 'file_upload') ? 'span 2' : 'auto' }}>
+                      <label className="form-label">{config.label} {config.is_required && <span className="text-danger">*</span>}</label>
+                      {renderCustomFieldInput(config, formData.custom_data[config.field_key], (val) => {
+                        setFormData({
+                          ...formData,
+                          custom_data: { ...formData.custom_data, [config.field_key]: val }
+                        })
+                      }, session.user.id)}
+                    </div>
+                  ))}
+               </div>
+               
+               <div className="form-actions" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid #f1f5f9' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary">{editingAccount ? 'Update Profile' : 'Create Customer'}</button>
+               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* Contact Customer Popup Modal */}
+      {contactPopupData && (
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="modal" style={{ maxWidth: 350, textAlign: 'center', padding: 30 }}>
+            <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg, #f37a23, #ff8c42)', color: '#fff', fontSize: 24, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              {contactPopupData.name[0]?.toUpperCase()}
+            </div>
+            <h2 style={{ margin: '0 0 16px 0', fontSize: 20 }}>{contactPopupData.name}</h2>
+            <div style={{ background: '#f8fafc', padding: 16, borderRadius: 12, marginBottom: 20, textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 800 }}>Contact Number</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b' }}>{contactPopupData.phone}</div>
+                <a href={`tel:${contactPopupData.phone}`} className="btn btn-sm" style={{ background: '#f37a2315', color: '#f37a23', marginTop: 8, display: 'inline-flex', padding: '4px 12px' }}><Phone size={14} style={{ marginRight: 6 }}/> Call Now</a>
+              </div>
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
+                <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 800 }}>Email Address</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: '#1e293b' }}>{contactPopupData.email}</div>
+              </div>
+            </div>
+            <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => setContactPopupData(null)}>Close</button>
+          </div>
+        </div>
+      )}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .tab-badge { background: #f37a23; color: #fff; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 8px; font-weight: 800; }
+        .reminder-item { transition: all 0.2s; } .reminder-item:hover { background: #fffafa; border-color: #f37a23; }
+        .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); z-index: 1000; opacity: 0; animation: fadeIn 0.3s forwards; }
+        .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 600px; background: #fff; z-index: 1001; box-shadow: -10px 0 40px rgba(0,0,0,0.1); transform: translateX(100%); animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; display: flex; flexDirection: column; }
+        @keyframes fadeIn { to { opacity: 1; } }
+        @keyframes slideIn { to { transform: translateX(0); } }
+      `}} />
+
+      <FieldBuilderModal 
+        module="customer_profile"
+        businessId={session.user.id}
+        isOpen={isFieldBuilderOpen}
+        onClose={() => {
+          setIsFieldBuilderOpen(false)
+          fetchCustomConfigs() // Refresh current view
+        }}
+      />
     </div>
   )
 }

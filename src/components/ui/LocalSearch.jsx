@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 
-export default function LocalSearch({ data, searchKeys, onSelect, placeholder, renderItem }) {
+export default function LocalSearch({ data = [], searchKeys = [], onSelect = () => {}, placeholder = "Search...", renderItem = (item) => item.name || item.account_name || item.service_name || "Result" }) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef(null);
@@ -15,12 +15,13 @@ export default function LocalSearch({ data, searchKeys, onSelect, placeholder, r
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [wrapperRef]);
 
-  const results = query.trim() === '' ? [] : data.filter(item => {
+  const results = query.trim() === '' ? [] : (data || []).filter(item => {
+    if (!searchKeys || searchKeys.length === 0) return true; // Show all if no keys
     return searchKeys.some(key => {
       const val = item[key];
       return val && val.toString().toLowerCase().includes(query.toLowerCase());
     });
-  }).slice(0, 5); // Limit to top 5 matches
+  }).slice(0, 5); 
 
   const handleSelect = (item) => {
     setIsOpen(false);

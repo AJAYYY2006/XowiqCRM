@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
-import { Trash2, Edit2, Calendar, User, Tag, Link2, CheckCircle2, Clock, PlayCircle, AlertCircle } from 'lucide-react'
+import { Trash2, Edit2, Calendar, User, Tag, Link2, CheckCircle2, Clock, PlayCircle, AlertCircle, CheckCircle } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 
-const TASK_TYPES = ['Email', 'Message', 'Call', 'Demo Meeting', 'Events', 'Inperson Meeting']
-const STATUS_STAGES = ['Open', 'Working', 'Pending', 'Completed']
+const TASK_TYPES = ['Follow-up', 'Demo', 'Onboarding', 'Renewal', 'Support', 'Email', 'Message', 'Call', 'Events']
+const STATUS_STAGES = ['Pending', 'In Progress', 'Completed', 'Overdue']
 const RELATED_ENTITIES = [
   { value: 'leads', label: 'Lead' },
   { value: 'contacts', label: 'Contact' },
@@ -21,7 +21,11 @@ export default function Tasks({ session, profile }) {
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
+  const [viewMode, setViewMode] = useState('active') // 'active' or 'history'
   
+  const companyType = session.user.user_metadata?.companyType || 'B2B'
+  const isB2C = companyType === 'B2C'
+
   // Entity data for relationships
   const [entityData, setEntityData] = useState({
     leads: [], contacts: [], accounts: [], opportunities: [], invoices: [], quotes: [], tickets: []
@@ -30,10 +34,10 @@ export default function Tasks({ session, profile }) {
   const [formData, setFormData] = useState({
     title: '',
     due_date: '',
-    status: 'Open',
-    task_type: 'Call',
+    status: 'Pending',
+    task_type: 'Follow-up',
     owner: profile?.name || session.user.email,
-    related_to: 'leads',
+    related_to: 'accounts',
     related_id: ''
   })
 
@@ -49,10 +53,20 @@ export default function Tasks({ session, profile }) {
         .from('tasks')
         .select('*')
         .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false })
+        .order('due_date', { ascending: true })
       
       if (error) throw error
-      setTasks(data || [])
+      
+      // Auto-update to Overdue if needed
+      const today = new Date(); today.setHours(0,0,0,0)
+      const updatedData = (data || []).map(t => {
+        if (t.status !== 'Completed' && t.due_date && new Date(t.due_date) < today && t.status !== 'Overdue') {
+          return { ...t, status: 'Overdue' }
+        }
+        return t
+      })
+      
+      setTasks(updatedData)
     } catch (error) {
       toast.error('Failed to load tasks')
     } finally {
@@ -92,10 +106,10 @@ export default function Tasks({ session, profile }) {
       setFormData({
         title: task.title,
         due_date: task.due_date || '',
-        status: task.status || 'Open',
-        task_type: task.task_type || 'Call',
+        status: task.status || 'Pending',
+        task_type: task.task_type || 'Follow-up',
         owner: task.owner || profile?.name || session.user.email,
-        related_to: task.related_to || 'leads',
+        related_to: task.related_to || 'accounts',
         related_id: task.related_id || ''
       })
     } else {
@@ -103,14 +117,95 @@ export default function Tasks({ session, profile }) {
       setFormData({
         title: '',
         due_date: '',
-        status: 'Open',
-        task_type: 'Call',
+        status: 'Pending',
+        task_type: 'Follow-up',
         owner: profile?.name || session.user.email,
-        related_to: 'leads',
+        related_to: 'accounts',
         related_id: ''
       })
     }
     setIsModalOpen(true)
+  }
+
+  const handleMarkComplete = async (task) => {
+    const toastId = toast.loading('Marking as completed...')
+    try {
+      const now = new Date().toISOString()
+      
+      // 1. Update status
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: 'Completed', updated_at: now })
+        .eq('id', task.id)
+      
+      if (error) throw error
+
+      // 2. Interaction History Log
+      await supabase.from('activities').insert([{
+        user_id: session.user.id,
+        type: 'Task Completed',
+        description: `Completed ${task.task_type}: ${task.title}` + (task.related_id ? ` for ${getRelatedName(task)}` : '')
+      }])
+
+      // 3. Auto-generate next follow-up if type is "Follow-up"
+      if (task.task_type === 'Follow-up' && task.related_id) {
+        const nextDue = new Date()
+        nextDue.setDate(nextDue.getDate() + 7)
+        
+        await supabase.from('tasks').insert([{
+          title: `Next Follow-up: ${task.title}`,
+          task_type: 'Follow-up',
+          due_date: nextDue.toISOString().split('T')[0],
+          status: 'Pending',
+          owner: task.owner,
+          related_to: task.related_to,
+          related_id: task.related_id,
+          user_id: session.user.id
+        }])
+        toast.success('Next follow-up generated (+7 days)')
+      }
+
+      // 4. Lead Status Update (Behavior 1.4)
+      if (task.related_to === 'leads' && task.related_id) {
+        // Check if all other tasks for this lead are completed
+        const { data: otherTasks } = await supabase
+          .from('tasks')
+          .select('status')
+          .eq('related_to', 'leads')
+          .eq('related_id', task.related_id)
+          .neq('id', task.id)
+        
+        const allDone = (otherTasks || []).every(t => t.status === 'Completed')
+        if (allDone) {
+          await supabase.from('leads').update({ status: 'Nurturing Complete' }).eq('id', task.related_id)
+          toast.success('Lead status updated to: Nurturing Complete')
+        }
+      }
+
+      toast.success('Task marked as completed', { id: toastId })
+      fetchTasks()
+    } catch (error) {
+      toast.error(error.message, { id: toastId })
+    }
+  }
+
+  const handleSnooze = async (task) => {
+    const toastId = toast.loading('Snoozing task (+24h)...')
+    try {
+      const currentDue = task.due_date ? new Date(task.due_date) : new Date()
+      currentDue.setDate(currentDue.getDate() + 1)
+      
+      const { error } = await supabase
+        .from('tasks')
+        .update({ due_date: currentDue.toISOString().split('T')[0], status: 'Pending' })
+        .eq('id', task.id)
+      
+      if (error) throw error
+      toast.success('Snoozed to tomorrow', { id: toastId })
+      fetchTasks()
+    } catch (error) {
+      toast.error(error.message, { id: toastId })
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -120,6 +215,9 @@ export default function Tasks({ session, profile }) {
     try {
       const payload = {
         ...formData,
+        // Convert empty strings to null for database compatibility (UUID/Date fields)
+        related_id: formData.related_id || null,
+        due_date: formData.due_date || null,
         user_id: session.user.id
       }
 
@@ -129,6 +227,13 @@ export default function Tasks({ session, profile }) {
           .update(payload)
           .eq('id', editingTask.id)
         if (error) throw error
+        
+        // Behavior 1.1 logic if status changed to Completed here
+        if (formData.status === 'Completed' && editingTask.status !== 'Completed') {
+          handleMarkComplete(editingTask) // Uses existing logic for follow-ups
+          return // handleMarkComplete handles the close/refresh
+        }
+        
         toast.success('Task updated', { id: toastId })
       } else {
         const { error } = await supabase
@@ -160,10 +265,21 @@ export default function Tasks({ session, profile }) {
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'Completed': return <CheckCircle2 size={16} className="text-success" />
-      case 'Working': return <PlayCircle size={16} style={{ color: '#3b82f6' }} />
-      case 'Pending': return <Clock size={16} style={{ color: '#f59e0b' }} />
-      default: return <AlertCircle size={16} style={{ color: '#6b7280' }} />
+      case 'Completed': return <CheckCircle2 size={18} className="text-success" />
+      case 'In Progress': return <PlayCircle size={18} style={{ color: '#3b82f6' }} />
+      case 'Pending': return <Clock size={18} style={{ color: '#f59e0b' }} />
+      case 'Overdue': return <AlertCircle size={18} className="text-danger" />
+      default: return <Clock size={18} style={{ color: '#6b7280' }} />
+    }
+  }
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Completed': return '#16a34a' // Green
+      case 'In Progress': return '#3b82f6' // Blue
+      case 'Overdue': return '#dc2626' // Red
+      case 'Pending': return '#f59e0b' // Yellow (prompt said Yellow for In Progress, but standard is Pending=Yellow)
+      default: return '#6b7280'
     }
   }
 
@@ -174,6 +290,110 @@ export default function Tasks({ session, profile }) {
     return item ? (item.name || item.account_name || item.invoice_name || item.quote_name || item.subject) : 'Unknown'
   }
 
+  const filteredTasksByStatus = tasks.filter(t => 
+    viewMode === 'active' ? t.status !== 'Completed' : t.status === 'Completed'
+  )
+
+  const groupTasks = (taskList) => {
+    const today = new Date(); today.setHours(0,0,0,0)
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
+    const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + (7 - today.getDay()))
+
+    return {
+      overdue: taskList.filter(t => t.status === 'Overdue' || (t.due_date && new Date(t.due_date) < today)),
+      today: taskList.filter(t => t.due_date && new Date(t.due_date).setHours(0,0,0,0) === today.getTime()),
+      thisWeek: taskList.filter(t => t.due_date && new Date(t.due_date) >= tomorrow && new Date(t.due_date) <= endOfWeek),
+      upcoming: taskList.filter(t => !t.due_date || new Date(t.due_date) > endOfWeek)
+    }
+  }
+
+  const groups = groupTasks(filteredTasksByStatus)
+
+  const renderTaskTable = (taskList, title, color) => {
+    if (taskList.length === 0) return null;
+
+    return (
+      <div key={title} style={{ marginBottom: 24 }}>
+        <h3 style={{ fontSize: 13, color: color, marginBottom: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
+          {title.toUpperCase()} ({taskList.length})
+        </h3>
+        <div style={{ overflowX: 'auto' }}>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 40 }}></th>
+                <th>Task Title</th>
+                <th>Type</th>
+                <th>Related To</th>
+                <th>Due Date</th>
+                <th>Owner</th>
+                <th>Status</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {taskList.map(task => (
+                <tr key={task.id}>
+                  <td>{getStatusIcon(task.status)}</td>
+                  <td>
+                    <div className="fw-bold">{task.title}</div>
+                  </td>
+                  <td>
+                    <span className="badge badge-normal">{task.task_type}</span>
+                  </td>
+                  <td>
+                    <div className="text-muted" style={{ fontSize: '12px' }}>
+                      <span style={{ textTransform: 'capitalize' }}>
+                        {task.related_to === 'accounts' ? (isB2C ? 'Customer' : 'Account') : task.related_to || '-'}:
+                      </span> {getRelatedName(task)}
+                    </div>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '13px', color: task.status === 'Overdue' ? '#dc2626' : 'inherit' }}>
+                      <Calendar size={14} className="text-muted" />
+                      {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No deadline'}
+                    </div>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '13px' }}>
+                      <User size={14} className="text-muted" />
+                      {task.owner}
+                    </div>
+                  </td>
+                  <td>
+                    <span style={{ 
+                      fontSize: '11px', fontWeight: 800, padding: '4px 8px', borderRadius: '12px',
+                      background: `${getStatusColor(task.status)}15`, color: getStatusColor(task.status)
+                    }}>
+                      {task.status}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
+                      {task.status !== 'Completed' && (
+                        <>
+                          <button className="btn btn-sm btn-secondary" style={{ color: '#16a34a', border: '1px solid #dcfce3', background: '#f0fdf4' }} onClick={() => handleMarkComplete(task)}>
+                            <CheckCircle size={14} style={{ marginRight: 4 }} /> Done
+                          </button>
+                          <button className="btn btn-sm btn-secondary" style={{ color: '#f37a23', border: '1px solid #fff5f0', background: '#fff5f0' }} onClick={() => handleSnooze(task)}>
+                            <Clock size={14} style={{ marginRight: 4 }} /> Snooze
+                          </button>
+                        </>
+                      )}
+                      <button className="btn-icon" onClick={() => handleOpenModal(task)}><Edit2 size={16} /></button>
+                      <button className="btn-icon text-danger" onClick={() => handleDeleteTask(task)}><Trash2 size={16} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
   if (loading) return <div className="loading-container"><div className="spinner" /></div>
   
   const isAdmin = ['admin', 'administrator'].includes(profile?.role?.toLowerCase())
@@ -182,8 +402,8 @@ export default function Tasks({ session, profile }) {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Tasks</h1>
-          <p className="page-subtitle">Track follow-ups, meetings, and project tasks.</p>
+          <h1 className="page-title">{isB2C ? 'Antigravity B2C Tasks' : 'Tasks'}</h1>
+          <p className="page-subtitle">{isB2C ? 'Automated engagement tracking and customer follow-ups.' : 'Track follow-ups, meetings, and project tasks.'}</p>
         </div>
         <button className="btn btn-primary" onClick={() => handleOpenModal()}>
           <span style={{ fontSize: 18 }}>+</span> Create Task
@@ -191,88 +411,62 @@ export default function Tasks({ session, profile }) {
       </div>
 
       <div className="table-container">
-        <div className="table-header">
-          <h2 className="table-title">All Tasks ({tasks.length})</h2>
-          <LocalSearch 
-            data={tasks}
-            searchKeys={['title', 'task_type', 'owner']}
-            onSelect={(item) => handleOpenModal(item)}
-            placeholder="Search tasks..."
-          />
+        <div className="table-header" style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: 0 }}>
+          <div style={{ display: 'flex', gap: 24 }}>
+            <button 
+              onClick={() => setViewMode('active')}
+              style={{
+                padding: '16px 4px', fontSize: 14, fontWeight: 700,
+                borderBottom: viewMode === 'active' ? '3px solid #f37a23' : '3px solid transparent',
+                color: viewMode === 'active' ? '#f37a23' : '#64748b',
+                background: 'none', borderLeft: 'none', borderRight: 'none', borderTop: 'none',
+                cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              Active Tasks ({tasks.filter(t => t.status !== 'Completed').length})
+            </button>
+            <button 
+              onClick={() => setViewMode('history')}
+              style={{
+                padding: '16px 4px', fontSize: 14, fontWeight: 700,
+                borderBottom: viewMode === 'history' ? '3px solid #f37a23' : '3px solid transparent',
+                color: viewMode === 'history' ? '#f37a23' : '#64748b',
+                background: 'none', borderLeft: 'none', borderRight: 'none', borderTop: 'none',
+                cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              Task History ({tasks.filter(t => t.status === 'Completed').length})
+            </button>
+          </div>
+          <div style={{ marginLeft: 'auto', paddingBottom: 12 }}>
+            <LocalSearch 
+              data={tasks}
+              searchKeys={['title', 'task_type', 'owner']}
+              onSelect={(item) => handleOpenModal(item)}
+              placeholder="Search tasks..."
+            />
+          </div>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Task Title</th>
-                <th>Type</th>
-                <th>Related To</th>
-                <th>Due Date</th>
-                <th>Status</th>
-                <th>Owner</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.length === 0 ? (
-                <tr>
-                  <td colSpan="7">
-                    <div className="empty-state">
-                      <h3>No tasks assigned</h3>
-                      <p>Start by creating a task for your leads or opportunities.</p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                tasks.map(task => (
-                  <tr key={task.id}>
-                    <td>
-                      <div className="fw-bold">{task.title}</div>
-                    </td>
-                    <td>
-                      <span className="badge badge-normal">{task.task_type}</span>
-                    </td>
-                    <td>
-                      <div className="text-muted" style={{ fontSize: '12px' }}>
-                        <span style={{ textTransform: 'capitalize' }}>{task.related_to || '-'}:</span> {getRelatedName(task)}
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '13px' }}>
-                        <Calendar size={14} className="text-muted" />
-                        {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No deadline'}
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {getStatusIcon(task.status)}
-                        <span className="fw-bold" style={{ fontSize: '13px' }}>{task.status}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '13px' }}>
-                        <User size={14} className="text-muted" />
-                        {task.owner}
-                      </div>
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
-                        <button className="btn-icon text-primary" onClick={() => handleOpenModal(task)}>
-                          <Edit2 size={16} />
-                        </button>
-                        {isAdmin && (
-                          <button className="btn-icon text-danger" onClick={() => handleDeleteTask(task)}>
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <div style={{ padding: 20 }}>
+          {filteredTasksByStatus.length === 0 ? (
+            <div className="empty-state" style={{ padding: '40px 0' }}>
+              <div style={{ fontSize: 40, marginBottom: 16 }}>✨</div>
+              <h3>No {viewMode} tasks</h3>
+              <p>Everything looks clean here!</p>
+            </div>
+          ) : (
+            viewMode === 'active' ? (
+              <>
+                {renderTaskTable(groups.overdue, 'Overdue', '#dc2626')}
+                {renderTaskTable(groups.today, 'Today', '#f37a23')}
+                {renderTaskTable(groups.thisWeek, 'Next 7 Days', '#3b82f6')}
+                {renderTaskTable(groups.upcoming, 'Upcoming / No Date', '#64748b')}
+              </>
+            ) : (
+              renderTaskTable(filteredTasksByStatus, 'Completed History', '#16a34a')
+            )
+          )}
         </div>
       </div>
 
@@ -344,12 +538,16 @@ export default function Tasks({ session, profile }) {
                     value={formData.related_to} 
                     onChange={e => setFormData({ ...formData, related_to: e.target.value, related_id: '' })}
                   >
-                    {RELATED_ENTITIES.map(re => <option key={re.value} value={re.value}>{re.label}</option>)}
+                    {RELATED_ENTITIES.map(re => (
+                      <option key={re.value} value={re.value}>
+                        {re.value === 'accounts' ? (isB2C ? 'Customer' : 'Account') : re.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Select {RELATED_ENTITIES.find(re => re.value === formData.related_to)?.label}</label>
+                  <label className="form-label">Select {RELATED_ENTITIES.find(re => re.value === formData.related_to)?.label || 'Item'}</label>
                   <select 
                     className="form-input" 
                     value={formData.related_id} 

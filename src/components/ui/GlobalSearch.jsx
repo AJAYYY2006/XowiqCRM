@@ -1,12 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { 
+  Users, 
+  UserSquare2, 
+  Building2, 
+  Briefcase, 
+  Quote, 
+  Ticket,
+  BarChart3
+ } from 'lucide-react';
 
 export default function GlobalSearch({ session }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const wrapperRef = useRef(null);
   const navigate = useNavigate();
 
@@ -38,6 +48,7 @@ export default function GlobalSearch({ session }) {
     setIsOpen(true);
     
     try {
+      if (!session?.user?.id) return;
       const term = `%${searchTerm}%`;
       const uid = session.user.id;
       
@@ -92,6 +103,7 @@ export default function GlobalSearch({ session }) {
       }
 
       setResults(aggregated);
+      setSelectedIndex(-1);
     } catch (error) {
       console.error("Search error:", error);
     } finally {
@@ -103,7 +115,26 @@ export default function GlobalSearch({ session }) {
   const handleSelect = (item) => {
     setIsOpen(false);
     setQuery('');
+    setSelectedIndex(-1);
     navigate(item.path, { state: { openId: item.id } });
+  };
+
+  const handleKeyDown = (e) => {
+    if (!isOpen) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev < results.length - 1 ? prev + 1 : prev));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev > 0 ? prev - 1 : prev));
+    } else if (e.key === 'Enter') {
+      if (selectedIndex >= 0 && selectedIndex < results.length) {
+        handleSelect(results[selectedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+    }
   };
 
   return (
@@ -112,10 +143,11 @@ export default function GlobalSearch({ session }) {
         <input 
           type="text" 
           className="search-input" 
-          placeholder="Search leads, contacts, accounts, opportunities, quotes, invoices, tickets..." 
+          placeholder="Search leads, contacts, accounts, opportunities..." 
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => { if (results.length > 0) setIsOpen(true) }}
+          onKeyDown={handleKeyDown}
         />
         {loading && <div className="search-spinner-container"><div className="spinner" style={{width: 16, height: 16, borderTopColor: 'var(--accent)', opacity: 0.5}}></div></div>}
       </div>
@@ -124,12 +156,36 @@ export default function GlobalSearch({ session }) {
         <div className="search-dropdown dropdown-animation">
           {results.length > 0 ? (
             <div className="search-results-list">
-              {results.map(item => (
-                <div key={`${item.type}-${item.id}`} className="search-result-item clickable-row" onClick={() => handleSelect(item)}>
-                  <div className="search-result-content">
+              {results.map((item, index) => (
+                <div 
+                  key={`${item.type}-${item.id}`} 
+                  className={`search-result-item clickable-row ${selectedIndex === index ? 'selected' : ''}`} 
+                  onClick={() => handleSelect(item)}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}
+                >
+                  <div style={{ 
+                    marginTop: '2px',
+                    padding: '8px', 
+                    borderRadius: '8px', 
+                    background: selectedIndex === index ? 'var(--accent-light)' : 'var(--bg-primary)',
+                    color: selectedIndex === index ? 'var(--accent)' : 'var(--text-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    {item.type === 'Lead' && <Users size={16} />}
+                    {item.type === 'Contact' && <UserSquare2 size={16} />}
+                    {item.type === 'Account' && <Building2 size={16} />}
+                    {item.type === 'Opportunity' && <Briefcase size={16} />}
+                    {item.type === 'Quote' && <Quote size={16} />}
+                    {item.type === 'Ticket' && <Ticket size={16} />}
+                    {item.type === 'Invoice' && <BarChart3 size={16} />}
+                  </div>
+                  <div className="search-result-content" style={{ flex: 1 }}>
                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-                        <span className="fw-bold" style={{ color: 'var(--text-primary)' }}>{item.title}</span>
-                        <span className={`badge badge-${item.type === 'Opportunity' ? 'working' : 'active'}`} style={{fontSize: 10, padding: '2px 6px'}}>{item.type}</span>
+                        <span className="fw-bold" style={{ color: selectedIndex === index ? 'var(--accent)' : 'var(--text-primary)', fontSize: '14px' }}>{item.title}</span>
+                        <span className={`badge badge-${item.type.toLowerCase()}`} style={{fontSize: 10, padding: '1px 6px'}}>{item.type}</span>
                      </div>
                      <div className="text-muted" style={{ fontSize: 12 }}>{item.subtitle}</div>
                   </div>

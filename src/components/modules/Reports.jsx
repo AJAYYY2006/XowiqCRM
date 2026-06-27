@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 import html2canvas from 'html2canvas'
@@ -29,6 +30,27 @@ export default function Reports({ session, profile }) {
   // To preview the report before downloading
   const [previewData, setPreviewData] = useState(null)
   const previewRef = useRef(null)
+  const navigate = useNavigate()
+  
+  const handleNavigateToRecord = (item, type) => {
+    const id = item.id
+    if (!id) return
+    
+    // Map internal types to dashboard routes
+    const routeMap = {
+      leads: 'leads',
+      contacts: 'contacts',
+      accounts: 'accounts',
+      opportunities: 'opportunities',
+      tickets: 'tickets',
+      tasks: 'tasks',
+      invoices: 'invoices',
+      quotes: 'quotes'
+    }
+    
+    const targetModule = routeMap[type] || type
+    navigate(`/dashboard/${targetModule}`, { state: { openId: id } })
+  }
 
   useEffect(() => {
     fetchReports()
@@ -251,6 +273,190 @@ export default function Reports({ session, profile }) {
   
   const isAdmin = ['admin', 'administrator'].includes(profile?.role?.toLowerCase())
 
+  if (viewingData) {
+    const { report, data } = viewingData
+    return (
+      <div className="report-detail-view anim-fade-in">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+          <button className="btn btn-secondary" onClick={() => setViewingData(null)} style={{ borderRadius: '20px', padding: '8px 16px' }}>
+            <span style={{ fontSize: '18px', marginRight: '8px' }}>←</span> Back to Reports
+          </button>
+          <div className="flex gap-2">
+            <button className="btn btn-primary" onClick={() => handleOpenModal(report)}>
+              <Edit2 size={16} /> Edit Report
+            </button>
+            <button className="btn btn-primary" onClick={() => generatePDF(report)} style={{ background: 'var(--success)' }}>
+              Download PDF
+            </button>
+          </div>
+        </div>
+
+        <div className="card" style={{ marginBottom: 24, borderLeft: '6px solid var(--accent)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: '32px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 800 }}>{report.report_name}</h1>
+                <span className="badge badge-normal" style={{ background: 'var(--bg-primary)', color: 'var(--accent)' }}>{report.folder}</span>
+              </div>
+              <p className="text-secondary" style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: 20 }}>
+                {report.description || 'No description provided for this report.'}
+              </p>
+              
+              <div className="report-meta-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '20px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Module</label>
+                  <div style={{ fontWeight: 600, textTransform: 'capitalize' }}>{report.report_type}</div>
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Created By</label>
+                  <div style={{ fontWeight: 600 }}>{report.created_by}</div>
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Records Found</label>
+                  <div style={{ fontWeight: 800, color: 'var(--accent)' }}>{data.length}</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ paddingLeft: '32px', borderLeft: '1px solid var(--border-subtle)' }}>
+              <h3 style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 16 }}>Applied Filters</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ fontSize: '13px' }}><span style={{ color: 'var(--text-muted)' }}>Status:</span> <strong>{report.filters?.status || 'All'}</strong></div>
+                <div style={{ fontSize: '13px' }}><span style={{ color: 'var(--text-muted)' }}>Owner:</span> <strong>{report.filters?.owner || 'Any'}</strong></div>
+                <div style={{ fontSize: '13px' }}><span style={{ color: 'var(--text-muted)' }}>Priority:</span> <strong>{report.filters?.priority || 'All'}</strong></div>
+                <div style={{ fontSize: '13px' }}><span style={{ color: 'var(--text-muted)' }}>Range:</span> <strong>{report.filters?.date_from || 'S'} - {report.filters?.date_to || 'E'}</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="table-container card" style={{ padding: 0 }}>
+          <div className="table-header" style={{ padding: '16px 24px' }}>
+            <h2 className="table-title">Report Data Results</h2>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>{['invoices', 'quotes', 'tickets'].includes(report.report_type) ? 'Subject/Name' : 'Name'}</th>
+                  <th>Status</th>
+                  {['opportunities', 'invoices', 'quotes'].includes(report.report_type) && <th>Amount</th>}
+                  <th>Created At</th>
+                  <th style={{ textAlign: 'right' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.length === 0 ? (
+                  <tr><td colSpan="5" style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>No records match the applied filters.</td></tr>
+                ) : (
+                  data.map((item, idx) => (
+                    <tr key={idx} className="clickable-row">
+                      <td className="fw-bold" style={{ color: 'var(--accent)' }}>{item.name || item.subject || item.report_name || item.account_name || item.invoice_name || item.quote_name}</td>
+                      <td><span className="badge badge-normal">{item.status || item.stage || 'N/A'}</span></td>
+                      {['opportunities', 'invoices', 'quotes'].includes(report.report_type) && (
+                        <td className="fw-bold text-success">{profile?.currency || '$'}{Number(item.amount || item.total_price || 0).toLocaleString()}</td>
+                      )}
+                      <td className="text-muted">{new Date(item.created_at).toLocaleDateString()}</td>
+                      <td style={{ textAlign: 'right' }}>
+                         <button className="btn btn-secondary btn-sm" onClick={() => handleNavigateToRecord(item, report.report_type)}>
+                           Open Record
+                         </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {isModalOpen && renderModal()}
+      </div>
+    )
+  }
+
+  function renderModal() {
+    return (
+      <div className="modal-overlay">
+        <div className="modal">
+          <div className="modal-header">
+            <h2 className="modal-title">{editingReport ? 'Edit' : 'Create New'} Report</h2>
+            <button className="modal-close" onClick={() => setIsModalOpen(false)}>✕</button>
+          </div>
+          
+          <form onSubmit={handleSubmit}>
+            <div className="form-grid">
+              <div className="form-group full-width">
+                <label className="form-label">Report Name *</label>
+                <input required className="form-input" value={formData.report_name} onChange={e => setFormData({...formData, report_name: e.target.value})} placeholder="Q3 Quarterly Pipeline Review" />
+              </div>
+              <div className="form-group full-width">
+                <label className="form-label">Description</label>
+                <textarea className="form-input" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Detailed analysis of won deals and lead conversion rates." />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Folder</label>
+                <select className="form-input" value={formData.folder} onChange={e => setFormData({...formData, folder: e.target.value})}>
+                  <option value="General">General</option>
+                  <option value="Sales">Sales</option>
+                  <option value="Marketing">Marketing</option>
+                  <option value="Support">Support</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Pull Reports On (Module)</label>
+                <select className="form-input" value={formData.report_type} onChange={e => setFormData({...formData, report_type: e.target.value})}>
+                  <option value="leads">Leads</option>
+                  <option value="opportunities">Deals (Opportunities)</option>
+                  <option value="tickets">Tickets</option>
+                  <option value="tasks">Tasks</option>
+                  <option value="accounts">Accounts</option>
+                  <option value="invoices">Invoices</option>
+                  <option value="contacts">Contacts</option>
+                  <option value="quotes">Quotes</option>
+                </select>
+              </div>
+
+              <div className="divider full-width" style={{ margin: '16px 0', height: '1px', background: 'var(--border-subtle)' }}></div>
+              <h3 className="full-width" style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>Filters</h3>
+
+              <div className="form-group">
+                <label className="form-label">Owner Name</label>
+                <input className="form-input" value={formData.filters.owner} onChange={e => setFormData({...formData, filters: {...formData.filters, owner: e.target.value}})} placeholder="Search owner..." />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Status</label>
+                <input className="form-input" value={formData.filters.status} onChange={e => setFormData({...formData, filters: {...formData.filters, status: e.target.value}})} placeholder="e.g. open, won, lost..." />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Priority</label>
+                <select className="form-input" value={formData.filters.priority} onChange={e => setFormData({...formData, filters: {...formData.filters, priority: e.target.value}})}>
+                  <option value="">-- All --</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Created From</label>
+                <input type="date" className="form-input" value={formData.filters.date_from} onChange={e => setFormData({...formData, filters: {...formData.filters, date_from: e.target.value}})} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Created To</label>
+                <input type="date" className="form-input" value={formData.filters.date_to} onChange={e => setFormData({...formData, filters: {...formData.filters, date_to: e.target.value}})} />
+              </div>
+            </div>
+            
+            <div className="form-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary">{editingReport ? 'Update' : 'Save'} Report</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -305,28 +511,27 @@ export default function Reports({ session, profile }) {
                 </tr>
               ) : (
                 reports.map(report => (
-                  <tr key={report.id} id={`report-row-${report.id}`}>
-                    <td className="fw-bold">{report.report_name}</td>
+                  <tr key={report.id} id={`report-row-${report.id}`} className="clickable-row" onClick={() => handleViewReport(report)}>
+                    <td className="fw-bold">
+                      <span className="report-name-link" style={{ color: 'var(--accent)', fontWeight: 700 }}>
+                        {report.report_name}
+                      </span>
+                    </td>
                     <td className="text-muted" style={{ maxWidth: 300 }}><div className="truncate">{report.description}</div></td>
                     <td><span className="badge badge-normal" style={{ background: 'var(--bg-secondary)' }}> {report.folder}</span></td>
                     <td>{report.created_by}</td>
                     <td className="text-muted">{new Date(report.created_at).toLocaleDateString()}</td>
                     <td style={{ textAlign: 'right' }}>
-                      <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => handleViewReport(report)} title="View Data">
-                          View
-                        </button>
-                        <button className="btn btn-primary btn-sm" onClick={() => generatePDF(report)} title="Download PDF">
+                      <div className="flex gap-2" style={{ justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <button className="btn btn-primary btn-sm" onClick={(e) => { e.stopPropagation(); generatePDF(report); }} title="Download PDF">
                           PDF
                         </button>
-                        <button className="btn-icon text-primary" onClick={() => handleOpenModal(report)} title="Edit Configuration">
+                        <button className="btn-icon text-primary" onClick={(e) => { e.stopPropagation(); handleOpenModal(report); }} title="Edit Configuration">
                           <Edit2 size={16} />
                         </button>
-                        {isAdmin && (
-                          <button className="btn-icon text-danger" onClick={() => handleDeleteReport(report)} title="Delete Report">
-                            <Trash2 size={16} />
-                          </button>
-                        )}
+                        <button className="btn-icon text-danger" onClick={(e) => { e.stopPropagation(); handleDeleteReport(report); }} title="Delete Report">
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -337,57 +542,6 @@ export default function Reports({ session, profile }) {
         </div>
       </div>
 
-      {viewingData && (
-        <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth: '900px', width: '95%' }}>
-            <div className="modal-header">
-              <div>
-                <h2 className="modal-title">{viewingData.report.report_name}</h2>
-                <p className="text-muted" style={{ fontSize: '13px' }}>
-                  Module: <span className="text-primary fw-bold" style={{ textTransform: 'capitalize' }}>{viewingData.report.report_type}</span> | 
-                  Results: <span className="fw-bold">{viewingData.data.length}</span>
-                </p>
-              </div>
-              <button className="modal-close" onClick={() => setViewingData(null)}>✕</button>
-            </div>
-            
-            <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-              <table className="mini-table">
-                <thead>
-                  <tr>
-                    <th>{['invoices', 'quotes', 'tickets'].includes(viewingData.report.report_type) ? 'Subject/Name' : 'Name'}</th>
-                    <th>Status</th>
-                    {['opportunities', 'invoices', 'quotes'].includes(viewingData.report.report_type) && <th>Amount</th>}
-                    <th>Created At</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {viewingData.data.length === 0 ? (
-                    <tr><td colSpan="4" style={{ textAlign: 'center', padding: '40px' }}>No records match these filters.</td></tr>
-                  ) : (
-                    viewingData.data.map((item, idx) => (
-                      <tr key={idx}>
-                        <td className="fw-bold">{item.name || item.subject || item.report_name || item.account_name || item.invoice_name || item.quote_name}</td>
-                        <td><span className="badge badge-normal">{item.status || item.stage || 'N/A'}</span></td>
-                        {['opportunities', 'invoices', 'quotes'].includes(viewingData.report.report_type) && (
-                          <td className="fw-bold">${Number(item.amount || item.total_price || 0).toLocaleString()}</td>
-                        )}
-                        <td className="text-muted">{new Date(item.created_at).toLocaleDateString()}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="form-actions" style={{ marginTop: '24px' }}>
-              <button className="btn btn-secondary" onClick={() => setViewingData(null)}>Close</button>
-              <button className="btn btn-primary" onClick={() => generatePDF(viewingData.report)}>Download PDF</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Hidden Preview Container for PDF Export */}
       {previewData && (
         <div style={{ 
@@ -397,7 +551,7 @@ export default function Reports({ session, profile }) {
         }} ref={previewRef}>
           <div style={{ borderBottom: '2px solid #6366f1', paddingBottom: 20, marginBottom: 30, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <h1 style={{ margin: 0, fontSize: 32, color: '#111827' }}>NexusCRM Report</h1>
+              <h1 style={{ margin: 0, fontSize: 32, color: '#111827' }}>XOWIQ CRM Report</h1>
               <p style={{ margin: 0, color: '#6b7280', marginTop: 8 }}>{previewData.report.report_name}</p>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -437,7 +591,7 @@ export default function Reports({ session, profile }) {
                   <tr key={idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
                     <td style={{ padding: '10px 0', fontWeight: 600 }}>{item.name || item.subject || item.report_name || item.account_name || item.invoice_name || item.quote_name || 'N/A'}</td>
                     <td>{item.status || item.stage || 'N/A'}</td>
-                    <td style={{ fontWeight: 600 }}>{ (item.amount || item.total_price) ? `$${Number(item.amount || item.total_price).toLocaleString()}` : '-' }</td>
+                    <td style={{ fontWeight: 600 }}>{ (item.amount || item.total_price) ? `${profile?.currency || '$'}${Number(item.amount || item.total_price).toLocaleString()}` : '-' }</td>
                     <td>{new Date(item.created_at).toLocaleDateString()}</td>
                   </tr>
                 ))}
@@ -449,90 +603,12 @@ export default function Reports({ session, profile }) {
           </div>
           
           <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: 12, marginTop: 100, borderTop: '1px solid #e5e7eb', paddingTop: 20 }}>
-            This report was securely generated by NexusCRM. Confidential information.
+            This report was securely generated by XOWIQ CRM. Confidential information.
           </div>
         </div>
       )}
 
-      {isModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h2 className="modal-title">{editingReport ? 'Edit' : 'Create New'} Report</h2>
-              <button className="modal-close" onClick={() => setIsModalOpen(false)}>✕</button>
-            </div>
-            
-            <form onSubmit={handleSubmit}>
-              <div className="form-grid">
-                <div className="form-group full-width">
-                  <label className="form-label">Report Name *</label>
-                  <input required className="form-input" value={formData.report_name} onChange={e => setFormData({...formData, report_name: e.target.value})} placeholder="Q3 Quarterly Pipeline Review" />
-                </div>
-                <div className="form-group full-width">
-                  <label className="form-label">Description</label>
-                  <textarea className="form-input" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Detailed analysis of won deals and lead conversion rates." />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Folder</label>
-                  <select className="form-input" value={formData.folder} onChange={e => setFormData({...formData, folder: e.target.value})}>
-                    <option value="General">General</option>
-                    <option value="Sales">Sales</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Support">Support</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Pull Reports On (Module)</label>
-                  <select className="form-input" value={formData.report_type} onChange={e => setFormData({...formData, report_type: e.target.value})}>
-                    <option value="leads">Leads</option>
-                    <option value="opportunities">Deals (Opportunities)</option>
-                    <option value="tickets">Tickets</option>
-                    <option value="tasks">Tasks</option>
-                    <option value="accounts">Accounts</option>
-                    <option value="invoices">Invoices</option>
-                    <option value="contacts">Contacts</option>
-                    <option value="quotes">Quotes</option>
-                  </select>
-                </div>
-
-                <div className="divider full-width" style={{ margin: '16px 0', height: '1px', background: 'var(--border-subtle)' }}></div>
-                <h3 className="full-width" style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>Filters</h3>
-
-                <div className="form-group">
-                  <label className="form-label">Owner Name</label>
-                  <input className="form-input" value={formData.filters.owner} onChange={e => setFormData({...formData, filters: {...formData.filters, owner: e.target.value}})} placeholder="Search owner..." />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Status</label>
-                  <input className="form-input" value={formData.filters.status} onChange={e => setFormData({...formData, filters: {...formData.filters, status: e.target.value}})} placeholder="e.g. open, won, lost..." />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Priority</label>
-                  <select className="form-input" value={formData.filters.priority} onChange={e => setFormData({...formData, filters: {...formData.filters, priority: e.target.value}})}>
-                    <option value="">-- All --</option>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Created From</label>
-                  <input type="date" className="form-input" value={formData.filters.date_from} onChange={e => setFormData({...formData, filters: {...formData.filters, date_from: e.target.value}})} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Created To</label>
-                  <input type="date" className="form-input" value={formData.filters.date_to} onChange={e => setFormData({...formData, filters: {...formData.filters, date_to: e.target.value}})} />
-                </div>
-              </div>
-              
-              <div className="form-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">{editingReport ? 'Update' : 'Save'} Report</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {isModalOpen && renderModal()}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
 import DashboardHome from '../components/modules/DashboardHome'
@@ -8,9 +9,12 @@ import Contacts from '../components/modules/Contacts'
 import Accounts from '../components/modules/Accounts'
 import Opportunities from '../components/modules/Opportunities'
 import Quotes from '../components/modules/Quotes'
+import Invoices from '../components/modules/Invoices' // Added for B2C Invoices
 import Reports from '../components/modules/Reports'
 import Tickets from '../components/modules/Tickets'
 import Tasks from '../components/modules/Tasks'
+import SettingsPage from '../components/modules/Settings'
+import Services from '../components/modules/Services'
 import { 
   LayoutDashboard, 
   Users, 
@@ -21,28 +25,53 @@ import {
   BarChart3, 
   Ticket,
   LogOut,
-  Search
+  Search,
+  ArrowLeft,
+  Package,
+  Settings
 } from 'lucide-react'
 import GlobalSearch from '../components/ui/GlobalSearch'
 import ProfileModal from '../components/ui/ProfileModal'
-
-const navItems = [
-  { path: '', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-  { path: 'leads', label: 'Leads', icon: <UserSquare2 size={18} /> },
-  { path: 'contacts', label: 'Contacts', icon: <Users size={18} /> },
-  { path: 'accounts', label: 'Accounts', icon: <Building2 size={18} /> },
-  { path: 'opportunities', label: 'Opportunities', icon: <Briefcase size={18} /> },
-  { path: 'quotes', label: 'Quotes', icon: <Quote size={18} /> },
-  { path: 'reports', label: 'Reports', icon: <BarChart3 size={18} /> },
-  { path: 'tickets', label: 'Tickets', icon: <Ticket size={18} /> },
-  { path: 'tasks', label: 'Tasks', icon: <Search size={18} /> },
-]
+import LanguageSwitcher from '../components/ui/LanguageSwitcher'
 
 export default function Dashboard({ session }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const { t } = useTranslation()
   const [profile, setProfile] = useState(null)
   const [showProfile, setShowProfile] = useState(false)
+  const [taskCount, setTaskCount] = useState(0)
+
+  const companyType = session.user.user_metadata?.companyType || 'B2B'
+  const isB2C = companyType === 'B2C'
+
+  const b2cNavItems = [
+    { path: '', label: t('sidebar.dashboard'), icon: <LayoutDashboard size={18} /> },
+    { path: 'accounts', label: t('sidebar.customerProfiles'), icon: <Users size={18} /> },
+    { path: 'services', label: 'Services', icon: <Package size={18} /> },
+    { path: 'leads', label: t('sidebar.leads'), icon: <UserSquare2 size={18} /> },
+    { path: 'opportunities', label: 'Opportunities', icon: <Briefcase size={18} /> },
+    { path: 'invoices', label: 'Invoices', icon: <Quote size={18} /> },
+    { path: 'tasks', label: 'Tasks', icon: <Search size={18} /> },
+    { path: 'tickets', label: t('sidebar.tickets'), icon: <Ticket size={18} /> },
+    { path: 'reports', label: t('sidebar.reports'), icon: <BarChart3 size={18} /> },
+    { path: 'settings', label: 'Settings', icon: <Settings size={18} /> }
+  ]
+
+  const b2bNavItems = [
+    { path: '', label: t('sidebar.dashboard'), icon: <LayoutDashboard size={18} /> },
+    { path: 'leads', label: t('sidebar.leads'), icon: <UserSquare2 size={18} /> },
+    { path: 'contacts', label: t('sidebar.contacts'), icon: <Users size={18} /> },
+    { path: 'accounts', label: t('sidebar.accounts'), icon: <Building2 size={18} /> },
+    { path: 'opportunities', label: t('sidebar.opportunities'), icon: <Briefcase size={18} /> },
+    { path: 'quotes', label: 'Quotes & Proposals', icon: <Quote size={18} /> },
+    { path: 'reports', label: t('sidebar.reports'), icon: <BarChart3 size={18} /> },
+    { path: 'tickets', label: t('sidebar.tickets'), icon: <Ticket size={18} /> },
+    { path: 'tasks', label: t('sidebar.tasks'), icon: <Search size={18} /> },
+    { path: 'settings', label: 'Settings', icon: <Settings size={18} /> }
+  ]
+
+  const navItems = isB2C ? b2cNavItems : b2bNavItems
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -53,12 +82,27 @@ export default function Dashboard({ session }) {
         .single()
       if (data) setProfile(data)
     }
-    fetchProfile()
+    if (session) {
+      fetchProfile()
+      fetchTaskCount()
+      // Real-time task count update
+      const channel = supabase.channel('tasks-count-sync')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+          fetchTaskCount()
+        })
+        .subscribe()
+      return () => { supabase.removeChannel(channel) }
+    }
   }, [session])
+
+  const fetchTaskCount = async () => {
+    const { count } = await supabase.from('tasks').select('*', { count: 'exact', head: true }).neq('status', 'Completed').eq('user_id', session.user.id)
+    setTaskCount(count || 0)
+  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    toast.success('See you soon!')
+    toast.success(t('sidebar.seeYouSoon'))
     navigate('/')
   }
 
@@ -77,16 +121,24 @@ export default function Dashboard({ session }) {
           </div>
         </div>
 
-        <div className="sidebar-section-label">Main Menu</div>
+        <div className="sidebar-section-label">{t('sidebar.mainMenu')}</div>
         <nav className="sidebar-nav">
           {navItems.map(item => (
             <button
               key={item.path}
               className={`nav-item ${currentPath === item.path ? 'active' : ''}`}
               onClick={() => navigate(`/dashboard${item.path ? '/' + item.path : ''}`)}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}
             >
-              <span className="nav-icon">{item.icon}</span>
-              {item.label}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span className="nav-icon">{item.icon}</span>
+                {item.label}
+              </div>
+              {item.path === 'tasks' && taskCount > 0 && (
+                <span style={{ background: '#f37a23', color: '#fff', fontSize: '10px', fontWeight: 900, padding: '2px 6px', borderRadius: '10px', minWidth: '18px', textAlign: 'center' }}>
+                  {taskCount}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -125,7 +177,7 @@ export default function Dashboard({ session }) {
           </button>
           <button className="nav-item" onClick={handleLogout} style={{ color: 'var(--danger)', width: '100%', gap: 10 }}>
             <LogOut size={18} />
-            Sign Out
+            {t('sidebar.signOut')}
           </button>
         </div>
       </aside>
@@ -141,10 +193,52 @@ export default function Dashboard({ session }) {
           background: '#FFFBDC',
           position: 'sticky',
           top: 0,
-          zIndex: 40
+          zIndex: 40,
+          padding: '0 24px',
         }}>
-          <div style={{ maxWidth: '600px', width: '100%' }}>
+          <button 
+            className="back-btn-global" 
+            onClick={() => navigate(-1)}
+            title="Go Back"
+            style={{
+              position: 'absolute',
+              left: 24,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              border: '1px solid var(--border-subtle)',
+              background: '#fff',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              color: 'var(--text-secondary)'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)' }}
+          >
+            <ArrowLeft size={18} />
+          </button>
+          
+          <div style={{ position: 'absolute', left: 80, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+              {session.user.user_metadata?.companyName || 'My Company'}
+            </h2>
+            <span style={{ 
+              fontSize: 11, fontWeight: 700, padding: '3px 8px', 
+              borderRadius: 12, background: isB2C ? '#3b82f6' : '#f37a23', color: '#fff',
+              letterSpacing: '0.5px'
+            }}>
+              {isB2C ? 'B2C MODE' : 'B2B MODE'}
+            </span>
+          </div>
+
+          <div style={{ maxWidth: '400px', width: '100%', marginLeft: '180px' }}>
             <GlobalSearch session={session} />
+          </div>
+          <div style={{ position: 'absolute', right: 24 }}>
+            <LanguageSwitcher />
           </div>
         </header>
         
@@ -154,11 +248,14 @@ export default function Dashboard({ session }) {
           <Route path="leads" element={<Leads session={session} profile={profile} />} />
           <Route path="contacts" element={<Contacts session={session} profile={profile} />} />
           <Route path="accounts" element={<Accounts session={session} profile={profile} />} />
+          <Route path="services" element={<Services session={session} profile={profile} />} />
           <Route path="opportunities/*" element={<Opportunities session={session} profile={profile} />} />
           <Route path="quotes" element={<Quotes session={session} profile={profile} />} />
+          <Route path="invoices" element={<Invoices session={session} profile={profile} />} />
           <Route path="reports" element={<Reports session={session} profile={profile} />} />
           <Route path="tickets" element={<Tickets session={session} profile={profile} />} />
           <Route path="tasks" element={<Tasks session={session} profile={profile} />} />
+          <Route path="settings" element={<SettingsPage session={session} profile={profile} />} />
           </Routes>
         </div>
       </main>
