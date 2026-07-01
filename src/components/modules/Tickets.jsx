@@ -232,7 +232,7 @@ export default function Tickets({ session, profile }) {
 
   if (loading) return <div className="loading-container"><div className="spinner"/></div>
   
-  const isAdmin = ['admin', 'administrator'].includes(profile?.role?.toLowerCase())
+  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
 
   const TICKET_STAGES = ['open', 'pending', 'closed']
   const TICKET_STAGE_LABELS = { open: 'Open', pending: 'Pending', closed: 'Closed' }
@@ -256,9 +256,11 @@ export default function Tickets({ session, profile }) {
             <button className="btn btn-primary" onClick={() => handleOpenModal(selectedTicket)}>
               <Edit2 size={16} /> Edit Ticket
             </button>
-            <button className="btn btn-danger" onClick={async () => { await handleDeleteTicket(selectedTicket.id, selectedTicket.subject); setSelectedTicket(null); }}>
-              <Trash2 size={16} /> Delete Ticket
-            </button>
+            {isAdmin && (
+              <button className="btn btn-danger" onClick={async () => { await handleDeleteTicket(selectedTicket.id, selectedTicket.subject); setSelectedTicket(null); }}>
+                <Trash2 size={16} /> Delete Ticket
+              </button>
+            )}
           </div>
         </div>
 
@@ -535,7 +537,7 @@ export default function Tickets({ session, profile }) {
             </div>
             
             <div className="form-actions">
-              {editingTicket && (
+              {editingTicket && isAdmin && (
                 <button 
                   type="button" 
                   className="btn btn-danger" 
@@ -676,13 +678,15 @@ export default function Tickets({ session, profile }) {
                         >
                           <Edit2 size={16} />
                         </button>
-                        <button
-                          className="btn-icon text-danger"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteTicket(ticket.id, ticket.subject); }}
-                          title="Delete Ticket"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            className="btn-icon text-danger"
+                            onClick={(e) => { e.stopPropagation(); handleDeleteTicket(ticket.id, ticket.subject); }}
+                            title="Delete Ticket"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

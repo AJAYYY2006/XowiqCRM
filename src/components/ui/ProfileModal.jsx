@@ -21,10 +21,10 @@ export default function ProfileModal({ session, profile, onClose, onProfileUpdat
   const [showConfirmPwd, setShowConfirmPwd] = useState(false)
   const [savingPwd, setSavingPwd] = useState(false)
 
-  const role = profile?.role || 'user'
+  const role = session?.user?.user_metadata?.role || profile?.role || 'user'
   const email = session?.user?.email || ''
   const initials = (profile?.name || email)?.[0]?.toUpperCase() || '?'
-  const isAdmin = role === 'admin'
+  const isAdmin = ['admin', 'administrator'].includes(role.toLowerCase())
   const isB2C = session.user.user_metadata?.companyType === 'B2C'
 
   // Slide-in animation on mount
@@ -184,13 +184,6 @@ export default function ProfileModal({ session, profile, onClose, onProfileUpdat
             <span style={{ flex: 1, color: '#444', fontWeight: 600 }}>
               {isB2C ? '🛍️ B2C Enterprise Mode' : '🏢 B2B Enterprise Mode'}
             </span>
-            <span style={{
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.05em',
-              background: '#fef3ec', color: '#ff5900', borderRadius: 6,
-              padding: '2px 8px', border: '1px solid #ffe0cc', flexShrink: 0,
-            }}>
-              STATIC
-            </span>
           </div>
 
           {/* ── Email (read-only) ── */}
@@ -198,13 +191,6 @@ export default function ProfileModal({ session, profile, onClose, onProfileUpdat
           <div style={readonlyFieldStyle}>
             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#444' }}>
               {email}
-            </span>
-            <span style={{
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.05em',
-              background: '#fef3ec', color: '#ff5900', borderRadius: 6,
-              padding: '2px 8px', border: '1px solid #ffe0cc', flexShrink: 0,
-            }}>
-              READ ONLY
             </span>
           </div>
 

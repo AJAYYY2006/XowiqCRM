@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
-import { Plus, Edit2, Trash2, Package, DollarSign, Clock, Save, GripVertical, Settings2, Palette } from 'lucide-react'
+import { Plus, Edit2, Trash2, Package, DollarSign, Clock, Save, GripVertical, Settings2, Palette, Zap, Layers } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 
 export default function Services({ session, profile }) {
@@ -15,13 +15,12 @@ export default function Services({ session, profile }) {
     price: 0,
     reminder_days: 30,
     description: '',
-    status: 'active'
+    status: 'active',
+    service_type: 'Instant'
   })
 
   // Stage Builder State
-  const [isStageTrackingEnabled, setIsStageTrackingEnabled] = useState(
-    session.user.user_metadata?.b2cStageTrackingEnabled === true
-  )
+  // Stage tracking is now per-service (service_type field), no global toggle needed
   const [stages, setStages] = useState([])
   const [isStageModalOpen, setIsStageModalOpen] = useState(false)
   const [editingStage, setEditingStage] = useState(null)
@@ -30,15 +29,14 @@ export default function Services({ session, profile }) {
   const [accounts, setAccounts] = useState([]);
   const [animatingCards, setAnimatingCards] = useState({});
   const [stageHistory, setStageHistory] = useState([]);
+  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
 
   useEffect(() => {
     fetchServices()
-    if (isStageTrackingEnabled) {
-      fetchStages();
-      fetchAccounts();
-      fetchStageHistory();
-    }
-  }, [session, isStageTrackingEnabled])
+    fetchStages();
+    fetchAccounts();
+    fetchStageHistory();
+  }, [session])
 
   const fetchStages = async () => {
     try {
@@ -52,8 +50,38 @@ export default function Services({ session, profile }) {
 
   const fetchAccounts = async () => {
     try {
-      const { data } = await supabase.from('accounts').select('*, customer_services(service_id, services(service_name))').eq('user_id', session.user.id);
-      setAccounts(data || []);
+      const { data: accsData, error: accErr } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('user_id', session.user.id);
+
+      if (accErr) throw accErr;
+
+      const accountIds = (accsData || []).map(a => a.id);
+      if (accountIds.length === 0) {
+        setAccounts([]);
+        return;
+      }
+
+      const { data: csData } = await supabase
+        .from('customer_services')
+        .select('*, services(service_name)')
+        .in('account_id', accountIds);
+
+      // Coerce both sides to String to avoid bigint vs UUID mismatch
+      const mappedAccounts = (accsData || []).map(acc => {
+        const myServices = (csData || []).filter(
+          cs => String(cs.account_id) === String(acc.id)
+        );
+        return { ...acc, customer_services: myServices };
+      });
+
+      console.log('[StageBuilder] accounts mapped:', mappedAccounts.map(a => ({
+        name: a.account_name,
+        id: a.id,
+        services: (a.customer_services || []).map(cs => cs.services?.service_name)
+      })));
+      setAccounts(mappedAccounts);
     } catch(e) {
       console.error('Failed to load accounts for stage builder', e);
     }
@@ -82,17 +110,7 @@ export default function Services({ session, profile }) {
     }
   };
 
-  const handleToggleStageTracking = async (checked) => {
-    setIsStageTrackingEnabled(checked)
-    try {
-      await supabase.auth.updateUser({
-        data: { b2cStageTrackingEnabled: checked }
-      })
-      toast.success(checked ? 'Stage Tracking Enabled' : 'Stage Tracking Disabled')
-    } catch (e) {
-      toast.error('Failed to save Preference')
-    }
-  }
+  // Global toggle removed — stage tracking is now per-service via service_type field
 
   const fetchServices = async () => {
     try {
@@ -121,7 +139,8 @@ export default function Services({ session, profile }) {
         price: service.price || 0,
         reminder_days: service.reminder_days || 30,
         description: service.description || '',
-        status: service.status || 'active'
+        status: service.status || 'active',
+        service_type: service.service_type || 'Multi-Stage'
       })
     } else {
       setEditingService(null)
@@ -130,7 +149,8 @@ export default function Services({ session, profile }) {
         price: 0,
         reminder_days: 30,
         description: '',
-        status: 'active'
+        status: 'active',
+        service_type: 'Instant'
       })
     }
     setIsModalOpen(true)
@@ -362,13 +382,22 @@ export default function Services({ session, profile }) {
                 <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#1e293b' }}>{svc.service_name}</h3>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn-icon" onClick={() => handleOpenModal(svc)} title="Edit"><Edit2 size={16} /></button>
-                  <button className="btn-icon text-danger" onClick={() => handleDelete(svc)} title="Delete"><Trash2 size={16} /></button>
+                  {isAdmin && (
+                    <button className="btn-icon text-danger" onClick={() => handleDelete(svc)} title="Delete"><Trash2 size={16} /></button>
+                  )}
                 </div>
               </div>
               
               <div className="service-details" style={{ fontSize: 14, color: '#64748b' }}>
-                <p style={{ marginBottom: 16, minHeight: 40 }}>{svc.description || 'No description provided.'}</p>
+                <p style={{ marginBottom: 12, minHeight: 40 }}>{svc.description || 'No description provided.'}</p>
                 
+                <div style={{ marginBottom: 12 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 800, background: (svc.service_type || 'Multi-Stage') === 'Instant' ? '#dbeafe' : '#fef3c7', color: (svc.service_type || 'Multi-Stage') === 'Instant' ? '#1d4ed8' : '#92400e' }}>
+                    {(svc.service_type || 'Multi-Stage') === 'Instant' ? <Zap size={13} /> : <Layers size={13} />}
+                    {svc.service_type || 'Multi-Stage'}
+                  </span>
+                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 16 }}>
                   <div>
                     <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', marginBottom: 4 }}>Standard Price</div>
@@ -395,23 +424,10 @@ export default function Services({ session, profile }) {
               <Settings2 size={24} color="#f97316" />
               Customer Stage Builder
             </h2>
-            <p style={{ color: '#64748b', fontSize: 14 }}>Enable visual Kanban pipelines to track customer progress dynamically.</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f8fafc', padding: '10px 16px', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-            <span style={{ fontWeight: 700, fontSize: 14, color: isStageTrackingEnabled ? '#1e293b' : '#94a3b8' }}>
-              Enable Stage Tracking
-            </span>
-            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-              <div style={{ position: 'relative' }}>
-                <input type="checkbox" className="sr-only" checked={isStageTrackingEnabled} onChange={(e) => handleToggleStageTracking(e.target.checked)} />
-                <div style={{ width: 44, height: 24, backgroundColor: isStageTrackingEnabled ? '#f37a23' : '#cbd5e1', borderRadius: 9999, transition: 'background-color 0.2s' }}></div>
-                <div style={{ position: 'absolute', top: 2, left: isStageTrackingEnabled ? 22 : 2, width: 20, height: 20, backgroundColor: 'white', borderRadius: '50%', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}></div>
-              </div>
-            </label>
+            <p style={{ color: '#64748b', fontSize: 14 }}>Visual Kanban pipelines for Multi-Stage services. Instant services skip stages automatically.</p>
           </div>
         </div>
 
-        {isStageTrackingEnabled && (
           <div style={{ marginTop: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: '#475569' }}>Your Custom Stages</h3>
@@ -445,13 +461,18 @@ export default function Services({ session, profile }) {
                           <div style={{ display: 'flex', gap: 8 }}>
                             <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', background: '#e2e8f0', padding: '2px 8px', borderRadius: 12 }}>{stageAccounts.length}</span>
                             <button className="btn-icon" onClick={() => handleOpenStageModal(stg)}><Edit2 size={16} /></button>
-                            <button className="btn-icon text-danger" onClick={() => handleDeleteStage(stg)}><Trash2 size={16} /></button>
+                            {isAdmin && (
+                              <button className="btn-icon text-danger" onClick={() => handleDeleteStage(stg)}><Trash2 size={16} /></button>
+                            )}
                           </div>
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 100 }}>
                           {stageAccounts.map(acc => {
-                            const serviceName = acc.customer_services?.[0]?.services?.service_name || 'No Service';
+                            const serviceNames = (acc.customer_services || [])
+                              .map(cs => cs.services?.service_name)
+                              .filter(Boolean);
+                            const serviceName = serviceNames.length > 0 ? serviceNames.join(', ') : 'No Service';
                             const animation = animatingCards[acc.id] || '';
                             return (
                             <div 
@@ -507,7 +528,6 @@ export default function Services({ session, profile }) {
               </>
             )}
           </div>
-        )}
       </div>
 
       {isModalOpen && (
@@ -537,6 +557,19 @@ export default function Services({ session, profile }) {
                     <Clock size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                     <input type="number" required className="form-input" style={{ paddingLeft: 32 }} value={formData.reminder_days} onChange={e => setFormData({...formData, reminder_days: e.target.value})} />
                   </div>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="form-label">Service Type *</label>
+                <select required className="form-input" value={formData.service_type} onChange={e => setFormData({...formData, service_type: e.target.value})}>
+                  <option value="Instant">⚡ Instant — Completed immediately, no Kanban card</option>
+                  <option value="Multi-Stage">🔄 Multi-Stage — Tracked through custom stages</option>
+                </select>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                  {formData.service_type === 'Instant' 
+                    ? 'This service will be marked as completed immediately when assigned to a customer.'
+                    : 'This service will create a Kanban card and move through your custom stages.'}
                 </div>
               </div>
 

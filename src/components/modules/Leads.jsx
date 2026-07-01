@@ -5,6 +5,8 @@ import { Trash2, Edit2, ArrowRightCircle, Settings, Plus, LayoutGrid } from 'luc
 import LocalSearch from '../ui/LocalSearch'
 import toast from 'react-hot-toast'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
+import WhatsAppButton from '../ui/WhatsAppButton'
+import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../lib/whatsapp'
 
 export default function Leads({ session, profile }) {
   const companyType = session.user.user_metadata?.companyType || 'B2B'
@@ -404,14 +406,14 @@ export default function Leads({ session, profile }) {
 
   if (loading) return <div className="loading-container"><div className="spinner"/></div>
   
-  const isAdmin = ['admin', 'administrator'].includes(profile?.role?.toLowerCase())
+  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
 
   return (
     <div>
       {selectedLead ? (
         <div>
-          <button className="back-btn" onClick={() => setSelectedLead(null)}>
-            ← Back to Leads Hub
+          <button className="back-btn" onClick={() => setSelectedLead(null)} title="Back to Leads">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
           </button>
           
           <div className="card" style={{ marginBottom: 24 }}>
@@ -422,6 +424,20 @@ export default function Leads({ session, profile }) {
               <div className="detail-info">
                 <h1 className="detail-name">{selectedLead.name}</h1>
                 <div className="detail-meta">{selectedLead.company} • {selectedLead.email}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                  <span style={{ fontSize: 13, color: '#64748b', fontWeight: 600 }}>
+                    {(() => { const raw = selectedLead.contact_number || selectedLead.custom_data?.contact_number; const cleaned = cleanPhoneNumber(raw); return cleaned ? formatPhoneDisplay(cleaned) : (raw || 'No phone'); })()}
+                  </span>
+                  <WhatsAppButton
+                    phone={selectedLead.contact_number || selectedLead.custom_data?.contact_number}
+                    messageText={getWhatsAppMessage('lead', {
+                      firstName: (selectedLead.name || '').split(' ')[0],
+                      businessName: profile?.company_name || 'our company'
+                    })}
+                    session={session}
+                    recordName={selectedLead.name}
+                  />
+                </div>
                 <div className={`badge badge-${selectedLead.status} mt-2`}>{selectedLead.status}</div>
               </div>
             </div>
@@ -485,9 +501,11 @@ export default function Leads({ session, profile }) {
                                   setTaskFormData({ title: t.title, task_type: t.task_type, status: t.status, due_date: t.due_date || '', owner: t.owner })
                                   setIsTaskModalOpen(true)
                                 }}><Edit2 size={14}/></button>
-                                <button className="btn-icon text-danger" onClick={() => handleDeleteTask(t.id, t.title)}>
-                                  <Trash2 size={14}/>
-                                </button>
+                                {isAdmin && (
+                                  <button className="btn-icon text-danger" onClick={() => handleDeleteTask(t.id, t.title)}>
+                                    <Trash2 size={14}/>
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -641,6 +659,7 @@ export default function Leads({ session, profile }) {
                             >
                               <Edit2 size={14} />
                             </button>
+                            {isAdmin && (
                               <button 
                                 className="btn-secondary btn-sm" 
                                 style={{ padding: '6px', color: 'var(--danger)' }}
@@ -652,6 +671,7 @@ export default function Leads({ session, profile }) {
                               >
                                 <Trash2 size={14} />
                               </button>
+                            )}
                           </div>
                         </td>
                       </tr>

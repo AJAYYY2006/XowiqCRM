@@ -12,6 +12,7 @@ export default function Invoices({ session, profile }) {
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState('All')
+  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
   
   const [formData, setFormData] = useState({
     title: '', account_id: '', amount: 0, due_date: '', status: 'Unpaid'
@@ -278,9 +279,11 @@ export default function Invoices({ session, profile }) {
                         <button className="btn-icon text-primary" onClick={() => handleOpenModal(inv)} title="Edit">
                           <Edit2 size={16} />
                         </button>
-                        <button className="btn-icon text-danger" onClick={() => handleDelete(inv)} title="Delete">
-                          <Trash2 size={16} />
-                        </button>
+                        {isAdmin && (
+                          <button className="btn-icon text-danger" onClick={() => handleDelete(inv)} title="Delete">
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

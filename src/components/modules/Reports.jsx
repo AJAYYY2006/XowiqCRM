@@ -271,7 +271,7 @@ export default function Reports({ session, profile }) {
 
   if (loading) return <div className="loading-container"><div className="spinner"/></div>
   
-  const isAdmin = ['admin', 'administrator'].includes(profile?.role?.toLowerCase())
+  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
 
   if (viewingData) {
     const { report, data } = viewingData
@@ -529,9 +529,11 @@ export default function Reports({ session, profile }) {
                         <button className="btn-icon text-primary" onClick={(e) => { e.stopPropagation(); handleOpenModal(report); }} title="Edit Configuration">
                           <Edit2 size={16} />
                         </button>
-                        <button className="btn-icon text-danger" onClick={(e) => { e.stopPropagation(); handleDeleteReport(report); }} title="Delete Report">
-                          <Trash2 size={16} />
-                        </button>
+                        {isAdmin && (
+                          <button className="btn-icon text-danger" onClick={(e) => { e.stopPropagation(); handleDeleteReport(report); }} title="Delete Report">
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
 import {
   Plus, Pencil, CheckCircle, Trash2, ArrowLeft, Package, LayoutGrid, 
-  ChevronRight, FileText, Receipt, CheckSquare, Activity, ClipboardList, TrendingUp
+  ChevronRight, FileText, Receipt, CheckSquare, Activity, ClipboardList, TrendingUp, Settings
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LocalSearch from '../ui/LocalSearch'
 import toast from 'react-hot-toast'
+import WhatsAppButton from '../ui/WhatsAppButton'
+import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../lib/whatsapp'
+import FieldBuilderModal from '../ui/FieldBuilderModal'
 
 // --- Constants ---
 const STAGES = ['Prospecting', 'Scoping', 'Negotiation', 'Legal', 'Contract', 'Closed']
@@ -24,6 +27,9 @@ export default function Opportunities({ session, profile }) {
   })
   const [productForm, setProductForm] = useState({ name: '', qty: 1, price: 0 })
   const [products, setProducts] = useState([])
+  const [linkedAccountPhone, setLinkedAccountPhone] = useState(null)
+  const [linkedAccountName, setLinkedAccountName] = useState('')
+  const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
 
   // --- Effects ---
   useEffect(() => {
@@ -53,6 +59,28 @@ export default function Opportunities({ session, profile }) {
       setLoading(false)
     }
   }
+
+  // Fetch phone from linked account when viewing an opportunity
+  useEffect(() => {
+    const fetchLinkedPhone = async () => {
+      if (!viewingOpp?.account_id) {
+        setLinkedAccountPhone(null)
+        setLinkedAccountName('')
+        return
+      }
+      // Try account phone first, then contacts
+      const { data: acc } = await supabase
+        .from('accounts')
+        .select('phone, account_name, contacts(phone)')
+        .eq('id', viewingOpp.account_id)
+        .single()
+      if (acc) {
+        setLinkedAccountPhone(acc.phone || acc.contacts?.[0]?.phone || null)
+        setLinkedAccountName(acc.account_name || '')
+      }
+    }
+    fetchLinkedPhone()
+  }, [viewingOpp])
 
   // --- Handlers ---
   const handleOpenModal = (opp = null) => {
@@ -135,13 +163,15 @@ export default function Opportunities({ session, profile }) {
 
   if (loading) return <div className="loading-container"><div className="spinner"/></div>
 
+  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
+
   return (
     <div>
       {viewingOpp ? (
         /* --- DETAIL VIEW --- */
         <div className="animate-in fade-in">
-          <button className="back-btn" onClick={() => setViewingOpp(null)}>
-            ← Back to Opportunities Hub
+          <button className="back-btn" onClick={() => setViewingOpp(null)} title="Back to Opportunities">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
           </button>
 
           <div className="card" style={{ marginBottom: 24 }}>
@@ -160,9 +190,11 @@ export default function Opportunities({ session, profile }) {
                 <button className="btn btn-secondary" onClick={() => handleOpenModal(viewingOpp)}>
                   <Pencil size={14} style={{ marginRight: 6 }} /> Edit
                 </button>
-                <button className="btn btn-secondary text-danger" onClick={() => handleDelete(viewingOpp.id)}>
-                   <Trash2 size={14} style={{ marginRight: 6 }} /> Delete
-                </button>
+                {isAdmin && (
+                  <button className="btn btn-secondary text-danger" onClick={() => handleDelete(viewingOpp.id)}>
+                     <Trash2 size={14} style={{ marginRight: 6 }} /> Delete
+                  </button>
+                )}
               </div>
             </div>
 
@@ -182,6 +214,21 @@ export default function Opportunities({ session, profile }) {
               <div className="detail-field">
                 <label>Created Date</label>
                 <span>{new Date(viewingOpp.created_at).toLocaleDateString()}</span>
+              </div>
+              <div className="detail-field">
+                <label>Contact Phone</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>{(() => { const cleaned = cleanPhoneNumber(linkedAccountPhone); return cleaned ? formatPhoneDisplay(cleaned) : (linkedAccountPhone || 'No phone on account'); })()}</span>
+                  <WhatsAppButton
+                    phone={linkedAccountPhone}
+                    messageText={getWhatsAppMessage('opportunity', {
+                      firstName: (linkedAccountName || '').split(' ')[0],
+                      opportunityName: viewingOpp.name
+                    })}
+                    session={session}
+                    recordName={viewingOpp.name}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -306,9 +353,14 @@ export default function Opportunities({ session, profile }) {
               <h1 className="page-title">Opportunities</h1>
               <p className="page-subtitle">Track and close your sales pipeline efficiently.</p>
             </div>
-            <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-              <Plus size={18} style={{ marginRight: 6 }} /> New Opportunity
-            </button>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button className="btn btn-secondary" onClick={() => setIsFieldBuilderOpen(true)}>
+                <Settings size={18} style={{ marginRight: 6 }} /> Edit fields
+              </button>
+              <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+                <Plus size={18} style={{ marginRight: 6 }} /> New Opportunity
+              </button>
+            </div>
           </div>
 
           <div className="table-container">
@@ -374,9 +426,11 @@ export default function Opportunities({ session, profile }) {
                               <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); handleOpenModal(opp); }}>
                                  <Pencil size={14} />
                               </button>
-                              <button className="btn btn-secondary btn-sm text-danger" onClick={(e) => { e.stopPropagation(); handleDelete(opp.id); }}>
-                                 <Trash2 size={14} />
-                              </button>
+                              {isAdmin && (
+                                <button className="btn btn-secondary btn-sm text-danger" onClick={(e) => { e.stopPropagation(); handleDelete(opp.id); }}>
+                                   <Trash2 size={14} />
+                                </button>
+                              )}
                            </div>
                         </td>
                       </tr>
@@ -437,6 +491,13 @@ export default function Opportunities({ session, profile }) {
           </div>
         </div>
       )}
+      
+      <FieldBuilderModal 
+        module="opportunity"
+        businessId={session.user.id}
+        isOpen={isFieldBuilderOpen}
+        onClose={() => setIsFieldBuilderOpen(false)}
+      />
     </div>
   )
 }

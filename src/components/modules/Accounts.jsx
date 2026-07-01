@@ -5,6 +5,8 @@ import toast from 'react-hot-toast'
 import { Trash2, Edit2, Package, Plus, Calendar, CreditCard, Clock, FileText, CheckCircle, Download, Check, X, Phone, Save, Link2, Settings, AlertCircle, ArrowUp, ArrowDown, LayoutGrid } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
+import WhatsAppButton from '../ui/WhatsAppButton'
+import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../lib/whatsapp'
 import { useTranslation } from 'react-i18next'
 import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
@@ -111,7 +113,9 @@ export default function Accounts({ session, profile }) {
   
   const companyType = session.user.user_metadata?.companyType || 'B2B'
   const isB2C = companyType === 'B2C'
-  const isStageTrackingEnabled = session.user.user_metadata?.b2cStageTrackingEnabled === true
+  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
+  // Stage tracking is now per-service (service_type field), always fetch stages
+  const hasMultiStageServices = (svcList) => (svcList || []).some(s => s.service_type === 'Multi-Stage')
 
   const [b2cStages, setB2cStages] = useState([])
 
@@ -179,7 +183,7 @@ export default function Accounts({ session, profile }) {
   useEffect(() => { 
     fetchAccounts()
     fetchCustomConfigs()
-    if (isB2C && isStageTrackingEnabled) {
+    if (isB2C) {
       fetchB2CStages()
     }
   }, [session])
@@ -250,7 +254,7 @@ export default function Accounts({ session, profile }) {
 
   useEffect(() => {
     if (selectedAccount) fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
-  }, [selectedAccount])
+  }, [selectedAccount?.id])
 
   const fetchAccounts = async () => {
     try {
@@ -271,19 +275,50 @@ export default function Accounts({ session, profile }) {
   }
 
   const fetchAccountDetails = async (id, accName) => {
-    const [cRes, iRes, tRes, csRes, sRes, aRes] = await Promise.all([
+    const [accRes, cRes, iRes, tRes, csRes, svcRes, sRes, aRes, stageHistoryRes, allStagesRes] = await Promise.all([
+      supabase.from('accounts').select('*, contacts(phone, email, id)').eq('id', id).single(),
       supabase.from('contacts').select('*').eq('account_id', id),
       supabase.from('quotes').select('*').eq('account_id', id).order('created_at', { ascending: false }),
       supabase.from('tasks').select('*').eq('account_id', id).order('due_date', { ascending: true }),
-      supabase.from('customer_services').select('*, services(service_name, reminder_days)').eq('account_id', id).order('assigned_date', { ascending: false }),
+      supabase.from('customer_services').select('*').eq('account_id', id).order('assigned_date', { ascending: false }),
+      supabase.from('services').select('id, service_name, reminder_days').eq('user_id', session.user.id),
       supabase.from('services').select('*').eq('user_id', session.user.id).eq('status', 'active'),
-      supabase.from('activities').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false })
+      supabase.from('activities').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
+      supabase.from('b2c_customer_stages').select('id, stage_id, service_id, moved_at').eq('customer_id', String(id)).order('moved_at', { ascending: false }),
+      supabase.from('b2c_stages').select('id, name, color').order('order_index', { ascending: true })
     ])
+    
+    if (csRes.error) {
+      console.error('[ServiceHistory] DB Error fetching customer_services:', csRes.error)
+    }
+
+    if (accRes.data) {
+      setSelectedAccount(accRes.data)
+    }
+
+    // Build a stage lookup map: stage_id -> { name, color }
+    const stagesMap = {}
+    ;(allStagesRes.data || []).forEach(st => { stagesMap[String(st.id)] = st })
+
+    // Enrich stage history rows with stage details
+    const stageHistory = (stageHistoryRes.data || []).map(sh => ({
+      ...sh,
+      stageDetail: stagesMap[String(sh.stage_id)] || null
+    }))
+
+    // For each service entry: try matched stage by service_id, fallback to global customer moves (where service_id is null)
+    const mySvcs = (csRes.data || []).map(cs => {
+      const match = (svcRes.data || []).find(s => String(s.id) === String(cs.service_id))
+      const latestByService = stageHistory.find(sh => sh.service_id && String(sh.service_id) === String(cs.service_id))
+      const latestGlobal = stageHistory.find(sh => !sh.service_id)
+      const latestStage = latestByService || latestGlobal
+      return { ...cs, services: match || null, currentStage: latestStage?.stageDetail || null, stageFromServiceId: !!latestByService }
+    })
 
     setAccContacts(cRes.data || [])
     setAccInvoices(iRes.data || [])
     setAccTasks(tRes.data || [])
-    setAccServices(csRes.data || [])
+    setAccServices(mySvcs)
     setAvailableServices(sRes.data || [])
 
     const nameLower = (accName || '').toLowerCase()
@@ -432,34 +467,58 @@ export default function Accounts({ session, profile }) {
       }
 
       // 3. CREATE/UPDATE SERVICE ENTRY
+      const selectedSvcType = selectedSvc?.service_type || 'Instant'
       const csPayload = {
         user_id: session.user.id,
-        account_id: selectedAccount.id,
+        account_id: String(selectedAccount.id),
         service_id: serviceAssignForm.service_id,
         price: serviceAssignForm.price,
         assigned_date: serviceAssignForm.service_date,
         notes: serviceAssignForm.notes,
         quote_id: quoteId,
         task_id: taskId,  // Link for future syncs
-        status: 'Active',
-        stage_notes: serviceEntryTab === 'stage' ? serviceAssignForm.stage_notes : null,
-        next_follow_up_date: serviceEntryTab === 'stage' ? (serviceAssignForm.next_follow_up_date || null) : null
+        status: selectedSvcType === 'Instant' ? 'Completed' : 'Active'
       }
 
       if (editingServiceEntry) {
-        await supabase.from('customer_services').update(csPayload).eq('id', editingServiceEntry.id)
+        const { error } = await supabase.from('customer_services').update(csPayload).eq('id', editingServiceEntry.id)
+        if (error) throw error
         toast.success('Service, Invoice & Reminder synced!', { id: toastId })
       } else {
-        await supabase.from('customer_services').insert([csPayload])
+        const { error } = await supabase.from('customer_services').insert([csPayload])
+        if (error) throw error
         toast.success('Service entry saved! Invoice and Reminder generated.', { id: toastId })
       }
       
-      if (isB2C && isStageTrackingEnabled && serviceEntryTab === 'stage' && serviceAssignForm.b2c_stage_id) {
-        await supabase.from('accounts').update({ b2c_stage_id: serviceAssignForm.b2c_stage_id }).eq('id', selectedAccount.id)
+      // Stage assignment: Instant services auto-complete and bypass Kanban, Multi-Stage behaves as today
+      if (isB2C) {
+        if (selectedSvcType === 'Instant') {
+          const completedStage = b2cStages.find(s => s.name === 'Completed')
+          if (completedStage) {
+            await supabase.from('accounts').update({ b2c_stage_id: completedStage.id }).eq('id', selectedAccount.id)
+            await supabase.from('b2c_customer_stages').insert([{
+              customer_id: String(selectedAccount.id),
+              stage_id: completedStage.id,
+              service_id: serviceAssignForm.service_id,
+              moved_at: new Date().toISOString()
+            }])
+          }
+        } else if (selectedSvcType === 'Multi-Stage') {
+          if (serviceEntryTab === 'stage' && serviceAssignForm.b2c_stage_id) {
+            await supabase.from('accounts').update({ b2c_stage_id: serviceAssignForm.b2c_stage_id }).eq('id', selectedAccount.id)
+            await supabase.from('b2c_customer_stages').insert([{
+              customer_id: String(selectedAccount.id),
+              stage_id: serviceAssignForm.b2c_stage_id,
+              service_id: serviceAssignForm.service_id,
+              moved_at: new Date().toISOString()
+            }])
+          }
+        }
       }
 
       setIsServiceModalOpen(false)
       fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
+      fetchAccounts()
       
       await supabase.from('activities').insert([{
         user_id: session.user.id,
@@ -560,7 +619,9 @@ export default function Accounts({ session, profile }) {
     return (
       <div className="customer-detail-view">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <button className="back-btn" onClick={() => setSelectedAccount(null)} style={{ margin: 0 }}>← All Customers</button>
+          <button className="back-btn" onClick={() => setSelectedAccount(null)} style={{ margin: 0 }} title="Back to Accounts">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+          </button>
           <div style={{ display: 'flex', gap: 12 }}>
             <button className="btn btn-secondary" onClick={() => handleOpenServiceModal()}><Plus size={16} /> Add Service Entry</button>
             <button className="btn btn-primary" onClick={() => handleOpenModal(selectedAccount)}><Edit2 size={16} /> Edit Profile</button>
@@ -576,26 +637,31 @@ export default function Accounts({ session, profile }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <h1 style={{ margin: 0, fontSize: 32, fontWeight: 900 }}>{selectedAccount.account_name}</h1>
                 <span className={`badge`} style={{ fontSize: 12, padding: '4px 12px', background: selectedAccount.status === 'Active' ? '#dcfce3' : '#f1f5f9', color: selectedAccount.status === 'Active' ? '#16a34a' : '#64748b' }}>{selectedAccount.status}</span>
-                {isB2C && isStageTrackingEnabled && (
-                  <select 
-                    style={{ marginLeft: 'auto', padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, fontWeight: 700, color: '#1e293b', background: b2cStages.find(s => s.id === selectedAccount.b2c_stage_id)?.color + '20' || '#f8fafc' }}
-                    value={selectedAccount.b2c_stage_id || ''}
-                    onChange={async (e) => {
-                      const newStageId = e.target.value
-                      await supabase.from('accounts').update({ b2c_stage_id: newStageId }).eq('id', selectedAccount.id)
-                      toast.success('Stage updated')
-                      fetchAccounts()
-                      fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
-                    }}
-                  >
-                    <option value="">-- Set Stage --</option>
-                    {b2cStages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                )}
+                {isB2C && b2cStages.length > 0 && (() => {
+                  const currentStg = b2cStages.find(st => st.id === selectedAccount.b2c_stage_id)
+                  return currentStg && (
+                    <span className="badge" style={{ fontSize: 12, padding: '4px 12px', background: (currentStg.color || '#f97316') + '20', color: currentStg.color || '#f97316', fontWeight: 800 }}>
+                      {currentStg.name}
+                    </span>
+                  )
+                })()}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px', marginTop: 15 }}>
                 <div style={detailFieldStyle}><span style={labelStyle}>Email:</span> {selectedAccount.email || selectedAccount.contacts?.[0]?.email || '—'}</div>
-                <div style={detailFieldStyle}><span style={labelStyle}>Phone:</span> {selectedAccount.phone || selectedAccount.contacts?.[0]?.phone || '—'}</div>
+                <div style={{ ...detailFieldStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={labelStyle}>Phone:</span>
+                  <span>{(() => { const raw = selectedAccount.phone || selectedAccount.contacts?.[0]?.phone; const cleaned = cleanPhoneNumber(raw); return cleaned ? formatPhoneDisplay(cleaned) : (raw || '—'); })()}</span>
+                  <WhatsAppButton
+                    phone={selectedAccount.phone || selectedAccount.contacts?.[0]?.phone}
+                    messageText={getWhatsAppMessage('customer', {
+                      firstName: (selectedAccount.account_name || '').split(' ')[0],
+                      agentName: profile?.name || session.user.email,
+                      businessName: profile?.company_name || 'our company'
+                    })}
+                    session={session}
+                    recordName={selectedAccount.account_name}
+                  />
+                </div>
                 <div style={detailFieldStyle}><span style={labelStyle}>Gender:</span> {selectedAccount.gender || '—'}</div>
                 <div style={detailFieldStyle}><span style={labelStyle}>DOB:</span> {selectedAccount.date_of_birth ? new Date(selectedAccount.date_of_birth).toLocaleDateString() : '—'}</div>
                 <div style={{ ...detailFieldStyle, gridColumn: 'span 2' }}>
@@ -648,7 +714,9 @@ export default function Accounts({ session, profile }) {
             <div className="card" style={{ padding: 0 }}>
               <div style={{ padding: 20, borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0 }}>Past Service Performance</h3>
-                <button className="btn btn-primary btn-sm" onClick={() => handleOpenServiceModal()}>Add Entry</button>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <button className="btn btn-primary btn-sm" onClick={() => handleOpenServiceModal()}>Add Entry</button>
+                </div>
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
@@ -656,23 +724,58 @@ export default function Accounts({ session, profile }) {
                     <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Service Name</th>
                     <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Date</th>
                     <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Price</th>
+                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Status</th>
+                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Current Stage</th>
                     <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Notes</th>
                     <th style={{ padding: 15, textAlign: 'right', fontSize: 12 }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {accServices.length === 0 ? (
-                    <tr><td colSpan="5" style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No service history found.</td></tr>
+                    <tr><td colSpan="7" style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No service history found.</td></tr>
                   ) : (
                     accServices.map(s => (
                       <tr key={s.id} style={{ borderTop: '1px solid #f1f5f9' }}>
                         <td style={{ padding: 15, fontWeight: 700 }}>{s.services?.service_name}</td>
                         <td style={{ padding: 15 }}>{new Date(s.assigned_date).toLocaleDateString()}</td>
                         <td style={{ padding: 15, fontWeight: 800 }}>{profile?.currency || '$'}{Number(s.price).toLocaleString()}</td>
+                        <td style={{ padding: 15 }}>
+                          <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 12, background: s.status === 'Completed' ? '#dcfce3' : '#f1f5f9', color: s.status === 'Completed' ? '#16a34a' : '#64748b', fontWeight: 800 }}>
+                            {s.status || 'Active'}
+                          </span>
+                        </td>
+                        <td style={{ padding: 15 }}>
+                          {(() => {
+                            const getStage = () => {
+                              if (s.status === 'Completed') {
+                                return s.currentStage || b2cStages.find(st => st.name === 'Completed') || null
+                              } else {
+                                if (s.currentStage) return s.currentStage
+                                const accountStage = selectedAccount.b2c_stage_id
+                                  ? b2cStages.find(st => st.id === selectedAccount.b2c_stage_id)
+                                  : null
+                                if (accountStage && accountStage.name === 'Completed') {
+                                  return b2cStages.find(st => st.name !== 'Completed') || null
+                                }
+                                return accountStage
+                              }
+                            }
+                            const stg = getStage()
+                            return stg ? (
+                              <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 12, background: (stg.color || '#f97316') + '20', color: stg.color || '#f97316', fontWeight: 800 }}>
+                                {stg.name}
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: 11, color: '#94a3b8' }}>—</span>
+                            )
+                          })()}
+                        </td>
                         <td style={{ padding: 15, color: '#64748b' }}>{s.notes || '-'}</td>
                         <td style={{ padding: 15, textAlign: 'right' }}>
                           <button className="btn-icon" onClick={() => handleOpenServiceModal(s)}><Edit2 size={14}/></button>
-                          <button className="btn-icon text-danger" onClick={() => handleDeleteServiceEntry(s)}><Trash2 size={14}/></button>
+                          {isAdmin && (
+                            <button className="btn-icon text-danger" onClick={() => handleDeleteServiceEntry(s)}><Trash2 size={14}/></button>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -800,7 +903,7 @@ export default function Accounts({ session, profile }) {
                       updated_at: new Date().toISOString()
                     }
 
-                    if (isB2C && isStageTrackingEnabled && b2cStages.length > 0 && !editingAccount) {
+                    if (isB2C && b2cStages.length > 0 && !editingAccount) {
                       payload.b2c_stage_id = b2cStages[0].id
                     }
                     
@@ -887,7 +990,7 @@ export default function Accounts({ session, profile }) {
                 <button className="modal-close" onClick={() => setIsServiceModalOpen(false)}>✕</button>
               </div>
 
-              {isB2C && isStageTrackingEnabled && (
+              {isB2C && b2cStages.length > 0 && (
                 <div style={{ display: 'flex', gap: 10, padding: '0 24px', borderBottom: '1px solid #e2e8f0', marginBottom: 20 }}>
                   <button 
                     className={`nav-tab ${serviceEntryTab === 'quick' ? 'active' : ''}`}
@@ -936,7 +1039,7 @@ export default function Accounts({ session, profile }) {
                   </select>
                 </div>
 
-                {isB2C && isStageTrackingEnabled && serviceEntryTab === 'stage' && (
+                {isB2C && b2cStages.length > 0 && serviceEntryTab === 'stage' && (
                   <>
                     <div className="form-group" style={{ marginBottom: 16 }}>
                       <label className="form-label">Current Stage</label>
@@ -997,7 +1100,7 @@ export default function Accounts({ session, profile }) {
               <tr>
                 <th style={{ minWidth: 180 }}>Customer Profile</th>
                 <th>Status</th>
-                {isB2C && isStageTrackingEnabled && <th>Stage</th>}
+                {isB2C && b2cStages.length > 0 && <th>Stage</th>}
                 {customFieldConfigs.filter(c => c.show_in_list && !c.is_core).map(config => (
                   <th key={config.id}>{config.label}</th>
                 ))}
@@ -1021,7 +1124,7 @@ export default function Accounts({ session, profile }) {
                   <td>
                     <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 12, background: acc.status === 'Active' ? '#dcfce3' : '#f1f5f9', color: acc.status === 'Active' ? '#16a34a' : '#64748b', fontWeight: 800 }}>{acc.status}</span>
                   </td>
-                  {isB2C && isStageTrackingEnabled && (
+                  {isB2C && b2cStages.length > 0 && (
                     <td>
                       {acc.b2c_stage_id ? (
                         <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 12, background: b2cStages.find(s => s.id === acc.b2c_stage_id)?.color + '20', color: b2cStages.find(s => s.id === acc.b2c_stage_id)?.color, fontWeight: 800 }}>
@@ -1050,7 +1153,9 @@ export default function Accounts({ session, profile }) {
                       </button>
                     )}
                     <button className="btn-icon" onClick={() => handleOpenModal(acc)} title="Edit"><Edit2 size={16} /></button>
-                    <button className="btn-icon text-danger" onClick={() => handleDeleteAccount(acc)} title="Delete"><Trash2 size={16} /></button>
+                    {isAdmin && (
+                      <button className="btn-icon text-danger" onClick={() => handleDeleteAccount(acc)} title="Delete"><Trash2 size={16} /></button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1084,7 +1189,7 @@ export default function Accounts({ session, profile }) {
                     updated_at: new Date().toISOString()
                   }
 
-                  if (isB2C && isStageTrackingEnabled && b2cStages.length > 0 && !editingAccount) {
+                  if (isB2C && b2cStages.length > 0 && !editingAccount) {
                     payload.b2c_stage_id = b2cStages[0].id
                   }
                   

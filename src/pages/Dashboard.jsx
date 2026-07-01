@@ -32,7 +32,7 @@ import {
 } from 'lucide-react'
 import GlobalSearch from '../components/ui/GlobalSearch'
 import ProfileModal from '../components/ui/ProfileModal'
-import LanguageSwitcher from '../components/ui/LanguageSwitcher'
+
 
 export default function Dashboard({ session }) {
   const navigate = useNavigate()
@@ -225,21 +225,12 @@ export default function Dashboard({ session }) {
             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
               {session.user.user_metadata?.companyName || 'My Company'}
             </h2>
-            <span style={{ 
-              fontSize: 11, fontWeight: 700, padding: '3px 8px', 
-              borderRadius: 12, background: isB2C ? '#3b82f6' : '#f37a23', color: '#fff',
-              letterSpacing: '0.5px'
-            }}>
-              {isB2C ? 'B2C MODE' : 'B2B MODE'}
-            </span>
           </div>
 
           <div style={{ maxWidth: '400px', width: '100%', marginLeft: '180px' }}>
             <GlobalSearch session={session} />
           </div>
-          <div style={{ position: 'absolute', right: 24 }}>
-            <LanguageSwitcher />
-          </div>
+
         </header>
         
         <div style={{ padding: '32px' }}>

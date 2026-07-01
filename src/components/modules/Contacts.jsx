@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { Trash2, Edit2 } from 'lucide-react'
+import { Trash2, Edit2, Settings, Plus } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 import toast from 'react-hot-toast'
+import WhatsAppButton from '../ui/WhatsAppButton'
+import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../lib/whatsapp'
+import FieldBuilderModal from '../ui/FieldBuilderModal'
 
 export default function Contacts({ session, profile }) {
   const [contacts, setContacts] = useState([])
@@ -18,6 +21,7 @@ export default function Contacts({ session, profile }) {
   const [formData, setFormData] = useState({
     name: '', email: '', phone: '', account_id: '', contact_owner: ''
   })
+  const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
 
   // Contact Detail State
   const [conTasks, setConTasks] = useState([])
@@ -225,14 +229,14 @@ export default function Contacts({ session, profile }) {
 
   if (loading) return <div className="loading-container"><div className="spinner"/></div>
   
-  const isAdmin = ['admin', 'administrator'].includes(profile?.role?.toLowerCase())
+  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
 
   return (
     <div>
       {selectedContact ? (
         <div>
-          <button className="back-btn" onClick={() => setSelectedContact(null)}>
-            ← Back to Contacts
+          <button className="back-btn" onClick={() => setSelectedContact(null)} title="Back to Contacts">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
           </button>
           
           <div className="card" style={{ marginBottom: 24 }}>
@@ -242,8 +246,22 @@ export default function Contacts({ session, profile }) {
               </div>
               <div className="detail-info">
                 <h1 className="detail-name">{selectedContact.name}</h1>
-                <div className="detail-meta">{selectedContact.email} • {selectedContact.phone || 'No phone'}</div>
+                <div className="detail-meta">{selectedContact.email}</div>
+
                 <div className="badge badge-active mt-2">Active Contact</div>
+              </div>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+                <button className="btn btn-secondary" onClick={() => handleOpenModal(selectedContact)}>
+                  <Edit2 size={14} style={{ marginRight: 6 }} /> Edit
+                </button>
+                {isAdmin && (
+                  <button className="btn btn-secondary text-danger" onClick={() => {
+                    handleDeleteContact(selectedContact.id, selectedContact.name);
+                    setSelectedContact(null);
+                  }}>
+                    <Trash2 size={14} style={{ marginRight: 6 }} /> Delete
+                  </button>
+                )}
               </div>
             </div>
 
@@ -265,6 +283,23 @@ export default function Contacts({ session, profile }) {
                 ) : (
                   <span>No Account</span>
                 )}
+              </div>
+              <div className="detail-field">
+                <label>Phone</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>{(() => { const raw = selectedContact.phone; const cleaned = cleanPhoneNumber(raw); return cleaned ? formatPhoneDisplay(cleaned) : (raw || 'No phone'); })()}</span>
+                  <WhatsAppButton
+                    phone={selectedContact.phone}
+                    messageText={getWhatsAppMessage('customer', {
+                      firstName: (selectedContact.name || '').split(' ')[0],
+                      agentName: profile?.name || session.user.email,
+                      businessName: profile?.company_name || 'our company'
+                    })}
+                    session={session}
+                    recordName={selectedContact.name}
+                    style={{ width: 26, height: 26 }}
+                  />
+                </div>
               </div>
               <div className="detail-field">
                 <label>Contact Owner</label>
@@ -365,9 +400,14 @@ export default function Contacts({ session, profile }) {
               <h1 className="page-title">Contacts</h1>
               <p className="page-subtitle">Manage people and relationships.</p>
             </div>
-            <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-              <span style={{ fontSize: 18 }}>+</span> Add New Contact
-            </button>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button className="btn btn-secondary" onClick={() => setIsFieldBuilderOpen(true)}>
+                <Settings size={18} style={{ marginRight: 6 }} /> Edit fields
+              </button>
+              <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+                <Plus size={18} style={{ marginRight: 6 }} /> Add New Contact
+              </button>
+            </div>
           </div>
 
           <div className="table-container">
@@ -569,6 +609,13 @@ export default function Contacts({ session, profile }) {
           </div>
         </div>
       )}
+      
+      <FieldBuilderModal 
+        module="contact"
+        businessId={session.user.id}
+        isOpen={isFieldBuilderOpen}
+        onClose={() => setIsFieldBuilderOpen(false)}
+      />
     </div>
   )
 }

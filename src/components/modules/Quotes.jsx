@@ -268,7 +268,7 @@ export default function Quotes({ session, profile }) {
 
   if (loading) return <div className="loading-container"><div className="spinner"/></div>
   
-  const isAdmin = ['admin', 'administrator'].includes(profile?.role?.toLowerCase())
+  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
 
   return (
     <div>

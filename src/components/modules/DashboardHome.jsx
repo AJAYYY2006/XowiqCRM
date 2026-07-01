@@ -208,83 +208,36 @@ export default function DashboardHome({ session, profile }) {
         </div>
       </div>
 
-      {isB2C && priorityTasks.length > 0 && (
-        <div style={{ padding: '0 24px 24px' }}>
-          <div className="card" style={{ borderLeft: '4px solid #ef4444', padding: 24, paddingBottom: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <AlertCircle size={24} color="#ef4444" />
-              <h2 style={{ fontSize: 20, margin: 0, fontWeight: 800 }}>Reminder Alerts</h2>
-              <span style={{ background: '#ef4444', color: '#fff', padding: '2px 10px', borderRadius: 12, fontSize: 12, fontWeight: 800 }}>{priorityTasks.length} Active Notice{priorityTasks.length > 1 ? 's' : ''}</span>
-            </div>
-            
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <tbody>
-                {priorityTasks.map(t => {
-                  const isOverdue = new Date(t.due_date) < new Date() && new Date(t.due_date).toDateString() !== new Date().toDateString()
-                  const isToday = new Date(t.due_date).toDateString() === new Date().toDateString()
-                  return (
-                    <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '12px 0' }}>
-                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <Clock size={16} color={isOverdue ? '#ef4444' : '#f37a23'} />
-                            </div>
-                            <div>
-                               <div style={{ fontWeight: 800, color: '#1e293b' }}>{t.title}</div>
-                               <div style={{ fontSize: 12, color: isOverdue ? '#ef4444' : (isToday ? '#f37a23' : '#64748b'), fontWeight: 600 }}>
-                                  {isOverdue ? `Overdue (was due ${new Date(t.due_date).toLocaleDateString()})` : `Due Today`}
-                               </div>
-                            </div>
-                         </div>
-                      </td>
-                      <td style={{ padding: '12px 0', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                          <button className="btn btn-sm btn-secondary" style={{ color: '#16a34a', background: '#f0fdf4', border: '1px solid #dcfce3', fontWeight: 700 }} onClick={() => handleTaskAction(t, 'done')}><CheckCircle size={14} style={{ marginRight: 6 }}/> Mark as Done</button>
-                          <button className="btn btn-sm btn-secondary" style={{ color: '#f59e0b', background: '#fef3c7', border: '1px solid #fde68a', fontWeight: 700 }} onClick={() => handleTaskAction(t, 'snooze')}><Clock size={14} style={{ marginRight: 6 }}/> Snooze</button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+
 
       {/* Top Stats */}
       <div className="dashboard-grid">
         {isB2C ? (
           <>
             <div className="stat-card">
-              <div className="stat-label">Total B2C Customers</div>
+              <div className="stat-label"><strong style={{ fontWeight: 900, color: '#0f172a' }}>Total B2C Customers</strong></div>
               <div className="stat-value">{stats.customersCount}</div>
               <div className="stat-change up">Growing actively</div>
-              <div style={{ position:'absolute', top:24, right:24, opacity:1, fontSize:36 }}>👥</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">Monthly B2C Revenue</div>
+              <div className="stat-label"><strong style={{ fontWeight: 900, color: '#0f172a' }}>Monthly B2C Revenue</strong></div>
               <div className="stat-value">{profile?.currency || '$'}{stats.revenue.toLocaleString()}</div>
               <div className="stat-change up">↑ 12% from last month</div>
-              <div style={{ position:'absolute', top:24, right:24, opacity:1, fontSize:36 }}>💳</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">Active Tickets</div>
+              <div className="stat-label"><strong style={{ fontWeight: 900, color: '#0f172a' }}>Active Tickets</strong></div>
               <div className="stat-value">{stats.ticketsCount}</div>
-              <div className="stat-change up">Response needed</div>
-              <div style={{ position:'absolute', top:24, right:24, opacity:1, fontSize:36 }}>🎫</div>
+              <div className="stat-change up"><strong style={{ fontWeight: 900, color: '#0f172a' }}>Response needed</strong></div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">Pending Service Reminders</div>
+              <div className="stat-label"><strong style={{ fontWeight: 900, color: '#0f172a' }}>Pending Service Reminders</strong></div>
               <div className="stat-value">{priorityTasks.length}</div>
               <div className="stat-change up" style={{ color: '#e11d48' }}>Action urgently needed</div>
-              <div style={{ position:'absolute', top:24, right:24, opacity:1, fontSize:36 }}>⏰</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">Unpaid B2C Invoices</div>
+              <div className="stat-label"><strong style={{ fontWeight: 900, color: '#0f172a' }}>Unpaid B2C Invoices</strong></div>
               <div className="stat-value">{stats.pendingInvoicesCount}</div>
               <div className="stat-change down">Collect payments</div>
-              <div style={{ position:'absolute', top:24, right:24, opacity:1, fontSize:36 }}>📄</div>
             </div>
           </>
         ) : (

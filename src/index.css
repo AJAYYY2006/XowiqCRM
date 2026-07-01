@@ -36,6 +36,11 @@
 /* ===== Reset & Base ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
 html { scroll-behavior: smooth; }
 
 body {
@@ -242,7 +247,7 @@ a:hover { color: var(--accent-2); }
 .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
 
 .btn-sm { padding: 6px 12px; font-size: 13px; }
-.btn-icon { padding: 8px; border-radius: var(--radius-sm); aspect-ratio: 1; }
+.btn-icon { padding: 8px; border-radius: var(--radius-sm); aspect-ratio: 1; cursor: pointer; }
 
 /* ===== Cards ===== */
 .card {
@@ -424,7 +429,12 @@ tbody td {
 tbody tr { transition: var(--transition); }
 tbody tr:hover { background: var(--bg-card-hover); }
 tbody tr:last-child td { border-bottom: none; }
-tbody tr.clickable-row { cursor: pointer; }
+tbody tr.clickable-row,
+tbody tr.clickable,
+.clickable,
+.clickable-row {
+  cursor: pointer;
+}
 
 /* ===== Badges ===== */
 .badge {
@@ -1202,16 +1212,26 @@ textarea.form-input {
 .back-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: var(--text-muted);
+  justify-content: center;
+  width: 36px;
+  height: 36px;
   cursor: pointer;
-  border: none;
-  background: none;
-  padding: 0 0 16px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  border-radius: 50%;
+  margin-bottom: 16px;
   transition: var(--transition);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-secondary);
+  flex-shrink: 0;
 }
-.back-btn:hover { color: var(--text-primary); }
+.back-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-light);
+  box-shadow: var(--shadow-md);
+  transform: translateX(-2px);
+}
 
 /* ===== Animations ===== */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

@@ -23,6 +23,7 @@ export default function Tasks({ session, profile }) {
   const [editingTask, setEditingTask] = useState(null)
   const [viewMode, setViewMode] = useState('active') // 'active' or 'history'
   
+  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
   const companyType = session.user.user_metadata?.companyType || 'B2B'
   const isB2C = companyType === 'B2C'
 
@@ -382,7 +383,9 @@ export default function Tasks({ session, profile }) {
                         </>
                       )}
                       <button className="btn-icon" onClick={() => handleOpenModal(task)}><Edit2 size={16} /></button>
-                      <button className="btn-icon text-danger" onClick={() => handleDeleteTask(task)}><Trash2 size={16} /></button>
+                      {isAdmin && (
+                        <button className="btn-icon text-danger" onClick={() => handleDeleteTask(task)}><Trash2 size={16} /></button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -396,8 +399,6 @@ export default function Tasks({ session, profile }) {
 
   if (loading) return <div className="loading-container"><div className="spinner" /></div>
   
-  const isAdmin = ['admin', 'administrator'].includes(profile?.role?.toLowerCase())
-
   return (
     <div>
       <div className="page-header">
