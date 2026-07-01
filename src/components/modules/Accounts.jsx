@@ -209,7 +209,8 @@ export default function Accounts({ session, profile }) {
         { label: 'Contact Number', field_key: 'contact_number', field_type: 'text', is_core: true, order: 1 },
         { label: 'Email ID', field_key: 'email_id', field_type: 'text', is_core: true, order: 2 },
         { label: 'Gender', field_key: 'gender', field_type: 'dropdown', options: ['Male', 'Female', 'Other'], is_core: true, order: 3 },
-        { label: 'Date of Birth', field_key: 'date_of_birth', field_type: 'date', is_core: true, order: 4 }
+        { label: 'Date of Birth', field_key: 'date_of_birth', field_type: 'date', is_core: true, order: 4 },
+        { label: 'Address', field_key: 'address', field_type: 'long_text', is_core: true, order: 5 }
       ]
 
       let finalData = existing || []
@@ -352,6 +353,7 @@ export default function Accounts({ session, profile }) {
           email_id: account.email || account.contacts?.[0]?.email || '',
           gender: account.gender || '',
           date_of_birth: account.date_of_birth ? new Date(account.date_of_birth).toISOString().split('T')[0] : '',
+          address: account.address || '',
           ...(account.custom_data || {})
         },
         contact_id: account.contacts?.[0]?.id || null
@@ -375,7 +377,8 @@ export default function Accounts({ session, profile }) {
           contact_number: '',
           email_id: '',
           gender: '',
-          date_of_birth: ''
+          date_of_birth: '',
+          address: ''
         },
         contact_id: null 
       })
@@ -907,7 +910,7 @@ export default function Accounts({ session, profile }) {
                       account_name: formData.custom_data?.customer_name || formData.custom_data?.full_name || formData.account_name, 
                       email: formData.custom_data?.email_id || (formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.email || null)),
                       phone: formData.custom_data?.contact_number || (!formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.phone || null)),
-                      address: formData.address,
+                      address: formData.custom_data?.address || formData.address || null,
                       gender: formData.custom_data?.gender || formData.gender || null,
                       date_of_birth: formData.custom_data?.date_of_birth || formData.date_of_birth || null,
                       notes: formData.notes,
@@ -1193,7 +1196,7 @@ export default function Accounts({ session, profile }) {
                     account_name: formData.custom_data?.customer_name || formData.custom_data?.full_name || formData.account_name, 
                     email: formData.custom_data?.email_id || (formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.email || null)),
                     phone: formData.custom_data?.contact_number || (!formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.phone || null)),
-                    address: formData.address, // Keep legacy columns for compatibility
+                    address: formData.custom_data?.address || formData.address || null, // Keep legacy columns for compatibility
                     gender: formData.custom_data?.gender || formData.gender || null,
                     date_of_birth: formData.custom_data?.date_of_birth || formData.date_of_birth || null,
                     notes: formData.notes,
