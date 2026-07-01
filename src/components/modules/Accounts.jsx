@@ -147,6 +147,46 @@ export default function Accounts({ session, profile }) {
 
   const [customFieldConfigs, setCustomFieldConfigs] = useState([])
   const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
+  const [isServiceFieldBuilderOpen, setIsServiceFieldBuilderOpen] = useState(false)
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false)
+  const [editingInvoice, setEditingInvoice] = useState(null)
+  const [invoiceForm, setInvoiceForm] = useState({ quote_name: '', total_price: 0, status: 'Unpaid', created_at: '' })
+
+  const handleOpenInvoiceModal = (inv) => {
+    setEditingInvoice(inv)
+    setInvoiceForm({
+      quote_name: inv.quote_name || '',
+      total_price: inv.total_price || 0,
+      status: inv.status || 'Unpaid',
+      created_at: inv.created_at ? new Date(inv.created_at).toISOString().split('T')[0] : ''
+    })
+    setIsInvoiceModalOpen(true)
+  }
+
+  const handleUpdateInvoice = async (e) => {
+    e.preventDefault()
+    const toastId = toast.loading('Updating invoice...')
+    try {
+      const { error } = await supabase
+        .from('quotes')
+        .update({
+          quote_name: invoiceForm.quote_name,
+          total_price: Number(invoiceForm.total_price),
+          status: invoiceForm.status,
+          created_at: invoiceForm.created_at ? new Date(invoiceForm.created_at).toISOString() : new Date().toISOString()
+        })
+        .eq('id', editingInvoice.id)
+
+      if (error) throw error
+
+      toast.success('Invoice updated successfully!', { id: toastId })
+      setIsInvoiceModalOpen(false)
+      fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
+    } catch (err) {
+      toast.error(err.message, { id: toastId })
+    }
+  }
+
   const [contactPopupData, setContactPopupData] = useState(null)
   const [viewContactsModal, setViewContactsModal] = useState(null) // { account, contacts }
   const [viewContactsLoading, setViewContactsLoading] = useState(false)
@@ -733,6 +773,9 @@ export default function Accounts({ session, profile }) {
               <div style={{ padding: 20, borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0 }}>Past Service Performance</h3>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <button className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setIsServiceFieldBuilderOpen(true)}>
+                    <Settings size={14} /> Edit fields
+                  </button>
                   <button className="btn btn-primary btn-sm" onClick={() => handleOpenServiceModal()}>Add Entry</button>
                 </div>
               </div>
@@ -825,6 +868,7 @@ export default function Accounts({ session, profile }) {
                         <button onClick={() => handleStatusToggle(inv)} className={`badge`} style={{ border: 'none', cursor: 'pointer', background: inv.status === 'Paid' ? '#dcfce3' : inv.status === 'Overdue' ? '#fee2e2' : '#fef9c3', color: inv.status === 'Paid' ? '#166534' : inv.status === 'Overdue' ? '#991b1b' : '#854d0e', fontWeight: 800 }}>{inv.status || 'Unpaid'}</button>
                       </td>
                       <td style={{ padding: 15, textAlign: 'right' }}>
+                        <button className="btn-icon" style={{ marginRight: 8 }} onClick={() => handleOpenInvoiceModal(inv)} title="Edit Invoice"><Edit2 size={16} /></button>
                         <button className="btn-icon" onClick={() => downloadInvoicePDF(inv)}><Download size={18} /></button>
                       </td>
                     </tr>
@@ -1367,6 +1411,74 @@ export default function Accounts({ session, profile }) {
           fetchCustomConfigs() // Refresh current view
         }}
       />
+
+      <FieldBuilderModal 
+        module="service"
+        businessId={session.user.id}
+        isOpen={isServiceFieldBuilderOpen}
+        onClose={() => setIsServiceFieldBuilderOpen(false)}
+      />
+
+      {isInvoiceModalOpen && editingInvoice && (
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="modal" style={{ maxWidth: 450 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Edit Invoice</h2>
+              <button className="modal-close" onClick={() => setIsInvoiceModalOpen(false)}>✕</button>
+            </div>
+            <form onSubmit={handleUpdateInvoice}>
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="form-label">Invoice Name / Service *</label>
+                <input 
+                  type="text" 
+                  required 
+                  className="form-input" 
+                  value={invoiceForm.quote_name} 
+                  onChange={e => setInvoiceForm({ ...invoiceForm, quote_name: e.target.value })} 
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="form-label">Amount ({profile?.currency || '$'}) *</label>
+                <input 
+                  type="number" 
+                  required 
+                  className="form-input" 
+                  value={invoiceForm.total_price} 
+                  onChange={e => setInvoiceForm({ ...invoiceForm, total_price: e.target.value })} 
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="form-label">Payment Status *</label>
+                <select 
+                  className="form-input" 
+                  value={invoiceForm.status} 
+                  onChange={e => setInvoiceForm({ ...invoiceForm, status: e.target.value })}
+                >
+                  <option value="Paid">✅ Paid</option>
+                  <option value="Unpaid">❌ Unpaid</option>
+                  <option value="Overdue">⚠️ Overdue</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: 24 }}>
+                <label className="form-label">Invoice Date *</label>
+                <input 
+                  type="date" 
+                  required 
+                  className="form-input" 
+                  value={invoiceForm.created_at} 
+                  onChange={e => setInvoiceForm({ ...invoiceForm, created_at: e.target.value })} 
+                />
+              </div>
+              <div className="form-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setIsInvoiceModalOpen(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Save size={18} /> Update Invoice
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
