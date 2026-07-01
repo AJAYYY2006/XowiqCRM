@@ -146,6 +146,7 @@ export default function Accounts({ session, profile }) {
   const navigate = useNavigate()
 
   const [customFieldConfigs, setCustomFieldConfigs] = useState([])
+  const [serviceHistoryConfigs, setServiceHistoryConfigs] = useState([])
   const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
   const [isServiceFieldBuilderOpen, setIsServiceFieldBuilderOpen] = useState(false)
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false)
@@ -223,6 +224,7 @@ export default function Accounts({ session, profile }) {
   useEffect(() => { 
     fetchAccounts()
     fetchCustomConfigs()
+    fetchServiceHistoryConfigs()
     if (isB2C) {
       fetchB2CStages()
     }
@@ -278,6 +280,54 @@ export default function Accounts({ session, profile }) {
       setCustomFieldConfigs(finalData.filter(f => !f.is_archived && f.field_key !== 'notes'))
     } catch (err) {
       console.error('Error loading custom fields:', err)
+    }
+  }
+
+  const fetchServiceHistoryConfigs = async () => {
+    try {
+      const { data: existing, error } = await supabase
+        .from('custom_field_configs')
+        .select('*')
+        .eq('business_id', session.user.id)
+        .eq('module', 'service_history')
+        .order('display_order', { ascending: true })
+      
+      if (error) throw error
+
+      const coreFieldsTarget = [
+        { label: 'Service Name', field_key: 'service_name', field_type: 'text', is_core: true, order: 0 },
+        { label: 'Date', field_key: 'assigned_date', field_type: 'date', is_core: true, order: 1 },
+        { label: 'Price', field_key: 'price', field_type: 'number', is_core: true, order: 2 },
+        { label: 'Status', field_key: 'status', field_type: 'dropdown', options: ['Active', 'Completed'], is_core: true, order: 3 },
+        { label: 'Current Stage', field_key: 'current_stage', field_type: 'text', is_core: true, order: 4 },
+        { label: 'Notes', field_key: 'notes', field_type: 'long_text', is_core: true, order: 5 }
+      ]
+
+      let finalData = existing || []
+      const missingCore = coreFieldsTarget.filter(t => !finalData.find(f => f.field_key === t.field_key))
+
+      if (missingCore.length > 0) {
+        const toInsert = missingCore.map(c => ({
+          business_id: session.user.id,
+          module: 'service_history',
+          field_key: c.field_key,
+          label: c.label,
+          field_type: c.field_type,
+          options: c.options || null,
+          is_core: true,
+          display_order: c.order,
+          is_required: false,
+          show_in_list: true
+        }))
+        const { data: inserted } = await supabase.from('custom_field_configs').insert(toInsert).select()
+        if (inserted) {
+          finalData = [...finalData, ...inserted].sort((a,b) => (a.display_order || 0) - (b.display_order || 0))
+        }
+      }
+
+      setServiceHistoryConfigs(finalData.filter(f => !f.is_archived))
+    } catch (err) {
+      console.error('Error loading service custom fields:', err)
     }
   }
 
@@ -782,56 +832,72 @@ export default function Accounts({ session, profile }) {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
-                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Service Name</th>
-                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Date</th>
-                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Price</th>
-                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Status</th>
-                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Current Stage</th>
-                    <th style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>Notes</th>
+                    {serviceHistoryConfigs.filter(c => c.show_in_list).map(config => (
+                      <th key={config.id} style={{ padding: 15, textAlign: 'left', fontSize: 12 }}>{config.label}</th>
+                    ))}
                     <th style={{ padding: 15, textAlign: 'right', fontSize: 12 }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {accServices.length === 0 ? (
-                    <tr><td colSpan="7" style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No service history found.</td></tr>
+                    <tr><td colSpan={serviceHistoryConfigs.filter(c => c.show_in_list).length + 1} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No service history found.</td></tr>
                   ) : (
                     accServices.map(s => (
                       <tr key={s.id} style={{ borderTop: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: 15, fontWeight: 700 }}>{s.services?.service_name}</td>
-                        <td style={{ padding: 15 }}>{new Date(s.assigned_date).toLocaleDateString()}</td>
-                        <td style={{ padding: 15, fontWeight: 800 }}>{profile?.currency || '$'}{Number(s.price).toLocaleString()}</td>
-                        <td style={{ padding: 15 }}>
-                          <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 12, background: s.status === 'Completed' ? '#dcfce3' : '#f1f5f9', color: s.status === 'Completed' ? '#16a34a' : '#64748b', fontWeight: 800 }}>
-                            {s.status || 'Active'}
-                          </span>
-                        </td>
-                        <td style={{ padding: 15 }}>
-                          {(() => {
-                            const getStage = () => {
-                              if (s.status === 'Completed') {
-                                return s.currentStage || b2cStages.find(st => st.name === 'Completed') || null
-                              } else {
-                                if (s.currentStage) return s.currentStage
-                                const accountStage = selectedAccount.b2c_stage_id
-                                  ? b2cStages.find(st => st.id === selectedAccount.b2c_stage_id)
-                                  : null
-                                if (accountStage && accountStage.name === 'Completed') {
-                                  return b2cStages.find(st => st.name !== 'Completed') || null
-                                }
-                                return accountStage
-                              }
-                            }
-                            const stg = getStage()
-                            return stg ? (
-                              <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 12, background: (stg.color || '#f97316') + '20', color: stg.color || '#f97316', fontWeight: 800 }}>
-                                {stg.name}
-                              </span>
-                            ) : (
-                              <span style={{ fontSize: 11, color: '#94a3b8' }}>—</span>
+                        {serviceHistoryConfigs.filter(c => c.show_in_list).map(config => {
+                          if (config.field_key === 'service_name') {
+                            return <td key={config.id} style={{ padding: 15, fontWeight: 700 }}>{s.services?.service_name}</td>
+                          }
+                          if (config.field_key === 'assigned_date') {
+                            return <td key={config.id} style={{ padding: 15 }}>{new Date(s.assigned_date).toLocaleDateString()}</td>
+                          }
+                          if (config.field_key === 'price') {
+                            return <td key={config.id} style={{ padding: 15, fontWeight: 800 }}>{profile?.currency || '$'}{Number(s.price).toLocaleString()}</td>
+                          }
+                          if (config.field_key === 'status') {
+                            return (
+                              <td key={config.id} style={{ padding: 15 }}>
+                                <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 12, background: s.status === 'Completed' ? '#dcfce3' : '#f1f5f9', color: s.status === 'Completed' ? '#16a34a' : '#64748b', fontWeight: 800 }}>
+                                  {s.status || 'Active'}
+                                </span>
+                              </td>
                             )
-                          })()}
-                        </td>
-                        <td style={{ padding: 15, color: '#64748b' }}>{s.notes || '-'}</td>
+                          }
+                          if (config.field_key === 'current_stage') {
+                            return (
+                              <td key={config.id} style={{ padding: 15 }}>
+                                {(() => {
+                                  const getStage = () => {
+                                    if (s.status === 'Completed') {
+                                      return s.currentStage || b2cStages.find(st => st.name === 'Completed') || null
+                                    } else {
+                                      if (s.currentStage) return s.currentStage
+                                      const accountStage = selectedAccount.b2c_stage_id
+                                        ? b2cStages.find(st => st.id === selectedAccount.b2c_stage_id)
+                                        : null
+                                      if (accountStage && accountStage.name === 'Completed') {
+                                        return b2cStages.find(st => st.name !== 'Completed') || null
+                                      }
+                                      return accountStage
+                                    }
+                                  }
+                                  const stg = getStage()
+                                  return stg ? (
+                                    <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 12, background: (stg.color || '#f97316') + '20', color: stg.color || '#f97316', fontWeight: 800 }}>
+                                      {stg.name}
+                                    </span>
+                                  ) : (
+                                    <span style={{ fontSize: 11, color: '#94a3b8' }}>—</span>
+                                  )
+                                })()}
+                              </td>
+                            )
+                          }
+                          if (config.field_key === 'notes') {
+                            return <td key={config.id} style={{ padding: 15, color: '#64748b' }}>{s.notes || '-'}</td>
+                          }
+                          return <td key={config.id} style={{ padding: 15 }}>{s[config.field_key] || '—'}</td>
+                        })}
                         <td style={{ padding: 15, textAlign: 'right' }}>
                           <button className="btn-icon" onClick={() => handleOpenServiceModal(s)}><Edit2 size={14}/></button>
                           {isAdmin && (
