@@ -209,7 +209,7 @@ export default function Accounts({ session, profile }) {
         { label: 'Contact Number', field_key: 'contact_number', field_type: 'text', is_core: true, order: 1 },
         { label: 'Email ID', field_key: 'email_id', field_type: 'text', is_core: true, order: 2 },
         { label: 'Gender', field_key: 'gender', field_type: 'dropdown', options: ['Male', 'Female', 'Other'], is_core: true, order: 3 },
-        { label: 'Notes', field_key: 'notes', field_type: 'long_text', is_core: true, order: 4 }
+        { label: 'Date of Birth', field_key: 'date_of_birth', field_type: 'date', is_core: true, order: 4 }
       ]
 
       let finalData = existing || []
@@ -234,7 +234,7 @@ export default function Accounts({ session, profile }) {
         }
       }
 
-      setCustomFieldConfigs(finalData.filter(f => !f.is_archived))
+      setCustomFieldConfigs(finalData.filter(f => !f.is_archived && f.field_key !== 'notes'))
     } catch (err) {
       console.error('Error loading custom fields:', err)
     }
