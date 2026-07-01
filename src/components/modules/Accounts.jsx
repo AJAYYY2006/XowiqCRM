@@ -623,7 +623,9 @@ export default function Accounts({ session, profile }) {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
           </button>
           <div style={{ display: 'flex', gap: 12 }}>
-            <button className="btn btn-secondary" onClick={() => handleOpenServiceModal()}><Plus size={16} /> Add Service Entry</button>
+            {!isB2C && (
+              <button className="btn btn-secondary" onClick={() => handleOpenServiceModal()}><Plus size={16} /> Add Service Entry</button>
+            )}
             <button className="btn btn-primary" onClick={() => handleOpenModal(selectedAccount)}><Edit2 size={16} /> Edit Profile</button>
           </div>
         </div>
