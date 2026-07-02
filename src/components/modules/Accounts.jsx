@@ -277,7 +277,8 @@ export default function Accounts({ session, profile }) {
         }
       }
 
-      setCustomFieldConfigs(finalData.filter(f => !f.is_archived && f.field_key !== 'notes'))
+      const allowedKeys = ['customer_name', 'contact_number', 'email_id', 'gender', 'date_of_birth', 'address']
+      setCustomFieldConfigs(finalData.filter(f => !f.is_archived && allowedKeys.includes(f.field_key)))
     } catch (err) {
       console.error('Error loading custom fields:', err)
     }
@@ -489,7 +490,8 @@ export default function Accounts({ session, profile }) {
         b2c_stage_id: selectedAccount?.b2c_stage_id || '',
         notes: entry.notes || '',
         stage_notes: entry.stage_notes || '',
-        next_follow_up_date: entry.next_follow_up_date ? new Date(entry.next_follow_up_date).toISOString().split('T')[0] : ''
+        next_follow_up_date: entry.next_follow_up_date ? new Date(entry.next_follow_up_date).toISOString().split('T')[0] : '',
+        custom_data: entry.custom_data || {}
       })
     } else {
       setEditingServiceEntry(null)
@@ -503,7 +505,8 @@ export default function Accounts({ session, profile }) {
         b2c_stage_id: selectedAccount?.b2c_stage_id || '',
         notes: '',
         stage_notes: '',
-        next_follow_up_date: ''
+        next_follow_up_date: '',
+        custom_data: {}
       })
     }
     setIsServiceModalOpen(true)
@@ -896,7 +899,7 @@ export default function Accounts({ session, profile }) {
                           if (config.field_key === 'notes') {
                             return <td key={config.id} style={{ padding: 15, color: '#64748b' }}>{s.notes || '-'}</td>
                           }
-                          return <td key={config.id} style={{ padding: 15 }}>{s[config.field_key] || '—'}</td>
+                          return <td key={config.id} style={{ padding: 15 }}>{s[config.field_key] || s.custom_data?.[config.field_key] || '—'}</td>
                         })}
                         <td style={{ padding: 15, textAlign: 'right' }}>
                           <button className="btn-icon" onClick={() => handleOpenServiceModal(s)}><Edit2 size={14}/></button>
@@ -1187,6 +1190,19 @@ export default function Accounts({ session, profile }) {
                   </>
                 )}
 
+                {/* Dynamic custom fields for service history */}
+                {serviceHistoryConfigs.filter(c => !c.is_core).map(config => (
+                  <div key={config.id} className="form-group" style={{ marginBottom: 16 }}>
+                    <label className="form-label">{config.label} {config.is_required && <span className="text-danger">*</span>}</label>
+                    {renderCustomFieldInput(config, serviceAssignForm.custom_data?.[config.field_key], (val) => {
+                      setServiceAssignForm({
+                        ...serviceAssignForm,
+                        custom_data: { ...serviceAssignForm.custom_data, [config.field_key]: val }
+                      })
+                    }, session.user.id)}
+                  </div>
+                ))}
+
                 <div className="form-group" style={{ marginBottom: 24 }}>
                   <label className="form-label">Notes / Observations</label>
                   <textarea className="form-input" style={{ minHeight: 80 }} value={serviceAssignForm.notes} onChange={e => setServiceAssignForm({...serviceAssignForm, notes: e.target.value})} placeholder="Any specific notes for this visit..." />
@@ -1201,6 +1217,16 @@ export default function Accounts({ session, profile }) {
             </div>
           </div>
         )}
+
+      <FieldBuilderModal
+        module="service_history"
+        businessId={session.user.id}
+        isOpen={isServiceFieldBuilderOpen}
+        onClose={() => {
+          setIsServiceFieldBuilderOpen(false)
+          fetchServiceHistoryConfigs()
+        }}
+      />
       </div>
     )
   }
@@ -1479,10 +1505,13 @@ export default function Accounts({ session, profile }) {
       />
 
       <FieldBuilderModal 
-        module="service"
+        module="service_history"
         businessId={session.user.id}
         isOpen={isServiceFieldBuilderOpen}
-        onClose={() => setIsServiceFieldBuilderOpen(false)}
+        onClose={() => {
+          setIsServiceFieldBuilderOpen(false)
+          fetchServiceHistoryConfigs()
+        }}
       />
 
       {isInvoiceModalOpen && editingInvoice && (

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
-import { Trash2, Edit2, Calendar, User, Tag, Link2, CheckCircle2, Clock, PlayCircle, AlertCircle, CheckCircle } from 'lucide-react'
+import { Trash2, Edit2, Calendar, User, Tag, Link2, CheckCircle2, Clock, PlayCircle, AlertCircle, CheckCircle, Settings, Save } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
+import FieldBuilderModal from '../ui/FieldBuilderModal'
 
 const TASK_TYPES = ['Follow-up', 'Demo', 'Onboarding', 'Renewal', 'Support', 'Email', 'Message', 'Call', 'Events']
 const STATUS_STAGES = ['Pending', 'In Progress', 'Completed', 'Overdue']
@@ -15,6 +16,36 @@ const RELATED_ENTITIES = [
   { value: 'quotes', label: 'Quote' },
   { value: 'tickets', label: 'Ticket' }
 ]
+
+function renderCustomFieldInput(config, value, onChange) {
+  const commonProps = {
+    required: config.is_required,
+    className: 'form-input',
+    value: value || '',
+    onChange: (e) => onChange(e.target.value)
+  }
+
+  switch (config.field_type) {
+    case 'number': return <input type="number" {...commonProps} />
+    case 'date': return <input type="date" {...commonProps} />
+    case 'checkbox': return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 42 }}>
+        <input type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)} style={{ width: 18, height: 18 }} />
+        <span style={{ fontSize: 13, color: '#64748b' }}>Check if applicable</span>
+      </div>
+    )
+    case 'dropdown': 
+      return (
+        <select {...commonProps}>
+          <option value="">-- Select Option --</option>
+          {(config.options || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      )
+    case 'long_text': return <textarea {...commonProps} style={{ minHeight: 80 }} />
+    case 'url': return <input type="url" {...commonProps} placeholder="https://" />
+    default: return <input type="text" {...commonProps} />
+  }
+}
 
 export default function Tasks({ session, profile }) {
   const [tasks, setTasks] = useState([])
@@ -39,12 +70,65 @@ export default function Tasks({ session, profile }) {
     task_type: 'Follow-up',
     owner: profile?.name || session.user.email,
     related_to: 'accounts',
-    related_id: ''
+    related_id: '',
+    custom_data: {}
   })
+
+  const [taskConfigs, setTaskConfigs] = useState([])
+  const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
+
+  const fetchTaskConfigs = async () => {
+    try {
+      const { data: existing, error } = await supabase
+        .from('custom_field_configs')
+        .select('*')
+        .eq('business_id', session.user.id)
+        .eq('module', 'task')
+        .order('display_order', { ascending: true })
+      
+      if (error) throw error
+
+      const coreFieldsTarget = [
+        { label: 'Task Title', field_key: 'title', field_type: 'text', is_core: true, order: 0 },
+        { label: 'Due Date', field_key: 'due_date', field_type: 'date', is_core: true, order: 1 },
+        { label: 'Status', field_key: 'status', field_type: 'dropdown', options: STATUS_STAGES, is_core: true, order: 2 },
+        { label: 'Task Type', field_key: 'task_type', field_type: 'dropdown', options: TASK_TYPES, is_core: true, order: 3 },
+        { label: 'Owner', field_key: 'owner', field_type: 'text', is_core: true, order: 4 },
+        { label: 'Relationship', field_key: 'related_to', field_type: 'text', is_core: true, order: 5 }
+      ]
+
+      let finalData = existing || []
+      const missingCore = coreFieldsTarget.filter(t => !finalData.find(f => f.field_key === t.field_key))
+
+      if (missingCore.length > 0) {
+        const toInsert = missingCore.map(c => ({
+          business_id: session.user.id,
+          module: 'task',
+          field_key: c.field_key,
+          label: c.label,
+          field_type: c.field_type,
+          options: c.options || null,
+          is_core: true,
+          display_order: c.order,
+          is_required: false,
+          show_in_list: true
+        }))
+        const { data: inserted } = await supabase.from('custom_field_configs').insert(toInsert).select()
+        if (inserted) {
+          finalData = [...finalData, ...inserted].sort((a,b) => (a.display_order || 0) - (b.display_order || 0))
+        }
+      }
+
+      setTaskConfigs(finalData.filter(f => !f.is_archived))
+    } catch (err) {
+      console.error('Error loading task configs:', err)
+    }
+  }
 
   useEffect(() => {
     fetchTasks()
     fetchAllEntities()
+    fetchTaskConfigs()
   }, [session])
 
   const fetchTasks = async () => {
@@ -111,7 +195,8 @@ export default function Tasks({ session, profile }) {
         task_type: task.task_type || 'Follow-up',
         owner: task.owner || profile?.name || session.user.email,
         related_to: task.related_to || 'accounts',
-        related_id: task.related_id || ''
+        related_id: task.related_id || '',
+        custom_data: task.custom_data || {}
       })
     } else {
       setEditingTask(null)
@@ -122,7 +207,8 @@ export default function Tasks({ session, profile }) {
         task_type: 'Follow-up',
         owner: profile?.name || session.user.email,
         related_to: 'accounts',
-        related_id: ''
+        related_id: '',
+        custom_data: {}
       })
     }
     setIsModalOpen(true)
@@ -324,12 +410,9 @@ export default function Tasks({ session, profile }) {
             <thead>
               <tr>
                 <th style={{ width: 40 }}></th>
-                <th>Task Title</th>
-                <th>Type</th>
-                <th>Related To</th>
-                <th>Due Date</th>
-                <th>Owner</th>
-                <th>Status</th>
+                {taskConfigs.filter(c => c.show_in_list).map(config => (
+                  <th key={config.id}>{config.label}</th>
+                ))}
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
@@ -337,39 +420,66 @@ export default function Tasks({ session, profile }) {
               {taskList.map(task => (
                 <tr key={task.id}>
                   <td>{getStatusIcon(task.status)}</td>
-                  <td>
-                    <div className="fw-bold">{task.title}</div>
-                  </td>
-                  <td>
-                    <span className="badge badge-normal">{task.task_type}</span>
-                  </td>
-                  <td>
-                    <div className="text-muted" style={{ fontSize: '12px' }}>
-                      <span style={{ textTransform: 'capitalize' }}>
-                        {task.related_to === 'accounts' ? (isB2C ? 'Customer' : 'Account') : task.related_to || '-'}:
-                      </span> {getRelatedName(task)}
-                    </div>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '13px', color: task.status === 'Overdue' ? '#dc2626' : 'inherit' }}>
-                      <Calendar size={14} className="text-muted" />
-                      {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No deadline'}
-                    </div>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '13px' }}>
-                      <User size={14} className="text-muted" />
-                      {task.owner}
-                    </div>
-                  </td>
-                  <td>
-                    <span style={{ 
-                      fontSize: '11px', fontWeight: 800, padding: '4px 8px', borderRadius: '12px',
-                      background: `${getStatusColor(task.status)}15`, color: getStatusColor(task.status)
-                    }}>
-                      {task.status}
-                    </span>
-                  </td>
+                  {taskConfigs.filter(c => c.show_in_list).map(config => {
+                    if (config.field_key === 'title') {
+                      return (
+                        <td key={config.id}>
+                          <div className="fw-bold">{task.title}</div>
+                        </td>
+                      )
+                    }
+                    if (config.field_key === 'task_type') {
+                      return (
+                        <td key={config.id}>
+                          <span className="badge badge-normal">{task.task_type}</span>
+                        </td>
+                      )
+                    }
+                    if (config.field_key === 'related_to') {
+                      return (
+                        <td key={config.id}>
+                          <div className="text-muted" style={{ fontSize: '12px' }}>
+                            <span style={{ textTransform: 'capitalize' }}>
+                              {task.related_to === 'accounts' ? (isB2C ? 'Customer' : 'Account') : task.related_to || '-'}:
+                            </span> {getRelatedName(task)}
+                          </div>
+                        </td>
+                      )
+                    }
+                    if (config.field_key === 'due_date') {
+                      return (
+                        <td key={config.id}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '13px', color: task.status === 'Overdue' ? '#dc2626' : 'inherit' }}>
+                            <Calendar size={14} className="text-muted" />
+                            {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No deadline'}
+                          </div>
+                        </td>
+                      )
+                    }
+                    if (config.field_key === 'owner') {
+                      return (
+                        <td key={config.id}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '13px' }}>
+                            <User size={14} className="text-muted" />
+                            {task.owner}
+                          </div>
+                        </td>
+                      )
+                    }
+                    if (config.field_key === 'status') {
+                      return (
+                        <td key={config.id}>
+                          <span style={{ 
+                            fontSize: '11px', fontWeight: 800, padding: '4px 8px', borderRadius: '12px',
+                            background: `${getStatusColor(task.status)}15`, color: getStatusColor(task.status)
+                          }}>
+                            {task.status}
+                          </span>
+                        </td>
+                      )
+                    }
+                    return <td key={config.id}>{task[config.field_key] || task.custom_data?.[config.field_key] || '—'}</td>
+                  })}
                   <td style={{ textAlign: 'right' }}>
                     <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                       {task.status !== 'Completed' && (
@@ -406,9 +516,14 @@ export default function Tasks({ session, profile }) {
           <h1 className="page-title">{isB2C ? 'Antigravity B2C Tasks' : 'Tasks'}</h1>
           <p className="page-subtitle">{isB2C ? 'Automated engagement tracking and customer follow-ups.' : 'Track follow-ups, meetings, and project tasks.'}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-          <span style={{ fontSize: 18 }}>+</span> Create Task
-        </button>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setIsFieldBuilderOpen(true)}>
+            <Settings size={14} /> Edit fields
+          </button>
+          <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+            <span style={{ fontSize: 18 }}>+</span> Create Task
+          </button>
+        </div>
       </div>
 
       <div className="table-container">
@@ -445,6 +560,12 @@ export default function Tasks({ session, profile }) {
               searchKeys={['title', 'task_type', 'owner']}
               onSelect={(item) => handleOpenModal(item)}
               placeholder="Search tasks..."
+              renderItem={(item) => (
+                <>
+                  <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{item.title}</div>
+                  <div className="text-muted" style={{ fontSize: '11px' }}>{item.task_type} • {item.owner}</div>
+                </>
+              )}
             />
           </div>
         </div>
@@ -562,6 +683,19 @@ export default function Tasks({ session, profile }) {
                     ))}
                   </select>
                 </div>
+
+                {/* Dynamic Custom Fields Loop */}
+                {taskConfigs.filter(c => !c.is_core).map(config => (
+                  <div key={config.id} className="form-group" style={{ gridColumn: (config.field_type === 'long_text' || config.field_type === 'file_upload') ? 'span 2' : 'auto' }}>
+                    <label className="form-label">{config.label} {config.is_required && <span className="text-danger">*</span>}</label>
+                    {renderCustomFieldInput(config, formData.custom_data?.[config.field_key], (val) => {
+                      setFormData({
+                        ...formData,
+                        custom_data: { ...formData.custom_data, [config.field_key]: val }
+                      })
+                    })}
+                  </div>
+                ))}
               </div>
 
               <div className="form-actions">
@@ -572,6 +706,16 @@ export default function Tasks({ session, profile }) {
           </div>
         </div>
       )}
+
+      <FieldBuilderModal 
+        module="task"
+        businessId={session.user.id}
+        isOpen={isFieldBuilderOpen}
+        onClose={() => {
+          setIsFieldBuilderOpen(false)
+          fetchTaskConfigs()
+        }}
+      />
     </div>
   )
 }

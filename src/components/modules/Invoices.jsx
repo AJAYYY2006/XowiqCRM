@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
-import { Download, Edit2, Trash2 } from 'lucide-react'
+import { Download, Edit2, Trash2, Settings } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
+import FieldBuilderModal from '../ui/FieldBuilderModal'
 import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 
@@ -18,9 +19,59 @@ export default function Invoices({ session, profile }) {
     title: '', account_id: '', amount: 0, due_date: '', status: 'Unpaid'
   })
   const [editingInvoice, setEditingInvoice] = useState(null)
+  const [invoiceConfigs, setInvoiceConfigs] = useState([])
+  const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
+
+  const fetchInvoiceConfigs = async () => {
+    try {
+      const { data: existing, error } = await supabase
+        .from('custom_field_configs')
+        .select('*')
+        .eq('business_id', session.user.id)
+        .eq('module', 'invoice')
+        .order('display_order', { ascending: true })
+      
+      if (error) throw error
+
+      const coreFieldsTarget = [
+        { label: 'Item / Description', field_key: 'quote_name', field_type: 'text', is_core: true, order: 0 },
+        { label: 'Customer Name', field_key: 'customer_name', field_type: 'text', is_core: true, order: 1 },
+        { label: 'Amount', field_key: 'total_price', field_type: 'number', is_core: true, order: 2 },
+        { label: 'Due Date', field_key: 'expires_at', field_type: 'date', is_core: true, order: 3 },
+        { label: 'Status', field_key: 'status', field_type: 'dropdown', options: ['Paid', 'Unpaid', 'Overdue'], is_core: true, order: 4 }
+      ]
+
+      let finalData = existing || []
+      const missingCore = coreFieldsTarget.filter(t => !finalData.find(f => f.field_key === t.field_key))
+
+      if (missingCore.length > 0) {
+        const toInsert = missingCore.map(c => ({
+          business_id: session.user.id,
+          module: 'invoice',
+          field_key: c.field_key,
+          label: c.label,
+          field_type: c.field_type,
+          options: c.options || null,
+          is_core: true,
+          display_order: c.order,
+          is_required: false,
+          show_in_list: true
+        }))
+        const { data: inserted } = await supabase.from('custom_field_configs').insert(toInsert).select()
+        if (inserted) {
+          finalData = [...finalData, ...inserted].sort((a,b) => (a.display_order || 0) - (b.display_order || 0))
+        }
+      }
+
+      setInvoiceConfigs(finalData.filter(f => !f.is_archived))
+    } catch (err) {
+      console.error('Error loading invoice custom fields:', err)
+    }
+  }
 
   useEffect(() => {
     fetchData()
+    fetchInvoiceConfigs()
   }, [session])
 
   const fetchData = async () => {
@@ -199,15 +250,33 @@ export default function Invoices({ session, profile }) {
           <h1 className="page-title">Invoices</h1>
           <p className="page-subtitle">Simple invoice generator and tracker.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-          <span style={{ fontSize: 18 }}>+</span> Create Invoice
-        </button>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setIsFieldBuilderOpen(true)}>
+            <Settings size={14} /> Edit fields
+          </button>
+          <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+            <span style={{ fontSize: 18 }}>+</span> Create Invoice
+          </button>
+        </div>
       </div>
 
       <div className="table-container">
         <div className="table-header">
           <h2 className="table-title">All Invoices ({invoices.length})</h2>
-          <LocalSearch data={invoices} searchKeys={['quote_name']} />
+          <LocalSearch 
+             data={invoices} 
+             searchKeys={['quote_name', 'invoice_number']} 
+             onSelect={(item) => handleOpenModal(item)}
+             placeholder="Search invoices..."
+             renderItem={(item) => (
+               <>
+                 <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{item.quote_name}</div>
+                 <div className="text-muted" style={{ fontSize: '11px' }}>
+                   {item.accounts?.account_name || item.opportunities?.accounts?.account_name || ''}
+                 </div>
+               </>
+             )}
+          />
         </div>
 
         {/* Filter Tabs */}
@@ -233,18 +302,16 @@ export default function Invoices({ session, profile }) {
           <table>
             <thead>
               <tr>
-                <th>Item / Description</th>
-                <th>Customer Name</th>
-                <th>Amount</th>
-                <th>Due Date</th>
-                <th>Status</th>
+                {invoiceConfigs.filter(c => c.show_in_list).map(config => (
+                  <th key={config.id}>{config.label}</th>
+                ))}
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan="6">
+                  <td colSpan={invoiceConfigs.filter(c => c.show_in_list).length + 1}>
                     <div className="empty-state">
                       <div className="empty-state-icon"></div>
                       <h3>No invoices yet</h3>
@@ -253,24 +320,41 @@ export default function Invoices({ session, profile }) {
                   </td>
                 </tr>
               ) : (
-                invoices.map(inv => (
+                filteredInvoices.map(inv => (
                   <tr key={inv.id}>
-                    <td>
-                      <div className="fw-bold">{inv.quote_name}</div>
-                      <div style={{ fontSize: 10, color: '#94a3b8' }}>{inv.invoice_number || 'No ID'}</div>
-                    </td>
-                    <td>{inv.accounts?.account_name || inv.opportunities?.accounts?.account_name || '-'}</td>
-                    <td className="fw-bold">{profile?.currency || '$'}{Number(inv.total_price).toLocaleString()}</td>
-                    <td>{inv.expires_at ? new Date(inv.expires_at).toLocaleDateString() : '-'}</td>
-                    <td>
-                      <span style={{
-                        padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
-                        backgroundColor: inv.status === 'Paid' ? '#dcfce3' : inv.status === 'Overdue' ? '#fee2e2' : '#fef9c3',
-                        color: inv.status === 'Paid' ? '#166534' : inv.status === 'Overdue' ? '#991b1b' : '#854d0e'
-                      }}>
-                        {inv.status || 'Unpaid'}
-                      </span>
-                    </td>
+                    {invoiceConfigs.filter(c => c.show_in_list).map(config => {
+                      if (config.field_key === 'quote_name') {
+                        return (
+                          <td key={config.id}>
+                            <div className="fw-bold">{inv.quote_name}</div>
+                            <div style={{ fontSize: 10, color: '#94a3b8' }}>{inv.invoice_number || 'No ID'}</div>
+                          </td>
+                        )
+                      }
+                      if (config.field_key === 'customer_name') {
+                        return <td key={config.id}>{inv.accounts?.account_name || inv.opportunities?.accounts?.account_name || '-'}</td>
+                      }
+                      if (config.field_key === 'total_price') {
+                        return <td key={config.id} className="fw-bold">{profile?.currency || '$'}{Number(inv.total_price).toLocaleString()}</td>
+                      }
+                      if (config.field_key === 'expires_at') {
+                        return <td key={config.id}>{inv.expires_at ? new Date(inv.expires_at).toLocaleDateString() : '-'}</td>
+                      }
+                      if (config.field_key === 'status') {
+                        return (
+                          <td key={config.id}>
+                            <span style={{
+                              padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
+                              backgroundColor: inv.status === 'Paid' ? '#dcfce3' : inv.status === 'Overdue' ? '#fee2e2' : '#fef9c3',
+                              color: inv.status === 'Paid' ? '#166534' : inv.status === 'Overdue' ? '#991b1b' : '#854d0e'
+                            }}>
+                              {inv.status || 'Unpaid'}
+                            </span>
+                          </td>
+                        )
+                      }
+                      return <td key={config.id}>{inv[config.field_key] || '—'}</td>
+                    })}
                     <td style={{ textAlign: 'right' }}>
                       <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                         <button className="btn-icon text-primary" onClick={() => downloadPDF(inv)} title="Download PDF">
@@ -343,6 +427,16 @@ export default function Invoices({ session, profile }) {
           </div>
         </div>
       )}
+
+      <FieldBuilderModal 
+        module="invoice"
+        businessId={session.user.id}
+        isOpen={isFieldBuilderOpen}
+        onClose={() => {
+          setIsFieldBuilderOpen(false)
+          fetchInvoiceConfigs()
+        }}
+      />
     </div>
   )
 }

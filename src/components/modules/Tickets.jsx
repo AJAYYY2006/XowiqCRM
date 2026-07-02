@@ -2,8 +2,39 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
-import { Trash2, Edit2 } from 'lucide-react'
+import { Trash2, Edit2, Settings, Save } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
+import FieldBuilderModal from '../ui/FieldBuilderModal'
+
+function renderCustomFieldInput(config, value, onChange) {
+  const commonProps = {
+    required: config.is_required,
+    className: 'form-input',
+    value: value || '',
+    onChange: (e) => onChange(e.target.value)
+  }
+
+  switch (config.field_type) {
+    case 'number': return <input type="number" {...commonProps} />
+    case 'date': return <input type="date" {...commonProps} />
+    case 'checkbox': return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 42 }}>
+        <input type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)} style={{ width: 18, height: 18 }} />
+        <span style={{ fontSize: 13, color: '#64748b' }}>Check if applicable</span>
+      </div>
+    )
+    case 'dropdown': 
+      return (
+        <select {...commonProps}>
+          <option value="">-- Select Option --</option>
+          {(config.options || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      )
+    case 'long_text': return <textarea {...commonProps} style={{ minHeight: 80 }} />
+    case 'url': return <input type="url" {...commonProps} placeholder="https://" />
+    default: return <input type="text" {...commonProps} />
+  }
+}
 
 export default function Tickets({ session, profile }) {
   const [tickets, setTickets] = useState([])
@@ -17,12 +48,67 @@ export default function Tickets({ session, profile }) {
   const navigate = useNavigate()
   
   const [formData, setFormData] = useState({
-    subject: '', priority: 'medium', status: 'open', owner: '', contact_id: '', account_id: '', description: ''
+    subject: '', priority: 'medium', status: 'open', owner: '', contact_id: '', account_id: '', description: '',
+    custom_data: {}
   })
   const [editingTicket, setEditingTicket] = useState(null)
+  const [ticketConfigs, setTicketConfigs] = useState([])
+  const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
+
+  const fetchTicketConfigs = async () => {
+    try {
+      const { data: existing, error } = await supabase
+        .from('custom_field_configs')
+        .select('*')
+        .eq('business_id', session.user.id)
+        .eq('module', 'ticket')
+        .order('display_order', { ascending: true })
+      
+      if (error) throw error
+
+      const coreFieldsTarget = [
+        { label: 'Ticket No.', field_key: 'ticket_no', field_type: 'text', is_core: true, order: 0 },
+        { label: 'Subject', field_key: 'subject', field_type: 'text', is_core: true, order: 1 },
+        { label: 'Description', field_key: 'description', field_type: 'long_text', is_core: true, order: 2 },
+        { label: 'Contact', field_key: 'contact', field_type: 'text', is_core: true, order: 3 },
+        { label: 'Account', field_key: 'account', field_type: 'text', is_core: true, order: 4 },
+        { label: 'Priority', field_key: 'priority', field_type: 'dropdown', options: ['low', 'medium', 'high'], is_core: true, order: 5 },
+        { label: 'Status', field_key: 'status', field_type: 'dropdown', options: ['open', 'pending', 'closed'], is_core: true, order: 6 },
+        { label: 'Owner', field_key: 'owner', field_type: 'text', is_core: true, order: 7 },
+        { label: 'Date/Time', field_key: 'created_at', field_type: 'date', is_core: true, order: 8 }
+      ]
+
+      let finalData = existing || []
+      const missingCore = coreFieldsTarget.filter(t => !finalData.find(f => f.field_key === t.field_key))
+
+      if (missingCore.length > 0) {
+        const toInsert = missingCore.map(c => ({
+          business_id: session.user.id,
+          module: 'ticket',
+          field_key: c.field_key,
+          label: c.label,
+          field_type: c.field_type,
+          options: c.options || null,
+          is_core: true,
+          display_order: c.order,
+          is_required: false,
+          show_in_list: true
+        }))
+        const { data: inserted } = await supabase.from('custom_field_configs').insert(toInsert).select()
+        if (inserted) {
+          finalData = [...finalData, ...inserted].sort((a,b) => (a.display_order || 0) - (b.display_order || 0))
+        }
+      }
+
+      setTicketConfigs(finalData.filter(f => !f.is_archived))
+    } catch (err) {
+      console.error('Error loading ticket configs:', err)
+    }
+  }
 
   useEffect(() => {
     fetchData()
+    fetchTicketConfigs()
   }, [session])
 
   useEffect(() => {
@@ -76,7 +162,8 @@ export default function Tickets({ session, profile }) {
         owner: ticket.owner || '',
         contact_id: ticket.contact_id || '',
         account_id: ticket.account_id || '',
-        description: ''
+        description: ticket.description || '',
+        custom_data: ticket.custom_data || {}
       })
       setAccSearch('')
     } else {
@@ -84,7 +171,8 @@ export default function Tickets({ session, profile }) {
       setFormData({
         subject: '', priority: 'medium', status: 'open',
         owner: profile?.name || session.user.email, contact_id: '', account_id: '',
-        description: ''
+        description: '',
+        custom_data: {}
       })
       setAccSearch('')
     }
@@ -116,7 +204,8 @@ export default function Tickets({ session, profile }) {
             owner: formData.owner,
             contact_id: formData.contact_id || null,
             account_id: formData.account_id || null,
-            description: formData.description
+            description: formData.description,
+            custom_data: formData.custom_data || {}
           })
           .eq('id', editingTicket.id)
           
@@ -133,9 +222,14 @@ export default function Tickets({ session, profile }) {
         const { error } = await supabase
           .from('tickets')
           .insert([{ 
-            ...formData, 
+            subject: formData.subject,
+            priority: formData.priority,
+            status: formData.status,
+            owner: formData.owner,
             contact_id: formData.contact_id || null,
             account_id: formData.account_id || null,
+            description: formData.description,
+            custom_data: formData.custom_data || {},
             user_id: session.user.id 
           }])
           
@@ -523,6 +617,19 @@ export default function Tickets({ session, profile }) {
                   <option value="closed">Closed</option>
                 </select>
               </div>
+              {/* Dynamic Custom Fields Loop */}
+              {ticketConfigs.filter(c => !c.is_core).map(config => (
+                <div key={config.id} className="form-group" style={{ gridColumn: (config.field_type === 'long_text' || config.field_type === 'file_upload') ? 'span 2' : 'auto' }}>
+                  <label className="form-label">{config.label} {config.is_required && <span className="text-danger">*</span>}</label>
+                  {renderCustomFieldInput(config, formData.custom_data?.[config.field_key], (val) => {
+                    setFormData({
+                      ...formData,
+                      custom_data: { ...formData.custom_data, [config.field_key]: val }
+                    })
+                  })}
+                </div>
+              ))}
+
               <div className="form-group full-width">
                 <label className="form-label">Description</label>
                 <textarea 
@@ -567,9 +674,14 @@ export default function Tickets({ session, profile }) {
           <h1 className="page-title">Support Tickets</h1>
           <p className="page-subtitle">Track and resolve customer issues.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-          <span style={{ fontSize: 18 }}>+</span> Create Ticket
-        </button>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setIsFieldBuilderOpen(true)}>
+            <Settings size={14} /> Edit fields
+          </button>
+          <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+            <span style={{ fontSize: 18 }}>+</span> Create Ticket
+          </button>
+        </div>
       </div>
 
       <div className="table-container">
@@ -593,22 +705,16 @@ export default function Tickets({ session, profile }) {
           <table>
             <thead>
               <tr>
-                <th>Ticket No.</th>
-                <th>Subject</th>
-                <th>Description</th>
-                <th>Contact</th>
-                <th>Account</th>
-                <th>Priority</th>
-                <th>Status</th>
-                <th>Owner</th>
-                <th>Date/Time</th>
+                {ticketConfigs.filter(c => c.show_in_list).map(config => (
+                  <th key={config.id}>{config.label}</th>
+                ))}
                 <th style={{ width: 70 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {tickets.length === 0 ? (
                 <tr>
-                  <td colSpan="9">
+                  <td colSpan={ticketConfigs.filter(c => c.show_in_list).length + 1}>
                     <div className="empty-state">
                       <div className="empty-state-icon"></div>
                       <h3>No support tickets</h3>
@@ -619,56 +725,87 @@ export default function Tickets({ session, profile }) {
               ) : (
                 tickets.map(ticket => (
                   <tr key={ticket.id} id={`ticket-row-${ticket.id}`} className="clickable-row" onClick={() => setSelectedTicket(ticket)}>
-                    <td className="font-mono text-muted">{ticket.ticket_no}</td>
-                    <td className="fw-bold" style={{ color: 'var(--accent)' }}>{ticket.subject}</td>
-                    <td className="text-muted" style={{ fontSize: '12px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ticket.description}>
-                      {ticket.description || '-'}
-                    </td>
-                    <td>{ticket.contacts?.name || '-'}</td>
-                    <td>
-                      {ticket.contacts?.account_id && ticket.contacts?.accounts?.account_name ? (
-                        <span 
-                          style={{ color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            navigate('/dashboard/accounts', { state: { openId: ticket.contacts.account_id } })
-                          }}
-                          title="Click to view account"
-                        >
-                          {ticket.contacts.accounts.account_name}
-                        </span>
-                      ) : (
-                        <span className="text-muted">-</span>
-                      )}
-                    </td>
-                    <td>
-                      <select 
-                        value={ticket.priority} 
-                        onChange={(e) => { e.stopPropagation(); handlePriorityChange(ticket.id, e.target.value); }}
-                        className={`badge badge-${ticket.priority}`}
-                        style={{ border: 'none', fontWeight: 600, appearance: 'none', paddingRight: 16 }}
-                      >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                      </select>
-                    </td>
-                    <td>
-                      <select 
-                        value={ticket.status} 
-                        onChange={(e) => { e.stopPropagation(); handleStatusChange(ticket.id, e.target.value); }}
-                        className={`badge badge-${ticket.status}`}
-                        style={{ border: 'none', fontWeight: 600, appearance: 'none', paddingRight: 16 }}
-                      >
-                        <option value="open">Open</option>
-                        <option value="pending">Pending</option>
-                        <option value="closed">Closed</option>
-                      </select>
-                    </td>
-                    <td>{ticket.owner}</td>
-                    <td className="text-muted">
-                      {new Date(ticket.created_at).toLocaleDateString()} {new Date(ticket.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </td>
+                    {ticketConfigs.filter(c => c.show_in_list).map(config => {
+                      if (config.field_key === 'ticket_no') {
+                        return <td key={config.id} className="font-mono text-muted">{ticket.ticket_no}</td>
+                      }
+                      if (config.field_key === 'subject') {
+                        return <td key={config.id} className="fw-bold" style={{ color: 'var(--accent)' }}>{ticket.subject}</td>
+                      }
+                      if (config.field_key === 'description') {
+                        return (
+                          <td key={config.id} className="text-muted" style={{ fontSize: '12px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ticket.description}>
+                            {ticket.description || '-'}
+                          </td>
+                        )
+                      }
+                      if (config.field_key === 'contact') {
+                        return <td key={config.id}>{ticket.contacts?.name || '-'}</td>
+                      }
+                      if (config.field_key === 'account') {
+                        return (
+                          <td key={config.id}>
+                            {ticket.contacts?.account_id && ticket.contacts?.accounts?.account_name ? (
+                              <span 
+                                style={{ color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  navigate('/dashboard/accounts', { state: { openId: ticket.contacts.account_id } })
+                                }}
+                                title="Click to view account"
+                              >
+                                {ticket.contacts.accounts.account_name}
+                              </span>
+                            ) : (
+                              <span className="text-muted">-</span>
+                            )}
+                          </td>
+                        )
+                      }
+                      if (config.field_key === 'priority') {
+                        return (
+                          <td key={config.id}>
+                            <select 
+                              value={ticket.priority} 
+                              onChange={(e) => { e.stopPropagation(); handlePriorityChange(ticket.id, e.target.value); }}
+                              className={`badge badge-${ticket.priority}`}
+                              style={{ border: 'none', fontWeight: 600, appearance: 'none', paddingRight: 16 }}
+                            >
+                              <option value="low">Low</option>
+                              <option value="medium">Medium</option>
+                              <option value="high">High</option>
+                            </select>
+                          </td>
+                        )
+                      }
+                      if (config.field_key === 'status') {
+                        return (
+                          <td key={config.id}>
+                            <select 
+                              value={ticket.status} 
+                              onChange={(e) => { e.stopPropagation(); handleStatusChange(ticket.id, e.target.value); }}
+                              className={`badge badge-${ticket.status}`}
+                              style={{ border: 'none', fontWeight: 600, appearance: 'none', paddingRight: 16 }}
+                            >
+                              <option value="open">Open</option>
+                              <option value="pending">Pending</option>
+                              <option value="closed">Closed</option>
+                            </select>
+                          </td>
+                        )
+                      }
+                      if (config.field_key === 'owner') {
+                        return <td key={config.id}>{ticket.owner}</td>
+                      }
+                      if (config.field_key === 'created_at') {
+                        return (
+                          <td key={config.id} className="text-muted">
+                            {new Date(ticket.created_at).toLocaleDateString()} {new Date(ticket.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </td>
+                        )
+                      }
+                      return <td key={config.id}>{ticket[config.field_key] || ticket.custom_data?.[config.field_key] || '—'}</td>
+                    })}
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                         <button
@@ -698,6 +835,16 @@ export default function Tickets({ session, profile }) {
       </div>
 
       {isModalOpen && renderModal()}
+
+      <FieldBuilderModal 
+        module="ticket"
+        businessId={session.user.id}
+        isOpen={isFieldBuilderOpen}
+        onClose={() => {
+          setIsFieldBuilderOpen(false)
+          fetchTicketConfigs()
+        }}
+      />
     </div>
   )
 }

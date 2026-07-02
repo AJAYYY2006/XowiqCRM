@@ -206,56 +206,96 @@ export default function Leads({ session, profile }) {
   }
 
   const convertLeadAction = async (leadData) => {
-    let accountId = null;
-    
-    const { data: accData, error: accErr } = await supabase
-      .from('accounts')
-      .insert([{
+    if (isB2C) {
+      // B2C: Convert to a Customer Profile in accounts table
+      let stageId = null;
+      const { data: stages } = await supabase
+        .from('b2c_stages')
+        .select('id')
+        .order('order_index', { ascending: true })
+        .limit(1)
+      if (stages && stages.length > 0) stageId = stages[0].id
+
+      const payload = {
         user_id: session.user.id,
-        account_name: leadData.company || `${leadData.name}'s Account`,
+        account_name: leadData.name,
         account_owner: leadData.lead_owner || null,
-        status: 'prospect'
-      }]).select()
-      
-    if (accErr) throw accErr
-    if (accData && accData.length > 0) accountId = accData[0].id
+        status: 'Active',
+        b2c_stage_id: stageId,
+        email: leadData.email || leadData.custom_data?.email || leadData.custom_data?.email_id || null,
+        phone: leadData.contact_number || leadData.custom_data?.contact_number || null,
+        custom_data: {
+          customer_name: leadData.name,
+          contact_number: leadData.contact_number || leadData.custom_data?.contact_number || '',
+          email_id: leadData.email || leadData.custom_data?.email || leadData.custom_data?.email_id || '',
+          gender: leadData.custom_data?.gender || '',
+          date_of_birth: leadData.custom_data?.date_of_birth || '',
+          address: leadData.custom_data?.address || '',
+          ...(leadData.custom_data || {})
+        }
+      }
 
-    const { error: cErr } = await supabase
-      .from('contacts')
-      .insert([{
+      const { error: accErr } = await supabase
+        .from('accounts')
+        .insert([payload])
+        
+      if (accErr) throw accErr
+
+      // Mark lead as converted
+      const { error: lErr } = await supabase
+        .from('leads')
+        .update({ status: 'converted' })
+        .eq('id', leadData.id)
+        
+      if (lErr) throw lErr
+
+      await supabase.from('activities').insert([{
         user_id: session.user.id,
-        name: leadData.name,
-        email: leadData.email || null,
-        contact_owner: leadData.lead_owner || null,
-        account_id: accountId,
-        lead_id: leadData.id
+        type: 'Lead Converted',
+        description: `Lead ${leadData.name} was converted to Customer Profile`
       }])
+    } else {
+      // B2B: Convert to Account & Contact (existing behavior)
+      let accountId = null;
       
-    if (cErr) throw cErr
+      const { data: accData, error: accErr } = await supabase
+        .from('accounts')
+        .insert([{
+          user_id: session.user.id,
+          account_name: leadData.company || `${leadData.name}'s Account`,
+          account_owner: leadData.lead_owner || null,
+          status: 'prospect'
+        }]).select()
+        
+      if (accErr) throw accErr
+      if (accData && accData.length > 0) accountId = accData[0].id
 
-    // B2C: Also create an Opportunity linked to the new account
-    if (isB2C && accountId) {
-      await supabase.from('opportunities').insert([{
-        name: `Opportunity: ${leadData.name}`,
-        account_id: accountId,
-        amount: 0,
-        stage: 'prospecting',
-        user_id: session.user.id
+      const { error: cErr } = await supabase
+        .from('contacts')
+        .insert([{
+          user_id: session.user.id,
+          name: leadData.name,
+          email: leadData.email || null,
+          contact_owner: leadData.lead_owner || null,
+          account_id: accountId,
+          lead_id: leadData.id
+        }])
+        
+      if (cErr) throw cErr
+
+      const { error: lErr } = await supabase
+        .from('leads')
+        .update({ status: 'converted' })
+        .eq('id', leadData.id)
+        
+      if (lErr) throw lErr
+
+      await supabase.from('activities').insert([{
+        user_id: session.user.id,
+        type: 'Lead Converted',
+        description: `Lead ${leadData.name} was converted to a Contact`
       }])
     }
-
-    const { error: lErr } = await supabase
-      .from('leads')
-      .update({ status: 'converted' })
-      .eq('id', leadData.id)
-      
-    if (lErr) throw lErr
-
-    await supabase.from('activities').insert([{
-      user_id: session.user.id,
-      type: 'Lead Converted',
-      description: `Lead ${leadData.name} was converted to ${isB2C ? 'Customer Profile + Opportunity' : 'a Contact'}`
-    }])
   }
 
   const handleDeleteLead = async (id, name) => {
@@ -286,12 +326,13 @@ export default function Leads({ session, profile }) {
     let currentToastId;
     try {
       if (newStatus === 'converted') {
-        const confirmConvert = window.confirm('Converting this lead will move it to Contacts and Accounts. Proceed?')
+        const targetSection = isB2C ? 'Customer Profiles' : 'Contacts and Accounts'
+        const confirmConvert = window.confirm(`Converting this lead will move it to ${targetSection}. Proceed?`)
         if (!confirmConvert) return fetchLeads() // Reset dropdown
         
         currentToastId = toast.loading('Converting lead...')
         await convertLeadAction(currentLead)
-        toast.success('Lead converted successfully!', { id: currentToastId })
+        toast.success(isB2C ? 'Lead converted to Customer Profile successfully!' : 'Lead converted successfully!', { id: currentToastId })
         fetchLeads()
       } else {
         const { error } = await supabase

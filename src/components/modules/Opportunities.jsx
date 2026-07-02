@@ -108,17 +108,34 @@ export default function Opportunities({ session, profile }) {
     e.preventDefault()
     const loadingToast = toast.loading(selectedOpp ? 'Updating opportunity...' : 'Adding opportunity...')
     try {
-      const data = { ...formData, user_id: session.user.id }
+      const data = { 
+        ...formData, 
+        user_id: session.user.id,
+        account_id: formData.account_id || null,
+        closed_date: formData.closed_date || null
+      }
       if (selectedOpp) {
-        await supabase.from('opportunities').update(data).eq('id', selectedOpp.id)
+        const { error } = await supabase.from('opportunities').update(data).eq('id', selectedOpp.id)
+        if (error) throw error
+
+        if (viewingOpp && viewingOpp.id === selectedOpp.id) {
+          const { data: updatedOpp } = await supabase
+            .from('opportunities')
+            .select('*, accounts(account_name)')
+            .eq('id', selectedOpp.id)
+            .single()
+          if (updatedOpp) setViewingOpp(updatedOpp)
+        }
       } else {
-        await supabase.from('opportunities').insert([data])
+        const { error } = await supabase.from('opportunities').insert([data])
+        if (error) throw error
       }
       setIsModalOpen(false)
       fetchData()
       toast.success(selectedOpp ? 'Opportunity updated' : 'Opportunity added', { id: loadingToast })
     } catch (err) {
-      toast.error('Operation failed', { id: loadingToast })
+      console.error(err)
+      toast.error(err.message || 'Operation failed', { id: loadingToast })
     }
   }
 
