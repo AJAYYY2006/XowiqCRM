@@ -34,12 +34,12 @@ export default function DashboardHome({ session, profile }) {
 
   useEffect(() => {
     fetchDashboardData()
-  }, [session])
+  }, [session, profile])
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
-      const userId = session.user.id
+      const userIds = profile?.teamUserIds || [session.user.id]
       const now = new Date()
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
@@ -48,13 +48,13 @@ export default function DashboardHome({ session, profile }) {
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
         
         let [leadsRes, oppsRes, ticketsRes, tasksRes, activitiesRes, accountsRes, quotesRes] = await Promise.all([
-          supabase.from('leads').select('*', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', startOfMonth),
-          supabase.from('opportunities').select('*').eq('user_id', userId),
-          supabase.from('tickets').select('*', { count: 'exact', head: true }).eq('user_id', userId).in('status', ['open', 'pending']),
-          supabase.from('tasks').select('*').eq('user_id', userId).neq('status', 'Completed').order('due_date', { ascending: true }),
-          supabase.from('activities').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(8),
-          supabase.from('accounts').select('*', { count: 'exact' }).eq('user_id', userId),
-          supabase.from('quotes').select('id, total_price, status, created_at').eq('user_id', userId)
+          supabase.from('leads').select('*', { count: 'exact', head: true }).in('user_id', userIds).gte('created_at', startOfMonth),
+          supabase.from('opportunities').select('*').in('user_id', userIds),
+          supabase.from('tickets').select('*', { count: 'exact', head: true }).in('user_id', userIds).in('status', ['open', 'pending']),
+          supabase.from('tasks').select('*').in('user_id', userIds).neq('status', 'Completed').order('due_date', { ascending: true }),
+          supabase.from('activities').select('*').in('user_id', userIds).order('created_at', { ascending: false }).limit(8),
+          supabase.from('accounts').select('*', { count: 'exact' }).in('user_id', userIds),
+          supabase.from('quotes').select('id, total_price, status, created_at').in('user_id', userIds)
         ])
 
         const opps = oppsRes.data || []
@@ -252,7 +252,7 @@ export default function DashboardHome({ session, profile }) {
               <div className="stat-value">{stats.leadsCount}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">Active Opportunities</div>
+              <div className="stat-label">Active Deals</div>
               <div className="stat-value">{stats.opportunitiesCount}</div>
             </div>
             <div className="stat-card">

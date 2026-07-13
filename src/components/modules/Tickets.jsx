@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 import { Trash2, Edit2, Settings, Save } from 'lucide-react'
@@ -106,10 +106,34 @@ export default function Tickets({ session, profile }) {
     }
   }
 
+  const location = useLocation()
+  const userIds = profile?.teamUserIds || [session.user.id]
+
   useEffect(() => {
     fetchData()
     fetchTicketConfigs()
-  }, [session])
+  }, [session, profile])
+
+  useEffect(() => {
+    if (tickets.length > 0 && location.state?.openId) {
+      const tkt = tickets.find(t => t.id === location.state.openId)
+      if (tkt) {
+        setEditingTicket(tkt)
+        setFormData({
+          subject: tkt.subject || '',
+          priority: tkt.priority || 'medium',
+          status: tkt.status || 'open',
+          owner: tkt.owner || '',
+          contact_id: tkt.contact_id || '',
+          account_id: tkt.account_id || '',
+          description: tkt.description || '',
+          custom_data: tkt.custom_data || {}
+        })
+        setIsModalOpen(true)
+        window.history.replaceState({}, document.title)
+      }
+    }
+  }, [tickets, location.state])
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -128,17 +152,17 @@ export default function Tickets({ session, profile }) {
         supabase
           .from('tickets')
           .select('*, contacts(name, account_id, accounts(account_name))')
-          .eq('user_id', session.user.id)
+          .in('user_id', userIds)
           .order('created_at', { ascending: false }),
         supabase
           .from('contacts')
           .select('id, name, account_id')
-          .eq('user_id', session.user.id)
+          .in('user_id', userIds)
           .order('name'),
         supabase
           .from('accounts')
           .select('id, account_name')
-          .eq('user_id', session.user.id)
+          .in('user_id', userIds)
           .order('account_name')
       ])
       

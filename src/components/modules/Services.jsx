@@ -5,6 +5,7 @@ import { Plus, Edit2, Trash2, Package, DollarSign, Clock, Save, GripVertical, Se
 import LocalSearch from '../ui/LocalSearch'
 
 export default function Services({ session, profile }) {
+  const userIds = profile?.teamUserIds || [session.user.id]
   const [services, setServices] = useState([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -36,7 +37,7 @@ export default function Services({ session, profile }) {
     fetchStages();
     fetchAccounts();
     fetchStageHistory();
-  }, [session])
+  }, [session, profile])
 
   const fetchStages = async () => {
     try {
@@ -53,7 +54,7 @@ export default function Services({ session, profile }) {
       const { data: accsData, error: accErr } = await supabase
         .from('accounts')
         .select('*')
-        .eq('user_id', session.user.id);
+        .in('user_id', userIds);
 
       if (accErr) throw accErr;
 
@@ -118,7 +119,7 @@ export default function Services({ session, profile }) {
       const { data, error } = await supabase
         .from('services')
         .select('*')
-        .eq('user_id', session.user.id)
+        .in('user_id', userIds)
         .order('created_at', { ascending: false })
       
       if (error) throw error

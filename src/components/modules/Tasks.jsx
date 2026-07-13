@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 import { Trash2, Edit2, Calendar, User, Tag, Link2, CheckCircle2, Clock, PlayCircle, AlertCircle, CheckCircle, Settings, Save } from 'lucide-react'
@@ -125,11 +126,35 @@ export default function Tasks({ session, profile }) {
     }
   }
 
+  const location = useLocation()
+  const userIds = profile?.teamUserIds || [session.user.id]
+
   useEffect(() => {
     fetchTasks()
     fetchAllEntities()
     fetchTaskConfigs()
-  }, [session])
+  }, [session, profile])
+
+  useEffect(() => {
+    if (tasks.length > 0 && location.state?.openId) {
+      const tsk = tasks.find(t => t.id === location.state.openId)
+      if (tsk) {
+        setEditingTask(tsk)
+        setFormData({
+          title: tsk.title || '',
+          due_date: tsk.due_date || '',
+          status: tsk.status || 'Pending',
+          task_type: tsk.task_type || 'Follow-up',
+          owner: tsk.owner || '',
+          related_to: tsk.related_to || 'accounts',
+          related_id: tsk.related_id || '',
+          custom_data: tsk.custom_data || {}
+        })
+        setIsModalOpen(true)
+        window.history.replaceState({}, document.title)
+      }
+    }
+  }, [tasks, location.state])
 
   const fetchTasks = async () => {
     try {
@@ -137,7 +162,7 @@ export default function Tasks({ session, profile }) {
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
-        .eq('user_id', session.user.id)
+        .in('user_id', userIds)
         .order('due_date', { ascending: true })
       
       if (error) throw error
@@ -162,13 +187,13 @@ export default function Tasks({ session, profile }) {
   const fetchAllEntities = async () => {
     try {
       const results = await Promise.all([
-        supabase.from('leads').select('id, name').eq('user_id', session.user.id),
-        supabase.from('contacts').select('id, name').eq('user_id', session.user.id),
-        supabase.from('accounts').select('id, account_name').eq('user_id', session.user.id),
-        supabase.from('opportunities').select('id, name').eq('user_id', session.user.id),
-        supabase.from('invoices').select('id, invoice_name').eq('user_id', session.user.id),
-        supabase.from('quotes').select('id, quote_name').eq('user_id', session.user.id),
-        supabase.from('tickets').select('id, subject').eq('user_id', session.user.id)
+        supabase.from('leads').select('id, name').in('user_id', userIds),
+        supabase.from('contacts').select('id, name').in('user_id', userIds),
+        supabase.from('accounts').select('id, account_name').in('user_id', userIds),
+        supabase.from('opportunities').select('id, name').in('user_id', userIds),
+        supabase.from('invoices').select('id, invoice_name').in('user_id', userIds),
+        supabase.from('quotes').select('id, quote_name').in('user_id', userIds),
+        supabase.from('tickets').select('id, subject').in('user_id', userIds)
       ])
 
       setEntityData({

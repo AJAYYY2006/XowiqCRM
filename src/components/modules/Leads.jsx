@@ -34,10 +34,12 @@ export default function Leads({ session, profile }) {
     custom_data: {}
   })
 
+  const userIds = profile?.teamUserIds || [session.user.id]
+
   useEffect(() => { 
     fetchLeads() 
     fetchCustomConfigs()
-  }, [session])
+  }, [session, profile])
 
   const fetchCustomConfigs = async () => {
     try {
@@ -105,7 +107,7 @@ export default function Leads({ session, profile }) {
       const { data, error } = await supabase
         .from('leads')
         .select('*')
-        .eq('user_id', session.user.id)
+        .in('user_id', userIds)
         .neq('status', 'converted')
         .order('serial_no', { ascending: true })
       
@@ -120,7 +122,7 @@ export default function Leads({ session, profile }) {
 
   const fetchLeadDetails = async (id, name) => {
     const { data: tskData } = await supabase.from('tasks').select('*').eq('related_to', 'leads').eq('related_id', id)
-    const { data: aData } = await supabase.from('activities').select('*').eq('user_id', session.user.id)
+    const { data: aData } = await supabase.from('activities').select('*').in('user_id', userIds)
     
     const nameLower = (name || '').toLowerCase()
     const filteredActs = (aData || []).filter(a => {

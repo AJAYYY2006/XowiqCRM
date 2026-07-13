@@ -33,9 +33,11 @@ export default function Contacts({ session, profile }) {
   const [taskFormData, setTaskFormData] = useState({ title: '', task_type: 'Call', status: 'Open', due_date: '', owner: '' })
   const [editingTaskId, setEditingTaskId] = useState(null)
 
+  const userIds = profile?.teamUserIds || [session.user.id]
+
   useEffect(() => {
     fetchData()
-  }, [session])
+  }, [session, profile])
 
   useEffect(() => {
     if (contacts.length > 0 && location.state?.openId) {
@@ -59,12 +61,12 @@ export default function Contacts({ session, profile }) {
         supabase
           .from('contacts')
           .select('*, accounts(account_name)')
-          .eq('user_id', session.user.id)
+          .in('user_id', userIds)
           .order('created_at', { ascending: false }),
         supabase
           .from('accounts')
           .select('id, account_name')
-          .eq('user_id', session.user.id)
+          .in('user_id', userIds)
           .order('account_name')
       ])
       

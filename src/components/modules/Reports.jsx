@@ -8,6 +8,7 @@ import { Trash2, Edit2 } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 
 export default function Reports({ session, profile }) {
+  const userIds = profile?.teamUserIds || [session.user.id]
   const [reports, setReports] = useState([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -54,7 +55,7 @@ export default function Reports({ session, profile }) {
 
   useEffect(() => {
     fetchReports()
-  }, [session])
+  }, [session, profile])
 
   const fetchReports = async () => {
     try {
@@ -62,7 +63,7 @@ export default function Reports({ session, profile }) {
       const { data, error } = await supabase
         .from('reports')
         .select('*')
-        .eq('user_id', session.user.id)
+        .in('user_id', userIds)
         .order('created_at', { ascending: false })
       
       if (error) throw error
@@ -101,7 +102,7 @@ export default function Reports({ session, profile }) {
     const toastId = toast.loading('Running report query...')
     try {
       const moduleTable = report.report_type === 'custom' ? 'leads' : report.report_type
-      let query = supabase.from(moduleTable).select('*').eq('user_id', session.user.id)
+      let query = supabase.from(moduleTable).select('*').in('user_id', userIds)
       
       const f = report.filters || {}
       if (f.owner) {
@@ -214,7 +215,7 @@ export default function Reports({ session, profile }) {
     try {
       // 1. Fetch data based on report configuration
       const moduleTable = report.report_type === 'custom' ? 'leads' : report.report_type
-      let query = supabase.from(moduleTable).select('*').eq('user_id', session.user.id)
+      let query = supabase.from(moduleTable).select('*').in('user_id', userIds)
       
       const f = report.filters || {}
       if (f.owner) {
@@ -407,7 +408,7 @@ export default function Reports({ session, profile }) {
                 <label className="form-label">Pull Reports On (Module)</label>
                 <select className="form-input" value={formData.report_type} onChange={e => setFormData({...formData, report_type: e.target.value})}>
                   <option value="leads">Leads</option>
-                  <option value="opportunities">Deals (Opportunities)</option>
+                  <option value="opportunities">Deals</option>
                   <option value="tickets">Tickets</option>
                   <option value="tasks">Tasks</option>
                   <option value="accounts">Accounts</option>

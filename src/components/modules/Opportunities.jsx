@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import {
   Plus, Pencil, CheckCircle, Trash2, ArrowLeft, Package, LayoutGrid, 
   ChevronRight, FileText, Receipt, CheckSquare, Activity, ClipboardList, TrendingUp, Settings
@@ -14,6 +15,7 @@ import FieldBuilderModal from '../ui/FieldBuilderModal'
 const STAGES = ['Prospecting', 'Scoping', 'Negotiation', 'Legal', 'Contract', 'Closed']
 
 export default function Opportunities({ session, profile }) {
+  const location = useLocation()
   // --- State ---
   const [opportunities, setOpportunities] = useState([])
   const [accounts, setAccounts] = useState([])
@@ -39,16 +41,17 @@ export default function Opportunities({ session, profile }) {
   const fetchData = async () => {
     try {
       setLoading(true)
+      const userIds = profile?.teamUserIds || [session.user.id]
       const { data: opps, error: oppsError } = await supabase
         .from('opportunities')
         .select('*, accounts(account_name)')
-        .eq('user_id', session.user.id)
+        .in('user_id', userIds)
         .order('created_at', { ascending: false })
       
       const { data: accs, error: accsError } = await supabase
         .from('accounts')
         .select('*')
-        .eq('user_id', session.user.id)
+        .in('user_id', userIds)
 
       if (oppsError || accsError) throw oppsError || accsError
       setOpportunities(opps || [])
@@ -59,6 +62,16 @@ export default function Opportunities({ session, profile }) {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (opportunities.length > 0 && location.state?.openId) {
+      const opp = opportunities.find(o => o.id === location.state.openId)
+      if (opp) {
+        setViewingOpp(opp)
+        window.history.replaceState({}, document.title)
+      }
+    }
+  }, [opportunities, location.state])
 
   // Fetch phone from linked account when viewing an opportunity
   useEffect(() => {
@@ -187,7 +200,7 @@ export default function Opportunities({ session, profile }) {
       {viewingOpp ? (
         /* --- DETAIL VIEW --- */
         <div className="animate-in fade-in">
-          <button className="back-btn" onClick={() => setViewingOpp(null)} title="Back to Opportunities">
+          <button className="back-btn" onClick={() => setViewingOpp(null)} title="Back to Deals">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
           </button>
 
@@ -367,7 +380,7 @@ export default function Opportunities({ session, profile }) {
         <div className="animate-in fade-in">
           <div className="page-header">
             <div>
-              <h1 className="page-title">Opportunities</h1>
+              <h1 className="page-title">Deals</h1>
               <p className="page-subtitle">Track and close your sales pipeline efficiently.</p>
             </div>
             <div style={{ display: 'flex', gap: 12 }}>

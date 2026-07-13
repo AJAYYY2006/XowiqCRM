@@ -50,7 +50,7 @@ export default function Dashboard({ session }) {
     { path: 'accounts', label: t('sidebar.customerProfiles'), icon: <Users size={18} /> },
     { path: 'services', label: 'Services', icon: <Package size={18} /> },
     { path: 'leads', label: t('sidebar.leads'), icon: <UserSquare2 size={18} /> },
-    { path: 'opportunities', label: 'Opportunities', icon: <Briefcase size={18} /> },
+    { path: 'opportunities', label: 'Deals', icon: <Briefcase size={18} /> },
     { path: 'invoices', label: 'Invoices', icon: <Quote size={18} /> },
     { path: 'tasks', label: 'Tasks', icon: <Search size={18} /> },
     { path: 'tickets', label: t('sidebar.tickets'), icon: <Ticket size={18} /> },
@@ -80,7 +80,7 @@ export default function Dashboard({ session }) {
         .select('*')
         .eq('id', session.user.id)
         .single()
-      if (data) setProfile(data)
+      if (data) setProfile({ ...data, teamUserIds: [session.user.id] })
     }
     if (session) {
       fetchProfile()

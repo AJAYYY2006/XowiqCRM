@@ -8,6 +8,7 @@ import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 
 export default function Quotes({ session, profile }) {
+  const userIds = profile?.teamUserIds || [session.user.id]
   const [quotes, setQuotes] = useState([])
   const [opportunities, setOpportunities] = useState([])
   const [loading, setLoading] = useState(true)
@@ -22,7 +23,7 @@ export default function Quotes({ session, profile }) {
 
   useEffect(() => {
     fetchData()
-  }, [session])
+  }, [session, profile])
 
   const parseQuoteData = (str) => {
     try {
@@ -40,12 +41,12 @@ export default function Quotes({ session, profile }) {
         supabase
           .from('quotes')
           .select('*, opportunities(id, name, account_id, accounts(account_name))')
-          .eq('user_id', session.user.id)
+          .in('user_id', userIds)
           .order('created_at', { ascending: false }),
         supabase
           .from('opportunities')
           .select('id, name')
-          .eq('user_id', session.user.id)
+          .in('user_id', userIds)
           .order('name')
       ])
       

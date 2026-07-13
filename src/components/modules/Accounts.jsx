@@ -221,6 +221,8 @@ export default function Accounts({ session, profile }) {
     contact_id: null
   })
 
+  const userIds = profile?.teamUserIds || [session.user.id]
+
   useEffect(() => { 
     fetchAccounts()
     fetchCustomConfigs()
@@ -228,7 +230,7 @@ export default function Accounts({ session, profile }) {
     if (isB2C) {
       fetchB2CStages()
     }
-  }, [session])
+  }, [session, profile])
 
   const fetchB2CStages = async () => {
     const { data } = await supabase.from('b2c_stages').select('*').order('order_index', { ascending: true })
@@ -354,7 +356,7 @@ export default function Accounts({ session, profile }) {
       const { data, error } = await supabase
         .from('accounts')
         .select('*, contacts(phone, email, id)')
-        .eq('user_id', session.user.id)
+        .in('user_id', userIds)
         .order('created_at', { ascending: false })
       
       if (error) throw error
@@ -373,9 +375,9 @@ export default function Accounts({ session, profile }) {
       supabase.from('quotes').select('*').eq('account_id', id).order('created_at', { ascending: false }),
       supabase.from('tasks').select('*').eq('account_id', id).order('due_date', { ascending: true }),
       supabase.from('customer_services').select('*').eq('account_id', id).order('assigned_date', { ascending: false }),
-      supabase.from('services').select('id, service_name, reminder_days').eq('user_id', session.user.id),
-      supabase.from('services').select('*').eq('user_id', session.user.id).eq('status', 'active'),
-      supabase.from('activities').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
+      supabase.from('services').select('id, service_name, reminder_days').in('user_id', userIds),
+      supabase.from('services').select('*').in('user_id', userIds).eq('status', 'active'),
+      supabase.from('activities').select('*').in('user_id', userIds).order('created_at', { ascending: false }),
       supabase.from('b2c_customer_stages').select('id, stage_id, service_id, moved_at').eq('customer_id', String(id)).order('moved_at', { ascending: false }),
       supabase.from('b2c_stages').select('id, name, color').order('order_index', { ascending: true })
     ])

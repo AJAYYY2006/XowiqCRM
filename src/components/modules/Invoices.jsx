@@ -8,6 +8,7 @@ import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 
 export default function Invoices({ session, profile }) {
+  const userIds = profile?.teamUserIds || [session.user.id]
   const [invoices, setInvoices] = useState([])
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -72,7 +73,7 @@ export default function Invoices({ session, profile }) {
   useEffect(() => {
     fetchData()
     fetchInvoiceConfigs()
-  }, [session])
+  }, [session, profile])
 
   const fetchData = async () => {
     try {
@@ -81,12 +82,12 @@ export default function Invoices({ session, profile }) {
         supabase
           .from('quotes')
           .select('*, accounts(account_name, contacts(phone, email)), opportunities(id, name, account_id, accounts(account_name, contacts(phone, email)))')
-          .eq('user_id', session.user.id)
+          .in('user_id', userIds)
           .order('created_at', { ascending: false }),
         supabase
           .from('accounts')
           .select('id, account_name')
-          .eq('user_id', session.user.id)
+          .in('user_id', userIds)
           .order('account_name')
       ])
       

@@ -8,9 +8,6 @@ export default function Login() {
   const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [companyName, setCompanyName] = useState('')
-  const [companyType, setCompanyType] = useState('')
-  const [role, setRole] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -18,6 +15,7 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setLoading(true)
+
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
     if (signInError) {
       setError(signInError.message)
@@ -27,62 +25,51 @@ export default function Login() {
 
     const userId = signInData.user.id
 
-    // Get the role from auth metadata first
-    const metaRole = signInData.user.user_metadata?.role || 'user'
-
-    // Fetch user's role from the database profiles table
+    // Fetch role from profiles table (source of truth)
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, company_name, company_type')
       .eq('id', userId)
       .maybeSingle()
 
-    const dbRole = profileData?.role || metaRole || role
-    const isDbAdmin = ['admin', 'administrator'].includes((dbRole || '').toLowerCase())
-    
-    // Ensure final role matches database record / metadata record / login selection fallback
-    const finalRole = isDbAdmin ? dbRole : 'user'
+    // Fall back to user_metadata if profile row doesn't exist yet
+    const role = profileData?.role || signInData.user.user_metadata?.role || 'user'
+    const isAdmin = ['admin', 'administrator'].includes(role.toLowerCase())
 
-    const updates = {}
-    if (companyName.trim()) updates.companyName = companyName.trim()
-    if (companyType) updates.companyType = companyType
-    updates.role = finalRole
+    // Sync role back to user_metadata so Dashboard can read it
+    await supabase.auth.updateUser({ data: { role } })
 
-    // 1. Update auth user_metadata
-    await supabase.auth.updateUser({ data: updates })
-    
-    // 2. Sync profiles table (use upsert to create the row if it's missing)
+    // Sync profiles table with metadata (companyName, companyType, created_by, created_by_admin_id)
     try {
-      await supabase.from('profiles').upsert({ 
-        id: userId, 
-        role: finalRole,
+      const meta = signInData.user.user_metadata || {}
+      await supabase.from('profiles').upsert({
+        id: userId,
+        name: meta.name || profileData?.name || 'Unknown User',
         email: signInData.user.email,
-        name: signInData.user.user_metadata?.name || 'Unknown User'
+        role: role,
+        company_name: meta.companyName || profileData?.company_name || null,
+        company_type: meta.companyType || profileData?.company_type || null,
+        created_by: meta.created_by || profileData?.created_by || null,
+        created_by_admin_id: meta.created_by_admin_id || profileData?.created_by_admin_id || null
       })
     } catch (err) {
-      console.warn('Profile sync failed:', err)
+      console.warn('Profile sync failed during login:', err)
     }
-    
-    // 3. Refresh session so Dashboard loads with updated metadata
-    await supabase.auth.refreshSession()
 
-    navigate('/dashboard')
     setLoading(false)
-  }
 
-  const selectStyle = {
-    cursor: 'pointer',
-    appearance: 'none',
-    backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23333%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")',
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'right 16px center',
-    backgroundSize: '10px'
+    if (isAdmin) {
+      navigate('/admin')
+    } else {
+      navigate('/dashboard')
+    }
   }
 
   return (
     <div className="auth-page">
       <div className="auth-bg-blur" />
       <div className="auth-card">
+        {/* Logo */}
         <div className="auth-logo" style={{ display: 'flex', alignItems: 'center', gap: 0, fontWeight: 900, fontFamily: '"Fredoka", sans-serif', fontSize: '26px', letterSpacing: '-0.5px', marginBottom: '24px', justifyContent: 'center' }}>
           <div style={{ backgroundColor: '#f37a23', color: '#ffffff', padding: '4px 6px', lineHeight: 1 }}>
             XOWIQ
@@ -120,45 +107,6 @@ export default function Login() {
               onChange={e => setPassword(e.target.value)}
               required
             />
-          </div>
-
-          <div className="auth-input-group">
-            <label className="auth-label">{t('auth.companyName')}</label>
-            <input
-              type="text"
-              className="auth-input"
-              placeholder="(Optional) Update Company Name"
-              value={companyName}
-              onChange={e => setCompanyName(e.target.value)}
-            />
-          </div>
-
-          <div className="auth-input-group">
-            <label className="auth-label">{t('auth.companyType')}</label>
-            <select
-              className="auth-input"
-              value={companyType}
-              onChange={e => setCompanyType(e.target.value)}
-              style={selectStyle}
-            >
-              <option value="">(Keep Current Mode)</option>
-              <option value="B2B">{t('auth.b2b')}</option>
-              <option value="B2C">{t('auth.b2c')}</option>
-            </select>
-          </div>
-
-          <div className="auth-input-group">
-            <label className="auth-label">Role</label>
-            <select
-              className="auth-input"
-              value={role}
-              onChange={e => setRole(e.target.value)}
-              style={selectStyle}
-            >
-              <option value="">(Keep Current Role)</option>
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
-            </select>
           </div>
 
           <button type="submit" className="auth-btn" disabled={loading}>
