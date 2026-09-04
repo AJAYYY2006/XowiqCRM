@@ -1237,30 +1237,38 @@ export default function Accounts({ session, profile }) {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">{isB2C ? 'Customer Profiles' : 'Accounts'}</h1>
-          <p className="page-subtitle">Manage your retail customers and track their service history.</p>
+          <h1 className="page-title">{isB2C ? t('modules.accounts.customerProfiles') : t('modules.accounts.accounts')}</h1>
+          <p className="page-subtitle">{t('modules.accounts.subtitle')}</p>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button className="btn btn-secondary" onClick={() => setIsFieldBuilderOpen(true)}>
-            <Settings size={16} /> Edit fields
+            <Settings size={16} /> {t('modules.accounts.editFields')}
           </button>
-          <button className="btn btn-primary" onClick={() => handleOpenModal()}><Plus size={16} /> Add New Customer</button>
+          <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+            <Plus size={16} /> {isB2C ? t('modules.accounts.addNewCustomer') : t('modules.accounts.addNewAccount')}
+          </button>
         </div>
       </div>
 
       <div className="table-container card">
-        <div style={{ padding: '0 24px' }}><LocalSearch data={accounts} searchKeys={['account_name', 'phone', 'email', 'address']} placeholder={"Search customers by name, phone, email..."} /></div>
+        <div style={{ padding: '0 24px' }}>
+          <LocalSearch 
+            data={accounts} 
+            searchKeys={['account_name', 'phone', 'email', 'address']} 
+            placeholder={t('modules.accounts.searchPlaceholder')} 
+          />
+        </div>
         <div style={{ overflowX: 'auto' }}>
           <table>
             <thead>
               <tr>
-                <th style={{ minWidth: 180 }}>Customer Profile</th>
-                <th>Status</th>
-                {isB2C && b2cStages.length > 0 && <th>Stage</th>}
+                <th style={{ minWidth: 180 }}>{t('modules.accounts.colProfile')}</th>
+                <th>{t('modules.accounts.colStatus')}</th>
+                {isB2C && b2cStages.length > 0 && <th>{t('modules.accounts.colStage')}</th>}
                 {customFieldConfigs.filter(c => c.show_in_list && !c.is_core).map(config => (
                   <th key={config.id}>{config.label}</th>
                 ))}
-                <th style={{ textAlign: 'right' }}>Actions</th>
+                <th style={{ textAlign: 'right' }}>{t('modules.accounts.colActions')}</th>
               </tr>
             </thead>
             <tbody>

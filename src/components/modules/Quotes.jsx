@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 import { Trash2, Edit2, Download, Plus, Minus, Send, CheckCircle, XCircle } from 'lucide-react'
@@ -8,6 +9,7 @@ import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 
 export default function Quotes({ session, profile }) {
+  const { t } = useTranslation()
   const userIds = profile?.teamUserIds || [session.user.id]
   const [quotes, setQuotes] = useState([])
   const [opportunities, setOpportunities] = useState([])
@@ -275,22 +277,22 @@ export default function Quotes({ session, profile }) {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Quotes</h1>
-          <p className="page-subtitle">Generate pricing estimates for your deals.</p>
+          <h1 className="page-title">{t('modules.quotes.title')}</h1>
+          <p className="page-subtitle">{t('modules.quotes.subtitle')}</p>
         </div>
         <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-          <span style={{ fontSize: 18 }}>+</span> Create Quote
+          <span style={{ fontSize: 18 }}>+</span> {t('modules.quotes.createQuote')}
         </button>
       </div>
 
       <div className="table-container">
         <div className="table-header">
-          <h2 className="table-title">All Quotes ({quotes.length})</h2>
+          <h2 className="table-title">{t('modules.quotes.allQuotes')} ({quotes.length})</h2>
           <LocalSearch 
              data={quotes} 
              searchKeys={['quote_name']} 
              onSelect={(item) => handleSelectQuote(item)} 
-             placeholder="Search quotes..." 
+             placeholder={t('modules.quotes.searchPlaceholder')} 
              renderItem={(item) => (
                <>
                  <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{item.quote_name}</div>

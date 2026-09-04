@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
 import { Trash2, Edit2, Settings, Plus } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
@@ -9,6 +10,7 @@ import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../
 import FieldBuilderModal from '../ui/FieldBuilderModal'
 
 export default function Contacts({ session, profile }) {
+  const { t } = useTranslation()
   const [contacts, setContacts] = useState([])
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -399,27 +401,27 @@ export default function Contacts({ session, profile }) {
         <div>
           <div className="page-header">
             <div>
-              <h1 className="page-title">Contacts</h1>
-              <p className="page-subtitle">Manage people and relationships.</p>
+              <h1 className="page-title">{t('modules.contacts.title')}</h1>
+              <p className="page-subtitle">{t('modules.contacts.subtitle')}</p>
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
               <button className="btn btn-secondary" onClick={() => setIsFieldBuilderOpen(true)}>
-                <Settings size={18} style={{ marginRight: 6 }} /> Edit fields
+                <Settings size={18} style={{ marginRight: 6 }} /> {t('modules.contacts.editFields')}
               </button>
               <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-                <Plus size={18} style={{ marginRight: 6 }} /> Add New Contact
+                <Plus size={18} style={{ marginRight: 6 }} /> {t('modules.contacts.addNewContact')}
               </button>
             </div>
           </div>
 
           <div className="table-container">
             <div className="table-header">
-              <h2 className="table-title">All Contacts ({contacts.length})</h2>
+              <h2 className="table-title">{t('modules.contacts.allContacts')} ({contacts.length})</h2>
               <LocalSearch 
                  data={contacts} 
                  searchKeys={['name', 'email', 'unique_id', 'phone']} 
                  onSelect={(item) => setSelectedContact(item)} 
-                 placeholder="Search contacts..." 
+                 placeholder={t('modules.contacts.searchPlaceholder')} 
                  renderItem={(item) => (
                    <>
                      <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{item.name}</div>

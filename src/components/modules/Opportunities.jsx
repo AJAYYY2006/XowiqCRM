@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Plus, Pencil, CheckCircle, Trash2, ArrowLeft, Package, LayoutGrid, 
   ChevronRight, FileText, Receipt, CheckSquare, Activity, ClipboardList, TrendingUp, Settings
@@ -12,9 +13,17 @@ import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../
 import FieldBuilderModal from '../ui/FieldBuilderModal'
 
 // --- Constants ---
-const STAGES = ['Prospecting', 'Scoping', 'Negotiation', 'Legal', 'Contract', 'Closed']
+const DEFAULT_STAGES = ['Prospecting', 'Scoping', 'Negotiation', 'Legal', 'Contract', 'Closed']
 
 export default function Opportunities({ session, profile }) {
+  const { t } = useTranslation()
+  const stages = (() => {
+    try {
+      const stored = localStorage.getItem('pipeline_stages')
+      if (stored) return JSON.parse(stored)
+    } catch (e) {}
+    return DEFAULT_STAGES
+  })()
   const location = useLocation()
   // --- State ---
   const [opportunities, setOpportunities] = useState([])
@@ -25,7 +34,7 @@ export default function Opportunities({ session, profile }) {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('products')
   const [formData, setFormData] = useState({
-    name: '', account_id: '', amount: 0, stage: 'Prospecting', closed_date: '', owner: 'Ajay'
+    name: '', account_id: '', amount: 0, stage: stages[0] || 'Prospecting', closed_date: '', owner: 'Ajay'
   })
   const [productForm, setProductForm] = useState({ name: '', qty: 1, price: 0 })
   const [products, setProducts] = useState([])
@@ -103,14 +112,14 @@ export default function Opportunities({ session, profile }) {
         name: opp.name,
         account_id: opp.account_id || '',
         amount: opp.amount || 0,
-        stage: opp.stage || 'Prospecting',
+        stage: opp.stage || stages[0] || 'Prospecting',
         closed_date: opp.closed_date || '',
         owner: opp.owner || profile?.name || session.user.email
       })
     } else {
       setSelectedOpp(null)
       setFormData({
-        name: '', account_id: '', amount: 0, stage: 'Prospecting', closed_date: '', 
+        name: '', account_id: '', amount: 0, stage: stages[0] || 'Prospecting', closed_date: '', 
         owner: profile?.name || session.user.email
       })
     }
@@ -119,7 +128,7 @@ export default function Opportunities({ session, profile }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    const loadingToast = toast.loading(selectedOpp ? 'Updating opportunity...' : 'Adding opportunity...')
+    const loadingToast = toast.loading(selectedOpp ? 'Updating deal...' : 'Adding deal...')
     try {
       const data = { 
         ...formData, 
@@ -145,7 +154,7 @@ export default function Opportunities({ session, profile }) {
       }
       setIsModalOpen(false)
       fetchData()
-      toast.success(selectedOpp ? 'Opportunity updated' : 'Opportunity added', { id: loadingToast })
+      toast.success(selectedOpp ? 'Deal updated' : 'Deal added', { id: loadingToast })
     } catch (err) {
       console.error(err)
       toast.error(err.message || 'Operation failed', { id: loadingToast })
@@ -153,13 +162,13 @@ export default function Opportunities({ session, profile }) {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this opportunity?')) return
+    if (!window.confirm('Are you sure you want to delete this deal?')) return
     const loadingToast = toast.loading('Deleting...')
     try {
       await supabase.from('opportunities').delete().eq('id', id)
       setOpportunities(prev => prev.filter(o => o.id !== id))
       if (viewingOpp?.id === id) setViewingOpp(null)
-      toast.success('Opportunity deleted', { id: loadingToast })
+      toast.success('Deal deleted', { id: loadingToast })
     } catch {
       toast.error('Failed to delete', { id: loadingToast })
     }
@@ -230,7 +239,7 @@ export default function Opportunities({ session, profile }) {
 
             <div className="detail-grid" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--border-color)' }}>
               <div className="detail-field">
-                <label>Opportunity ID</label>
+                <label>Deal ID</label>
                 <span className="font-mono" style={{ fontSize: 11 }}>{viewingOpp.id}</span>
               </div>
               <div className="detail-field">
@@ -267,8 +276,8 @@ export default function Opportunities({ session, profile }) {
              <div style={{ padding: 24 }}>
                 <label className="form-label" style={{ marginBottom: 16, display: 'block', color: 'var(--text-muted)' }}>Pipeline Progress</label>
                 <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-                  {STAGES.map((s, idx) => {
-                    const currentIdx = STAGES.indexOf(viewingOpp.stage)
+                  {stages.map((s, idx) => {
+                    const currentIdx = stages.findIndex(val => val.toLowerCase() === (viewingOpp.stage || '').toLowerCase())
                     const isComplete = idx < currentIdx
                     const isActive = idx === currentIdx
                     return (
@@ -283,7 +292,7 @@ export default function Opportunities({ session, profile }) {
                         >
                            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>{s}</span>
                         </div>
-                        {idx < STAGES.length - 1 && <ChevronRight size={14} className="text-muted" />}
+                        {idx < stages.length - 1 && <ChevronRight size={14} className="text-muted" />}
                       </div>
                     )
                   })}
@@ -369,7 +378,7 @@ export default function Opportunities({ session, profile }) {
                  <div className="empty-state">
                    <div className="empty-state-icon"></div>
                    <h3>No data found</h3>
-                   <p>This section is currently empty for this opportunity.</p>
+                   <p>This section is currently empty for this deal.</p>
                  </div>
                )}
             </div>
@@ -380,27 +389,27 @@ export default function Opportunities({ session, profile }) {
         <div className="animate-in fade-in">
           <div className="page-header">
             <div>
-              <h1 className="page-title">Deals</h1>
-              <p className="page-subtitle">Track and close your sales pipeline efficiently.</p>
+              <h1 className="page-title">{t('modules.opportunities.title')}</h1>
+              <p className="page-subtitle">{t('modules.opportunities.subtitle')}</p>
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
               <button className="btn btn-secondary" onClick={() => setIsFieldBuilderOpen(true)}>
-                <Settings size={18} style={{ marginRight: 6 }} /> Edit fields
+                <Settings size={18} style={{ marginRight: 6 }} /> {t('modules.opportunities.editFields')}
               </button>
               <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-                <Plus size={18} style={{ marginRight: 6 }} /> New Opportunity
+                <Plus size={18} style={{ marginRight: 6 }} /> {t('modules.opportunities.newDeal')}
               </button>
             </div>
           </div>
 
           <div className="table-container">
             <div className="table-header">
-              <h2 className="table-title">Active Deals ({opportunities.length})</h2>
+              <h2 className="table-title">{t('modules.opportunities.activeDeals')} ({opportunities.length})</h2>
               <LocalSearch 
                  data={opportunities} 
                  searchKeys={['name', 'owner']} 
                  onSelect={(item) => setViewingOpp(item)} 
-                 placeholder="Search deals..." 
+                 placeholder={t('modules.opportunities.searchPlaceholder')}
                  renderItem={(item) => (
                    <>
                      <div className="fw-bold" style={{ fontSize: '13px' }}>{item.name}</div>
@@ -428,7 +437,7 @@ export default function Opportunities({ session, profile }) {
                     <tr>
                       <td colSpan="7">
                         <div className="empty-state">
-                          <h3>No opportunities found</h3>
+                          <h3>No deals found</h3>
                           <p>Start your pipeline by adding a new deal.</p>
                           <button className="btn btn-secondary mt-4" onClick={() => handleOpenModal()}>Add Deal</button>
                         </div>
@@ -478,7 +487,7 @@ export default function Opportunities({ session, profile }) {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h2 className="modal-title">{selectedOpp ? 'Edit Opportunity' : 'New Opportunity'}</h2>
+              <h2 className="modal-title">{selectedOpp ? 'Edit Deal' : 'New Deal'}</h2>
               <button className="modal-close" onClick={() => setIsModalOpen(false)}>✕</button>
             </div>
             <form onSubmit={handleSubmit}>
@@ -501,7 +510,7 @@ export default function Opportunities({ session, profile }) {
                 <div className="form-group">
                   <label className="form-label">Pipeline Stage</label>
                   <select className="form-input" value={formData.stage} onChange={e => setFormData({...formData, stage: e.target.value})}>
-                    {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                    {stages.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
                 <div className="form-group">

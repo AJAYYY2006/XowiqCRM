@@ -1,10 +1,38 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
 import { Plus, Edit2, Trash2, Package, DollarSign, Clock, Save, GripVertical, Settings2, Palette, Zap, Layers } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 
+// ── Currency conversion ────────────────────────────────────────────────────
+// All prices are stored in the DB in INR (the app's default base currency).
+// These rates convert 1 INR → target currency.
+const INR_RATES = {
+  '₹': 1,           // Indian Rupee  (base — no conversion)
+  '$': 0.012,        // US Dollar     (1 INR ≈ 0.012 USD)
+  '€': 0.011,        // Euro          (1 INR ≈ 0.011 EUR)
+  '£': 0.0095,       // British Pound (1 INR ≈ 0.0095 GBP)
+  '¥': 1.77,         // JPY/CNY       (1 INR ≈ 1.77 JPY)
+}
+
+/**
+ * Convert a price stored in INR to the user's selected display currency.
+ * Returns a locale-formatted string, e.g. "1,234.56"
+ */
+function convertPrice(amountInINR, currencySymbol) {
+  const rate = INR_RATES[currencySymbol] ?? 1
+  const converted = Number(amountInINR) * rate
+  // Use appropriate decimal places: currencies like JPY/CNY don't use decimals
+  const decimals = ['¥'].includes(currencySymbol) ? 0 : 2
+  return converted.toLocaleString('en-IN', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })
+}
+
 export default function Services({ session, profile }) {
+  const { t } = useTranslation()
   const userIds = profile?.teamUserIds || [session.user.id]
   const [services, setServices] = useState([])
   const [loading, setLoading] = useState(true)
@@ -352,11 +380,11 @@ export default function Services({ session, profile }) {
     <div className="services-page" style={{ maxWidth: '100%', overflowX: 'hidden' }}>
       <div className="page-header">
         <div>
-          <h1 className="page-title"><Package size={28} style={{ color: '#f37a23', marginRight: 12, verticalAlign: 'bottom' }} />Master Services Catalog</h1>
-          <p className="page-subtitle">Define and manage the services your business offers to customers.</p>
+          <h1 className="page-title"><Package size={28} style={{ color: '#f37a23', marginRight: 12, verticalAlign: 'bottom' }} />{t('modules.services.title')}</h1>
+          <p className="page-subtitle">{t('modules.services.subtitle')}</p>
         </div>
         <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-          <Plus size={18} /> Add New Service
+          <Plus size={18} /> {t('modules.services.addNewService')}
         </button>
       </div>
 
@@ -364,7 +392,7 @@ export default function Services({ session, profile }) {
           <LocalSearch 
             data={services} 
             setResults={(res) => {}} // LocalSearch usually handles internal state but let's assume it works
-            placeholder="Search services by name or description..." 
+            placeholder={t('modules.services.searchPlaceholder')} 
           />
       </div>
 
@@ -402,7 +430,7 @@ export default function Services({ session, profile }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 16 }}>
                   <div>
                     <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', marginBottom: 4 }}>Standard Price</div>
-                    <div style={{ fontSize: 20, fontWeight: 900, color: '#0f172a' }}>{profile?.currency || '$'}{Number(svc.price).toLocaleString()}</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: '#0f172a' }}>{profile?.currency || '₹'}{convertPrice(svc.price, profile?.currency || '₹')}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', marginBottom: 4 }}>Reminder Cycle</div>

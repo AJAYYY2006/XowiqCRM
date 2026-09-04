@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 import { Trash2, Edit2, Calendar, User, Tag, Link2, CheckCircle2, Clock, PlayCircle, AlertCircle, CheckCircle, Settings, Save } from 'lucide-react'
@@ -49,6 +50,7 @@ function renderCustomFieldInput(config, value, onChange) {
 }
 
 export default function Tasks({ session, profile }) {
+  const { t } = useTranslation()
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -538,15 +540,15 @@ export default function Tasks({ session, profile }) {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">{isB2C ? 'Antigravity B2C Tasks' : 'Tasks'}</h1>
-          <p className="page-subtitle">{isB2C ? 'Automated engagement tracking and customer follow-ups.' : 'Track follow-ups, meetings, and project tasks.'}</p>
+          <h1 className="page-title">{isB2C ? t('modules.tasks.titleB2C') : t('modules.tasks.title')}</h1>
+          <p className="page-subtitle">{isB2C ? t('modules.tasks.subtitleB2C') : t('modules.tasks.subtitle')}</p>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setIsFieldBuilderOpen(true)}>
-            <Settings size={14} /> Edit fields
+            <Settings size={14} /> {t('modules.tasks.editFields')}
           </button>
           <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-            <span style={{ fontSize: 18 }}>+</span> Create Task
+            <span style={{ fontSize: 18 }}>+</span> {t('modules.tasks.createTask')}
           </button>
         </div>
       </div>
@@ -564,7 +566,7 @@ export default function Tasks({ session, profile }) {
                 cursor: 'pointer', transition: 'all 0.2s'
               }}
             >
-              Active Tasks ({tasks.filter(t => t.status !== 'Completed').length})
+              {t('modules.tasks.activeTasks')} ({tasks.filter(t => t.status !== 'Completed').length})
             </button>
             <button 
               onClick={() => setViewMode('history')}
@@ -576,7 +578,7 @@ export default function Tasks({ session, profile }) {
                 cursor: 'pointer', transition: 'all 0.2s'
               }}
             >
-              Task History ({tasks.filter(t => t.status === 'Completed').length})
+              {t('modules.tasks.taskHistory')} ({tasks.filter(t => t.status === 'Completed').length})
             </button>
           </div>
           <div style={{ marginLeft: 'auto', paddingBottom: 12 }}>
@@ -584,7 +586,7 @@ export default function Tasks({ session, profile }) {
               data={tasks}
               searchKeys={['title', 'task_type', 'owner']}
               onSelect={(item) => handleOpenModal(item)}
-              placeholder="Search tasks..."
+              placeholder={t('modules.tasks.searchPlaceholder')}
               renderItem={(item) => (
                 <>
                   <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{item.title}</div>

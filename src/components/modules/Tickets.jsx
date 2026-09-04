@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 import { Trash2, Edit2, Settings, Save } from 'lucide-react'
@@ -37,6 +38,7 @@ function renderCustomFieldInput(config, value, onChange) {
 }
 
 export default function Tickets({ session, profile }) {
+  const { t } = useTranslation()
   const [tickets, setTickets] = useState([])
   const [contacts, setContacts] = useState([])
   const [accounts, setAccounts] = useState([])
@@ -695,27 +697,27 @@ export default function Tickets({ session, profile }) {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Support Tickets</h1>
-          <p className="page-subtitle">Track and resolve customer issues.</p>
+          <h1 className="page-title">{t('modules.tickets.title')}</h1>
+          <p className="page-subtitle">{t('modules.tickets.subtitle')}</p>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setIsFieldBuilderOpen(true)}>
-            <Settings size={14} /> Edit fields
+            <Settings size={14} /> {t('modules.tickets.editFields')}
           </button>
           <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-            <span style={{ fontSize: 18 }}>+</span> Create Ticket
+            <span style={{ fontSize: 18 }}>+</span> {t('modules.tickets.createTicket')}
           </button>
         </div>
       </div>
 
       <div className="table-container">
         <div className="table-header">
-          <h2 className="table-title">All Tickets ({tickets.length})</h2>
+          <h2 className="table-title">{t('modules.tickets.allTickets')} ({tickets.length})</h2>
           <LocalSearch 
              data={tickets} 
              searchKeys={['subject', 'ticket_no']} 
              onSelect={(item) => handleSelectTicket(item)} 
-             placeholder="Search tickets..." 
+             placeholder={t('modules.tickets.searchPlaceholder')} 
              renderItem={(item) => (
                <>
                  <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{item.subject}</div>

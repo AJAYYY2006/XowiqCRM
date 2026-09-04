@@ -7,21 +7,12 @@ import LandingPage from './pages/LandingPage'
 import Login from './pages/Login'
 import SignUp from './pages/SignUp'
 import Dashboard from './pages/Dashboard'
-import AdminDashboard from './pages/AdminDashboard'
 
 function ProtectedRoute({ session, children }) {
   if (!session) return <Navigate to="/login" replace />
   return children
 }
 
-function AdminRoute({ session, children }) {
-  if (!session) return <Navigate to="/login" replace />
-  // Role comes from user_metadata — set at login time, always available immediately
-  const role = (session.user.user_metadata?.role || 'user').toLowerCase()
-  const isAdmin = ['admin', 'administrator'].includes(role)
-  if (!isAdmin) return <Navigate to="/dashboard" replace />
-  return children
-}
 
 export default function App() {
   const { t } = useTranslation()
@@ -44,6 +35,15 @@ export default function App() {
   }
 
   useEffect(() => {
+    // One-time force sign-out to migrate users to the unified dashboard
+    if (!localStorage.getItem('xowiq_unified_dashboard_migration')) {
+      supabase.auth.signOut().then(() => {
+        localStorage.setItem('xowiq_unified_dashboard_migration', 'done');
+        window.location.href = '/login';
+      });
+      return;
+    }
+
     // Always resolve loading — never hang
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
@@ -75,10 +75,7 @@ export default function App() {
     )
   }
 
-  // Redirect destination based on role in user_metadata (always available after login)
-  const role = (session?.user?.user_metadata?.role || 'user').toLowerCase()
-  const isAdmin = ['admin', 'administrator'].includes(role)
-  const loggedInRedirect = isAdmin ? '/admin' : '/dashboard'
+  const loggedInRedirect = '/dashboard'
 
   return (
     <BrowserRouter>
@@ -98,23 +95,12 @@ export default function App() {
         <Route path="/login" element={session ? <Navigate to={loggedInRedirect} replace /> : <Login />} />
         <Route path="/signup" element={session ? <Navigate to={loggedInRedirect} replace /> : <SignUp />} />
 
-        {/* Regular user CRM */}
         <Route
           path="/dashboard/*"
           element={
             <ProtectedRoute session={session}>
               <Dashboard session={session} />
             </ProtectedRoute>
-          }
-        />
-
-        {/* Admin-only dashboard */}
-        <Route
-          path="/admin/*"
-          element={
-            <AdminRoute session={session}>
-              <AdminDashboard session={session} />
-            </AdminRoute>
           }
         />
 

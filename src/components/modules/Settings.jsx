@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
@@ -51,49 +51,49 @@ const SECTIONS = [
   {
     key: 'about',
     icon: <Building2 size={26} />,
-    title: 'About My Business',
+    title: 'Business info',
     desc: 'Business name, logo, address and tax details.',
     color: '#f97316',
   },
   {
     key: 'money',
     icon: <DollarSign size={26} />,
-    title: 'Money Settings',
+    title: 'Currency settings',
     desc: 'Currency, tax rate and invoice payment due days.',
     color: '#10b981',
   },
   {
     key: 'language',
     icon: <Globe size={26} />,
-    title: 'Language & Format',
+    title: 'Languages',
     desc: 'Display language, date and number formats.',
     color: '#3b82f6',
   },
   {
     key: 'team',
     icon: <Users size={26} />,
-    title: 'My Team',
+    title: 'Team details',
     desc: 'Add team members and manage their roles.',
     color: '#8b5cf6',
   },
   {
     key: 'notifications',
     icon: <Bell size={26} />,
-    title: 'How I Get Notified',
+    title: 'Notifications',
     desc: 'WhatsApp, SMS and email notification preferences.',
     color: '#ec4899',
   },
   {
     key: 'pipeline',
     icon: <ListChecks size={26} />,
-    title: 'My Sales Steps',
+    title: 'Pipeline settings',
     desc: 'Rename your deals pipeline stages to match how you work.',
     color: '#f59e0b',
   },
   {
     key: 'backup',
     icon: <Shield size={26} />,
-    title: 'Backup & Safety',
+    title: 'Security',
     desc: 'Auto-backup and extra login security.',
     color: '#64748b',
   },
@@ -103,8 +103,60 @@ const SECTIONS = [
 // MAIN COMPONENT
 // ════════════════════════════════════════════════════════════════════════════
 export default function SettingsPage({ session, profile }) {
-  const { i18n } = useTranslation()
+  const { i18n, t } = useTranslation()
   const [activeSection, setActiveSection] = useState(null)
+
+  const SECTIONS = [
+    {
+      key: 'about',
+      icon: <Building2 size={26} />,
+      title: t('settings.sections.about.title'),
+      desc: t('settings.sections.about.desc'),
+      color: '#f97316',
+    },
+    {
+      key: 'money',
+      icon: <DollarSign size={26} />,
+      title: t('settings.sections.money.title'),
+      desc: t('settings.sections.money.desc'),
+      color: '#10b981',
+    },
+    {
+      key: 'language',
+      icon: <Globe size={26} />,
+      title: t('settings.sections.language.title'),
+      desc: t('settings.sections.language.desc'),
+      color: '#3b82f6',
+    },
+    {
+      key: 'team',
+      icon: <Users size={26} />,
+      title: t('settings.sections.team.title'),
+      desc: t('settings.sections.team.desc'),
+      color: '#8b5cf6',
+    },
+    {
+      key: 'notifications',
+      icon: <Bell size={26} />,
+      title: t('settings.sections.notifications.title'),
+      desc: t('settings.sections.notifications.desc'),
+      color: '#ec4899',
+    },
+    {
+      key: 'pipeline',
+      icon: <ListChecks size={26} />,
+      title: t('settings.sections.pipeline.title'),
+      desc: t('settings.sections.pipeline.desc'),
+      color: '#f59e0b',
+    },
+    {
+      key: 'backup',
+      icon: <Shield size={26} />,
+      title: t('settings.sections.backup.title'),
+      desc: t('settings.sections.backup.desc'),
+      color: '#64748b',
+    },
+  ]
 
   const isAdmin = ['admin', 'administrator'].includes(
     (session?.user?.user_metadata?.role || profile?.role || '').toLowerCase()
@@ -138,9 +190,9 @@ export default function SettingsPage({ session, profile }) {
               size={24}
               style={{ display: 'inline', marginRight: 8, verticalAlign: 'middle' }}
             />
-            Settings
+            {t('settings.title')}
           </h1>
-          <p className="page-subtitle">Tap a section below to configure it.</p>
+          <p className="page-subtitle">{t('settings.subtitle')}</p>
         </div>
       </div>
 
@@ -235,7 +287,8 @@ export default function SettingsPage({ session, profile }) {
 // ════════════════════════════════════════════════════════════════════════════
 // REUSABLE SECTION CARD WRAPPER
 // ════════════════════════════════════════════════════════════════════════════
-function SectionCard({ onBack, icon, color, title, desc, children }) {
+function SectionCard({ onBack, icon, color, title, desc, children, backLabel }) {
+  const { t } = useTranslation()
   return (
     <div className="anim-fade-in" style={{ maxWidth: 620 }}>
       {/* Breadcrumb / back row */}
@@ -273,7 +326,7 @@ function SectionCard({ onBack, icon, color, title, desc, children }) {
           }}
         >
           <ArrowLeft size={14} />
-          Back to Settings
+          {t('settings.backToSettings')}
         </button>
         <span style={{ fontSize: 13, color: '#9ca3af' }}>/ {title}</span>
       </div>
@@ -329,6 +382,7 @@ function SectionCard({ onBack, icon, color, title, desc, children }) {
 // 1. ABOUT MY BUSINESS
 // ════════════════════════════════════════════════════════════════════════════
 function AboutSection({ session, profile, onBack }) {
+  const { t } = useTranslation()
   const [bizName, setBizName] = useState(
     profile?.business_name || lsGet('biz_name', '')
   )
@@ -341,15 +395,36 @@ function AboutSection({ session, profile, onBack }) {
   const [logoUrl, setLogoUrl] = useState(
     profile?.business_logo_url || lsGet('biz_logo', '')
   )
+  const [logoFileName, setLogoFileName] = useState(
+    (profile?.business_logo_url || lsGet('biz_logo', ''))?.startsWith('data:image') ? 'Saved Image' : ''
+  )
   const [saving, setSaving] = useState(false)
+  const fileInputRef = useRef(null)
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      toast.error(t('settings.about.imageOnly'))
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      setLogoUrl(event.target.result)
+      setLogoFileName(file.name)
+    }
+    reader.readAsDataURL(file)
+  }
 
   const validate = () => {
     if (!bizName.trim()) {
-      toast.error('Business name is required')
+      toast.error(t('settings.about.bizNameRequired'))
       return false
     }
     if (gstId && !/^[A-Za-z0-9]{1,15}$/.test(gstId)) {
-      toast.error('GST/Tax ID must be up to 15 alphanumeric characters')
+      toast.error(t('settings.about.gstError'))
       return false
     }
     return true
@@ -358,7 +433,7 @@ function AboutSection({ session, profile, onBack }) {
   const handleSave = async () => {
     if (!validate()) return
     setSaving(true)
-    const tid = toast.loading('Saving business info…')
+    const tid = toast.loading(t('settings.about.saving'))
 
     // Always persist to localStorage as a reliable fallback
     lsSet('biz_name', bizName.trim())
@@ -379,9 +454,9 @@ function AboutSection({ session, profile, onBack }) {
 
     if (error) {
       // Column doesn't exist yet — localStorage save is enough for now
-      toast.success('Business info saved!', { id: tid })
+      toast.success(t('settings.about.savedSuccess'), { id: tid })
     } else {
-      toast.success('Business info saved!', { id: tid })
+      toast.success(t('settings.about.savedSuccess'), { id: tid })
     }
     setSaving(false)
   }
@@ -391,13 +466,13 @@ function AboutSection({ session, profile, onBack }) {
       onBack={onBack}
       icon={<Building2 size={22} />}
       color="#f97316"
-      title="About My Business"
-      desc="This information appears on every invoice, quote, and customer-facing document."
+      title={t('settings.about.title')}
+      desc={t('settings.about.desc')}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* Business Name */}
         <div className="form-group">
-          <label className="form-label">Business Name</label>
+          <label className="form-label">{t('settings.about.businessName')}</label>
           <input
             className="form-input"
             type="text"
@@ -409,30 +484,73 @@ function AboutSection({ session, profile, onBack }) {
 
         {/* Logo */}
         <div className="form-group">
-          <label className="form-label">Business Logo</label>
+          <label className="form-label">{t('settings.about.businessLogo')}</label>
           <div style={{ display: 'flex', gap: 8 }}>
             <input
               className="form-input"
               type="text"
-              placeholder="Paste your logo image URL here"
-              value={logoUrl}
-              onChange={(e) => setLogoUrl(e.target.value)}
+              placeholder={t('settings.about.logoPlaceholder')}
+              value={logoFileName || logoUrl}
+              onChange={(e) => {
+                if (logoFileName) {
+                  setLogoFileName('')
+                  setLogoUrl('')
+                } else {
+                  setLogoUrl(e.target.value)
+                }
+              }}
               style={{ flex: 1 }}
             />
             <button
               className="btn btn-secondary"
               type="button"
+              onClick={() => fileInputRef.current?.click()}
               style={{
                 flexShrink: 0,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
                 fontSize: 13,
+                ...(logoFileName ? { background: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0' } : {})
               }}
             >
-              <Upload size={13} />
-              Upload
+              {logoFileName ? <Check size={13} /> : <Upload size={13} />}
+              {logoFileName ? t('settings.about.uploaded') : t('settings.about.upload')}
             </button>
+            {logoUrl && (
+              <button
+                type="button"
+                onClick={() => {
+                  setLogoUrl('')
+                  setLogoFileName('')
+                  if (fileInputRef.current) fileInputRef.current.value = ''
+                }}
+                style={{
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 13,
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  color: '#ef4444',
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Trash2 size={13} />
+                {t('settings.about.remove')}
+              </button>
+            )}
+            <input 
+              type="file" 
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept="image/*"
+              style={{ display: 'none' }} 
+            />
           </div>
           {logoUrl && (
             <img
@@ -456,11 +574,11 @@ function AboutSection({ session, profile, onBack }) {
 
         {/* Address */}
         <div className="form-group">
-          <label className="form-label">Business Address</label>
+          <label className="form-label">{t('settings.about.businessAddress')}</label>
           <textarea
             className="form-input"
             rows={3}
-            placeholder="Street, City, State, PIN code"
+            placeholder={t('settings.about.addressPlaceholder')}
             value={bizAddress}
             onChange={(e) => setBizAddress(e.target.value)}
             style={{ resize: 'vertical' }}
@@ -469,18 +587,18 @@ function AboutSection({ session, profile, onBack }) {
 
         {/* GST */}
         <div className="form-group">
-          <label className="form-label">GST / Tax ID</label>
+          <label className="form-label">{t('settings.about.gstId')}</label>
           <input
             className="form-input"
             type="text"
-            placeholder="Up to 15 alphanumeric characters"
+            placeholder={t('settings.about.gstPlaceholder')}
             value={gstId}
             onChange={(e) => setGstId(e.target.value.toUpperCase())}
             maxLength={15}
             style={{ maxWidth: 280 }}
           />
           <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 5 }}>
-            Printed on your invoices and quotes.
+            {t('settings.about.gstNote')}
           </p>
         </div>
 
@@ -490,7 +608,7 @@ function AboutSection({ session, profile, onBack }) {
           className="btn btn-primary"
           style={{ alignSelf: 'flex-start', opacity: saving ? 0.7 : 1 }}
         >
-          {saving ? 'Saving…' : 'Save Business Info'}
+          {saving ? t('settings.about.saving') : t('settings.about.saveBtn')}
         </button>
       </div>
     </SectionCard>
@@ -501,6 +619,7 @@ function AboutSection({ session, profile, onBack }) {
 // 2. MONEY SETTINGS
 // ════════════════════════════════════════════════════════════════════════════
 function MoneySection({ session, profile, onBack }) {
+  const { t } = useTranslation()
   const [currency, setCurrency] = useState(profile?.currency || '$')
   const [taxRate, setTaxRate] = useState(
     String(profile?.tax_rate ?? lsGet('tax_rate', 18))
@@ -508,17 +627,25 @@ function MoneySection({ session, profile, onBack }) {
   const [dueDays, setDueDays] = useState(
     String(profile?.payment_due_days ?? lsGet('payment_due_days', 15))
   )
+  const [revenueGoal, setRevenueGoal] = useState(
+    String(profile?.revenue_goal ?? lsGet('revenue_goal', 10000))
+  )
   const [saving, setSaving] = useState(false)
 
   const validate = () => {
     const tax = parseFloat(taxRate)
     const days = parseInt(dueDays, 10)
+    const goal = parseFloat(revenueGoal)
     if (isNaN(tax) || tax < 0 || tax > 100) {
-      toast.error('Tax rate must be between 0 and 100')
+      toast.error(t('settings.money.taxRateError'))
       return false
     }
     if (isNaN(days) || days < 1 || days > 365) {
-      toast.error('Payment due days must be between 1 and 365')
+      toast.error(t('settings.money.dueDaysError'))
+      return false
+    }
+    if (isNaN(goal) || goal <= 0) {
+      toast.error(t('settings.money.revenueGoalError', 'Please enter a valid revenue goal greater than 0.'))
       return false
     }
     return true
@@ -527,26 +654,34 @@ function MoneySection({ session, profile, onBack }) {
   const handleSave = async () => {
     if (!validate()) return
     setSaving(true)
-    const tid = toast.loading('Updating money settings…')
+    const tid = toast.loading(t('settings.money.savingMsg'))
 
     // Save to localStorage always
+    lsSet('currency', currency)
     lsSet('tax_rate', parseFloat(taxRate))
     lsSet('payment_due_days', parseInt(dueDays, 10))
+    lsSet('revenue_goal', parseFloat(revenueGoal))
 
-    // Save to Supabase — currency already works this way in original code
+    // Save currency (this column definitely exists)
     const { error } = await supabase
       .from('profiles')
+      .update({ currency })
+      .eq('id', session.user.id)
+
+    // Attempt to save new columns (might silently fail if migration not run yet, but localStorage handles it locally)
+    await supabase
+      .from('profiles')
       .update({
-        currency,
         tax_rate: parseFloat(taxRate),
         payment_due_days: parseInt(dueDays, 10),
+        revenue_goal: parseFloat(revenueGoal),
       })
       .eq('id', session.user.id)
 
     if (error) {
-      toast.success('Money settings saved!', { id: tid })
+      toast.success(t('settings.money.savedSuccess'), { id: tid })
     } else {
-      toast.success('Money settings saved!', { id: tid })
+      toast.success(t('settings.money.savedSuccess'), { id: tid })
     }
 
     setSaving(false)
@@ -559,13 +694,13 @@ function MoneySection({ session, profile, onBack }) {
       onBack={onBack}
       icon={<DollarSign size={22} />}
       color="#10b981"
-      title="Money Settings"
-      desc="Set your default currency, tax rate, and how long customers have to pay."
+      title={t('settings.money.title')}
+      desc={t('settings.money.desc')}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
         {/* Currency */}
         <div className="form-group">
-          <label className="form-label">Global Currency Symbol</label>
+          <label className="form-label">{t('settings.money.currencyLabel')}</label>
           <select
             className="form-input"
             style={{ maxWidth: 300, ...dropStyle }}
@@ -579,7 +714,32 @@ function MoneySection({ session, profile, onBack }) {
             <option value="¥">¥ — Japanese Yen / Chinese Yuan</option>
           </select>
           <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 5 }}>
-            Affects all dashboard tiles, quotes, and PDF invoices.
+            {t('settings.money.currencyNote')}
+          </p>
+        </div>
+
+        <div style={{ borderTop: '1px solid #f1f5f9' }} />
+
+        {/* Monthly Revenue Goal */}
+        <div className="form-group">
+          <label className="form-label">{t('settings.money.revenueGoal', 'Monthly Revenue Goal')}</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              className="form-input"
+              type="number"
+              min={1}
+              value={revenueGoal}
+              onChange={(e) => setRevenueGoal(e.target.value)}
+              style={{ maxWidth: 200 }}
+            />
+            <span
+              style={{ fontSize: 14, color: '#4b5563', fontWeight: 600 }}
+            >
+              {currency}
+            </span>
+          </div>
+          <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 5 }}>
+            {t('settings.money.revenueGoalNote', 'Target sales/invoiced revenue for the dashboard goal meter.')}
           </p>
         </div>
 
@@ -587,7 +747,7 @@ function MoneySection({ session, profile, onBack }) {
 
         {/* Tax Rate */}
         <div className="form-group">
-          <label className="form-label">Tax Rate / GST %</label>
+          <label className="form-label">{t('settings.money.taxRate')}</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input
               className="form-input"
@@ -606,13 +766,13 @@ function MoneySection({ session, profile, onBack }) {
             </span>
           </div>
           <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 5 }}>
-            Automatically applied to invoice line items.
+            {t('settings.money.taxNote')}
           </p>
         </div>
 
         {/* Due Days */}
         <div className="form-group">
-          <label className="form-label">Payment Due Days</label>
+          <label className="form-label">{t('settings.money.dueDays')}</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input
               className="form-input"
@@ -626,11 +786,11 @@ function MoneySection({ session, profile, onBack }) {
             <span
               style={{ fontSize: 14, color: '#4b5563', fontWeight: 600 }}
             >
-              days
+              {t('settings.money.daysUnit')}
             </span>
           </div>
           <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 5 }}>
-            Sets the due date on new invoices and triggers overdue reminders.
+            {t('settings.money.dueDaysNote')}
           </p>
         </div>
 
@@ -640,7 +800,7 @@ function MoneySection({ session, profile, onBack }) {
           className="btn btn-primary"
           style={{ alignSelf: 'flex-start', opacity: saving ? 0.7 : 1 }}
         >
-          {saving ? 'Saving…' : 'Save Money Settings'}
+          {saving ? t('settings.money.saving') : t('settings.money.saveBtn')}
         </button>
       </div>
     </SectionCard>
@@ -650,9 +810,53 @@ function MoneySection({ session, profile, onBack }) {
 // ════════════════════════════════════════════════════════════════════════════
 // 3. LANGUAGE & FORMAT
 // ════════════════════════════════════════════════════════════════════════════
+// Moved ToggleRow outside to prevent remounting issues on re-render
+const ToggleRow = ({ label, desc, optA, optB, value, onChange }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <label className="form-label">{label}</label>
+    <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 6px' }}>{desc}</p>
+    <div
+      style={{
+        display: 'flex',
+        background: '#f1f5f9',
+        borderRadius: 10,
+        padding: 4,
+        maxWidth: 400,
+      }}
+    >
+      {[optA, optB].map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          style={{
+            flex: 1,
+            padding: '8px 10px',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+            background: value === opt.value ? '#fff' : 'transparent',
+            color: value === opt.value ? 'var(--accent)' : '#6b7280',
+            boxShadow:
+              value === opt.value
+                ? '0 1px 4px rgba(0,0,0,0.1)'
+                : 'none',
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  </div>
+)
+
 function LanguageSection({ session, profile, onBack, i18n }) {
+  const { t } = useTranslation()
   const [selectedLang, setSelectedLang] = useState(
-    () => localStorage.getItem('i18nextLng') || i18n.language || 'en'
+    () => localStorage.getItem('i18nextLng') || i18n?.language || 'en'
   )
   const [dateFormat, setDateFormat] = useState(lsGet('date_format', 'DD/MM/YYYY'))
   const [numberFormat, setNumberFormat] = useState(lsGet('number_format', 'indian'))
@@ -666,66 +870,26 @@ function LanguageSection({ session, profile, onBack, i18n }) {
   // Same logic as original — immediate language switch + localStorage
   const handleLanguageChange = (code) => {
     setSelectedLang(code)
-    i18n.changeLanguage(code)
+    if (i18n && i18n.changeLanguage) {
+      i18n.changeLanguage(code)
+    }
     localStorage.setItem('i18nextLng', code)
-    toast.success('Language updated!')
+    toast.success(t('settings.language.languageUpdated'))
   }
 
   const handleFormatSave = () => {
     lsSet('date_format', dateFormat)
     lsSet('number_format', numberFormat)
-    toast.success('Format settings saved!')
+    toast.success(t('settings.language.formatSaved'))
   }
-
-  // Inline toggle control
-  const ToggleRow = ({ label, desc, optA, optB, value, onChange }) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <label className="form-label">{label}</label>
-      <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 6px' }}>{desc}</p>
-      <div
-        style={{
-          display: 'flex',
-          background: '#f1f5f9',
-          borderRadius: 10,
-          padding: 4,
-          maxWidth: 400,
-        }}
-      >
-        {[optA, optB].map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => onChange(opt.value)}
-            style={{
-              flex: 1,
-              padding: '8px 10px',
-              borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 600,
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-              background: value === opt.value ? '#fff' : 'transparent',
-              color: value === opt.value ? 'var(--accent)' : '#6b7280',
-              boxShadow:
-                value === opt.value
-                  ? '0 1px 4px rgba(0,0,0,0.1)'
-                  : 'none',
-            }}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
 
   return (
     <SectionCard
       onBack={onBack}
       icon={<Globe size={22} />}
       color="#3b82f6"
-      title="Language & Format"
-      desc="Changes apply immediately across the entire CRM."
+      title={t('settings.language.title')}
+      desc={t('settings.language.desc')}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {/* Language picker — same UI as original */}
@@ -740,7 +904,7 @@ function LanguageSection({ session, profile, onBack, i18n }) {
             }}
           >
             <Globe size={14} />
-            Display Language
+            {t('settings.language.displayLanguage')}
           </label>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {languages.map((lang) => (
@@ -792,7 +956,7 @@ function LanguageSection({ session, profile, onBack, i18n }) {
             ))}
           </div>
           <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>
-            Changes apply immediately across the entire CRM.
+            {t('settings.language.changesNote')}
           </p>
         </div>
 
@@ -800,8 +964,8 @@ function LanguageSection({ session, profile, onBack, i18n }) {
 
         {/* Date format */}
         <ToggleRow
-          label="Date Format"
-          desc="How dates appear on invoices and throughout the CRM."
+          label={t('settings.language.dateFormat')}
+          desc={t('settings.language.dateFormatDesc')}
           optA={{ value: 'DD/MM/YYYY', label: 'DD/MM/YYYY' }}
           optB={{ value: 'MM/DD/YYYY', label: 'MM/DD/YYYY' }}
           value={dateFormat}
@@ -810,10 +974,10 @@ function LanguageSection({ session, profile, onBack, i18n }) {
 
         {/* Number format */}
         <ToggleRow
-          label="Number Format"
-          desc="How large numbers are grouped — Indian style (1,00,000) or international (100,000)."
-          optA={{ value: 'indian', label: 'Indian  1,00,000' }}
-          optB={{ value: 'international', label: 'International  100,000' }}
+          label={t('settings.language.numberFormat')}
+          desc={t('settings.language.numberFormatDesc')}
+          optA={{ value: 'indian', label: t('settings.language.indian') }}
+          optB={{ value: 'international', label: t('settings.language.international') }}
           value={numberFormat}
           onChange={setNumberFormat}
         />
@@ -823,7 +987,7 @@ function LanguageSection({ session, profile, onBack, i18n }) {
           className="btn btn-primary"
           style={{ alignSelf: 'flex-start' }}
         >
-          Save Format Settings
+          {t('settings.language.saveFormatBtn')}
         </button>
       </div>
     </SectionCard>
@@ -834,80 +998,102 @@ function LanguageSection({ session, profile, onBack, i18n }) {
 // 4. MY TEAM
 // ════════════════════════════════════════════════════════════════════════════
 function TeamSection({ session, profile, onBack, isAdmin }) {
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [company, setCompany] = useState('')
-  const [companyType, setCompanyType] = useState('B2B')
-  const [role, setRole] = useState('user')
+  const { t } = useTranslation()
+  const [teamMembers, setTeamMembers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [isAdding, setIsAdding] = useState(false)
   const [creating, setCreating] = useState(false)
 
-  // Role descriptions (plain language, no jargon)
-  const ROLE_INFO = {
-    user: 'Can add leads and contacts, but cannot delete records or manage accounts.',
-    manager:
-      'Can add, edit, and delete records. Cannot create new team members.',
-    admin: 'Full access — can manage accounts, team members, and all settings.',
-  }
+  const BLANK_ADD = { name: '', email: '', password: '', role: 'user', phone: '', address: '', age: '', gender: '', date_of_birth: '', date_of_joining: '' }
+  const [addForm, setAddForm] = useState(BLANK_ADD)
+  const [addPhoto, setAddPhoto] = useState(null)
+  const addPhotoRef = useRef(null)
+
+  const [editingId, setEditingId] = useState(null)
+  const [editForm, setEditForm] = useState({})
+  const [editPhoto, setEditPhoto] = useState(null)
+  const editPhotoRef = useRef(null)
+
+  const ROLE_OPTIONS = [
+    { value: 'user', label: 'User' },
+    { value: 'admin', label: 'Admin' }
+  ]
+  const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say']
 
   const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
 
-  // Same Supabase signUp logic as original handleCreateUser
+  const uploadPhoto = async (file, userId) => {
+    if (!file || !userId) return null
+    const ext = file.name.split('.').pop()
+    const path = `team-photos/${userId}.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (error) return null
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+    return data?.publicUrl || null
+  }
+
+  const fetchTeam = async () => {
+    setLoading(true)
+    try {
+      let ids = []
+      const { data: byAdmin } = await supabase.from('profiles').select('id').eq('created_by_admin_id', session.user.id)
+      if (byAdmin) byAdmin.forEach(t => ids.push(t.id))
+      const { data: byCreator } = await supabase.from('profiles').select('id').eq('created_by', session.user.id)
+      if (byCreator) byCreator.forEach(t => { if (!ids.includes(t.id)) ids.push(t.id) })
+      if (profile?.company_name) {
+        const { data: byCompany } = await supabase.from('profiles').select('id').ilike('company_name', `%${profile.company_name}%`).neq('id', session.user.id)
+        if (byCompany) byCompany.forEach(t => { if (!ids.includes(t.id)) ids.push(t.id) })
+      }
+      if (ids.length > 0) {
+        const { data } = await supabase.from('profiles').select('*').in('id', ids).order('created_at', { ascending: false })
+        setTeamMembers(data || [])
+      } else {
+        setTeamMembers([])
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isAdmin) fetchTeam()
+  }, [isAdmin])
+
   const handleCreate = async (e) => {
     e.preventDefault()
-    if (!name.trim()) {
-      toast.error('Please enter a full name')
-      return
-    }
-    if (!isValidEmail(email)) {
-      toast.error('Please enter a valid email address')
-      return
-    }
-    if (password.length < 6) {
-      toast.error('Password must be at least 6 characters')
-      return
-    }
+    if (!addForm.name.trim()) return toast.error(t('settings.team.nameRequired'))
+    if (!isValidEmail(addForm.email)) return toast.error(t('settings.team.invalidEmail'))
+    if (addForm.password.length < 6) return toast.error(t('settings.team.passwordShort'))
 
     setCreating(true)
-    const tid = toast.loading('Creating team member account…')
+    const tid = toast.loading(t('settings.team.creatingAccount'))
 
     try {
       const { createClient } = await import('@supabase/supabase-js')
       const supabaseUrl = 'https://bmsnbwgwdxqhccqesgkt.supabase.co'
-      const supabaseAnonKey =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtc25id2d3ZHhxaGNjcWVzZ2t0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTExNjksImV4cCI6MjA4OTA4NzE2OX0.IhByvcKXFOL6XwW3UhTig6XMzNrNvpYFhaehq2_DUBU'
-
-      // Secondary client — no session persistence, so current user stays logged in
-      const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: { persistSession: false },
-      })
+      const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtc25id2d3ZHhxaGNjcWVzZ2t0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTExNjksImV4cCI6MjA4OTA4NzE2OX0.IhByvcKXFOL6XwW3UhTig6XMzNrNvpYFhaehq2_DUBU'
+      const tempClient = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } })
 
       const { error } = await tempClient.auth.signUp({
-        email,
-        password,
+        email: addForm.email, password: addForm.password,
         options: {
           data: {
-            name: name.trim(),
-            // NOTE: role is stored in user_metadata here.
-            // Permission enforcement (restricting UI by role) is a follow-up task.
-            role,
-            companyName:
-              company.trim() || profile?.company_name || 'My Company',
-            companyType,
+            name: addForm.name.trim(), role: addForm.role,
+            companyName: profile?.company_name || 'My Company',
+            companyType: profile?.company_type || 'B2B',
+            created_by_admin_id: session.user.id
           },
         },
       })
-
       if (error) throw error
 
-      toast.success(`Account for ${email} created successfully!`, { id: tid })
-      // Reset form
-      setName('')
-      setEmail('')
-      setPassword('')
-      setCompany('')
-      setCompanyType('B2B')
-      setRole('user')
+      toast.success(`Account for ${addForm.email} created. Profile details can be edited once they appear below.`, { id: tid })
+      setAddForm(BLANK_ADD)
+      setAddPhoto(null)
+      setIsAdding(false)
+      setTimeout(fetchTeam, 1500)
     } catch (err) {
       toast.error(err.message || 'Failed to create account', { id: tid })
     } finally {
@@ -915,155 +1101,288 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
     }
   }
 
+  const startEdit = (user) => {
+    setEditingId(user.id)
+    setEditForm({
+      name: user.name || '',
+      email: user.email || '',
+      role: user.role || 'user',
+      phone: user.phone || '',
+      address: user.address || '',
+      age: user.age || '',
+      gender: user.gender || '',
+      date_of_birth: user.date_of_birth || '',
+      date_of_joining: user.date_of_joining || '',
+      photo_url: user.photo_url || '',
+    })
+    setEditPhoto(null)
+  }
+
+  const cancelEdit = () => { setEditingId(null); setEditForm({}); setEditPhoto(null) }
+
+  const saveEdit = async (userId) => {
+    if (!editForm.name.trim()) return toast.error(t('settings.team.nameEmpty'))
+    const tid = toast.loading(t('settings.team.savingChanges'))
+    try {
+      let photo_url = editForm.photo_url || null
+      if (editPhoto) {
+        const uploaded = await uploadPhoto(editPhoto, userId)
+        if (uploaded) photo_url = uploaded
+      }
+
+      const updatePayload = {
+        name: editForm.name,
+        role: editForm.role,
+        phone: editForm.phone || null,
+        address: editForm.address || null,
+        age: editForm.age ? parseInt(editForm.age) : null,
+        gender: editForm.gender || null,
+        date_of_birth: editForm.date_of_birth || null,
+        date_of_joining: editForm.date_of_joining || null,
+        photo_url,
+      }
+
+      const { error } = await supabase.from('profiles').update(updatePayload).eq('id', userId)
+      if (error) throw error
+      toast.success(t('settings.team.memberUpdated'), { id: tid })
+      setEditingId(null)
+      setEditPhoto(null)
+      fetchTeam()
+    } catch (err) {
+      toast.error(err.message, { id: tid })
+    }
+  }
+
+  const handleRemove = async (userId, userName) => {
+    if (!window.confirm(`${t('settings.team.confirmRemove')} ${userName || 'this user'}?`)) return
+    const tid = toast.loading(t('settings.team.removingMember'))
+    try {
+      const { error } = await supabase.from('profiles').delete().eq('id', userId)
+      if (error) throw error
+      toast.success(t('settings.team.memberRemoved'), { id: tid })
+      fetchTeam()
+    } catch (err) {
+      toast.error(err.message, { id: tid })
+    }
+  }
+
+  const fieldStyle = { padding: '7px 10px', margin: 0 }
+  const labelStyle = { fontSize: 11, color: '#64748b', fontWeight: 600, marginBottom: 3, display: 'block' }
+
   return (
     <SectionCard
       onBack={onBack}
       icon={<Users size={22} />}
       color="#8b5cf6"
-      title="My Team"
-      desc="Add team members and choose what they can do in the CRM."
+      title={t('settings.team.title')}
+      desc={t('settings.team.desc')}
     >
       {!isAdmin ? (
-        <div
-          style={{
-            padding: '14px 16px',
-            background: '#fef9c3',
-            borderRadius: 10,
-            fontSize: 13,
-            color: '#92400e',
-          }}
-        >
-          ⚠️ Only admins can add new team members. Contact your admin to get
-          someone added.
+        <div style={{ padding: '14px 16px', background: '#fef9c3', borderRadius: 10, fontSize: 13, color: '#92400e' }}>
+          ⚠️ {t('settings.team.adminOnly')}
         </div>
       ) : (
-        <form
-          onSubmit={handleCreate}
-          style={{ display: 'flex', flexDirection: 'column', gap: 18 }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              marginBottom: 2,
-            }}
-          >
-            <UserPlus size={15} style={{ color: '#8b5cf6' }} />
-            <span
-              style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Add Button */}
+          {!isAdding && (
+            <button
+              onClick={() => setIsAdding(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', background: '#8b5cf6', color: '#fff', borderRadius: 8, fontWeight: 600, border: 'none', cursor: 'pointer', alignSelf: 'flex-start' }}
             >
-              Add a Team Member
-            </span>
-          </div>
+              <UserPlus size={16} /> {t('settings.team.addNewUser')}
+            </button>
+          )}
 
-          <div className="form-group">
-            <label className="form-label">Full Name</label>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Enter full name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
+          {/* Inline Add Form */}
+          {isAdding && (
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h4 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#1e293b' }}>{t('settings.team.addNewUser')}</h4>
+                <button onClick={() => { setIsAdding(false); setAddForm(BLANK_ADD) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                  <X size={18} />
+                </button>
+              </div>
+              <form onSubmit={handleCreate} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                {[
+                  { label: t('settings.team.fullName'), key: 'name', type: 'text' },
+                  { label: t('settings.team.emailAddress'), key: 'email', type: 'email' },
+                  { label: t('settings.team.password'), key: 'password', type: 'password' },
+                  { label: t('settings.team.phoneNumber'), key: 'phone', type: 'tel' },
+                  { label: t('settings.team.dateOfJoining'), key: 'date_of_joining', type: 'date' },
+                  { label: t('settings.team.dateOfBirth'), key: 'date_of_birth', type: 'date' },
+                  { label: t('settings.team.age'), key: 'age', type: 'number' },
+                ].map(f => (
+                  <div key={f.key} className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: 12 }}>{f.label}</label>
+                    <input type={f.type} className="form-input" style={{ padding: '8px 12px' }}
+                      value={addForm[f.key]} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))}
+                      required={f.label.includes('*')} min={f.type === 'number' ? 1 : undefined} />
+                  </div>
+                ))}
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: 12 }}>{t('settings.team.gender')}</label>
+                  <select className="form-input" style={{ padding: '8px 12px', ...dropStyle }} value={addForm.gender} onChange={e => setAddForm(p => ({ ...p, gender: e.target.value }))}>
+                    <option value="">{t('settings.team.selectGender')}</option>
+                    {GENDER_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: 12 }}>{t('settings.team.role')}</label>
+                  <select className="form-input" style={{ padding: '8px 12px', ...dropStyle }} value={addForm.role} onChange={e => setAddForm(p => ({ ...p, role: e.target.value }))}>
+                    {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div className="form-group" style={{ gridColumn: '1 / -1', marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: 12 }}>{t('settings.team.address')}</label>
+                  <input type="text" className="form-input" style={{ padding: '8px 12px' }} value={addForm.address} onChange={e => setAddForm(p => ({ ...p, address: e.target.value }))} />
+                </div>
+                <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+                  <button type="submit" disabled={creating} className="btn btn-primary" style={{ padding: '8px 20px', background: '#8b5cf6', borderColor: '#8b5cf6' }}>
+                    {creating ? t('settings.team.creating') : t('settings.team.createUser')}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
 
-          <div className="form-group">
-            <label className="form-label">
-              Email Address (they will use this to log in)
-            </label>
-            <input
-              type="email"
-              className="form-input"
-              placeholder="Enter email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
+          {/* Team List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <h4 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#334155' }}>{t('settings.team.existingMembers')}</h4>
+            {loading ? (
+              <div style={{ padding: 20, textAlign: 'center', color: '#64748b', fontSize: 14 }}>{t('settings.team.loadingTeam')}</div>
+            ) : teamMembers.length === 0 ? (
+              <div style={{ padding: 20, textAlign: 'center', background: '#f8fafc', borderRadius: 8, color: '#64748b', fontSize: 14 }}>
+                {t('settings.team.noMembers')}
+              </div>
+            ) : (
+              teamMembers.map(user => {
+                const isEditing = editingId === user.id
+                return (
+                  <div key={user.id} style={{ border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff', overflow: 'hidden' }}>
+                    {/* VIEW MODE */}
+                    {!isEditing && (
+                      <div style={{ display: 'flex', gap: 16, padding: 16, alignItems: 'flex-start' }}>
+                        {/* Photo */}
+                        <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#f1f5f9', border: '2px solid #e2e8f0', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: '#94a3b8' }}>
+                          {user.photo_url
+                            ? <img src={user.photo_url} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : (user.name?.[0] || '?').toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <div>
+                              <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 15 }}>{user.name || t('settings.team.unnamed')}</div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <span style={{ padding: '3px 10px', background: user.role === 'admin' ? '#ede9fe' : '#f0fdf4', color: user.role === 'admin' ? '#7c3aed' : '#16a34a', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
+                                {ROLE_OPTIONS.find(r => r.value === user.role)?.label || user.role}
+                              </span>
+                              <button onClick={() => startEdit(user)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b5cf6', padding: 6 }} title={t('settings.team.edit')}><Edit3 size={15} /></button>
+                              <button onClick={() => handleRemove(user.id, user.name)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 6 }} title={t('settings.team.remove')}><Trash2 size={15} /></button>
+                            </div>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '6px 16px', fontSize: 12, color: '#64748b' }}>
+                            {user.email && <div><strong>{t('settings.team.email')}</strong> {user.email}</div>}
+                            {user.phone && <div><strong>{t('settings.team.phone')}</strong> {user.phone}</div>}
+                            {user.gender && <div><strong>{t('settings.team.genderLabel')}</strong> {user.gender}</div>}
+                            {user.age && <div><strong>{t('settings.team.ageLabel')}</strong> {user.age}</div>}
+                            {user.date_of_birth && <div><strong>{t('settings.team.dobLabel')}</strong> {new Date(user.date_of_birth).toLocaleDateString()}</div>}
+                            {user.date_of_joining && <div><strong>{t('settings.team.joinedLabel')}</strong> {new Date(user.date_of_joining).toLocaleDateString()}</div>}
+                            {user.address && <div style={{ gridColumn: '1 / -1' }}><strong>{t('settings.team.addressLabel')}</strong> {user.address}</div>}
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <input
-              type="password"
-              className="form-input"
-              placeholder="Minimum 6 characters"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
+                    {/* EDIT MODE */}
+                    {isEditing && (
+                      <div style={{ padding: 18 }}>
+                        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 16 }}>
+                          {/* Photo edit */}
+                          <div
+                            onClick={() => editPhotoRef.current?.click()}
+                            style={{ width: 70, height: 70, borderRadius: '50%', background: '#f1f5f9', border: '2px dashed #8b5cf6', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 11, color: '#8b5cf6', textAlign: 'center' }}
+                            title={t('settings.team.changePhoto')}
+                          >
+                            {editPhoto
+                              ? <img src={URL.createObjectURL(editPhoto)} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              : editForm.photo_url
+                                ? <img src={editForm.photo_url} alt="current" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                : t('settings.team.photo')}
+                          </div>
+                          <input type="file" accept="image/*" ref={editPhotoRef} style={{ display: 'none' }} onChange={e => setEditPhoto(e.target.files[0] || null)} />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>{t('settings.team.editingPrefix')} {editForm.name}</div>
+                            <div style={{ fontSize: 12, color: '#94a3b8' }}>{t('settings.team.clickPhotoHint')}</div>
+                          </div>
+                        </div>
 
-          <div className="form-group">
-            <label className="form-label">Company Name</label>
-            <input
-              type="text"
-              className="form-input"
-              placeholder={profile?.company_name || 'Company Name'}
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-            />
-          </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                          {[
+                            { label: t('settings.team.fullName'), key: 'name', type: 'text' },
+                            { label: t('settings.team.phoneNumber'), key: 'phone', type: 'tel' },
+                            { label: t('settings.team.age'), key: 'age', type: 'number' },
+                            { label: t('settings.team.dateOfBirth'), key: 'date_of_birth', type: 'date' },
+                            { label: t('settings.team.dateOfJoining'), key: 'date_of_joining', type: 'date' },
+                          ].map(f => (
+                            <div key={f.key}>
+                              <label style={labelStyle}>{f.label}</label>
+                              <input type={f.type} className="form-input" style={fieldStyle}
+                                value={editForm[f.key] || ''}
+                                onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
+                                min={f.type === 'number' ? 1 : undefined} />
+                            </div>
+                          ))}
+                          <div>
+                            <label style={labelStyle}>{t('settings.team.gender')}</label>
+                            <select className="form-input" style={{ ...fieldStyle, ...dropStyle }} value={editForm.gender || ''} onChange={e => setEditForm(p => ({ ...p, gender: e.target.value }))}>
+                              <option value="">{t('settings.team.selectGender')}</option>
+                              {GENDER_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label style={labelStyle}>{t('settings.team.role')}</label>
+                            <select className="form-input" style={{ ...fieldStyle, ...dropStyle }} value={editForm.role} onChange={e => setEditForm(p => ({ ...p, role: e.target.value }))}>
+                              {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label style={labelStyle}>{t('settings.team.emailReadOnly')}</label>
+                            <input type="email" className="form-input" style={{ ...fieldStyle, opacity: 0.6 }} value={editForm.email} disabled />
+                          </div>
+                          <div style={{ gridColumn: '1 / -1' }}>
+                            <label style={labelStyle}>{t('settings.team.address')}</label>
+                            <input type="text" className="form-input" style={fieldStyle} value={editForm.address || ''} onChange={e => setEditForm(p => ({ ...p, address: e.target.value }))} />
+                          </div>
+                        </div>
 
-          <div className="form-group">
-            <label className="form-label">Company Type</label>
-            <select
-              className="form-input"
-              value={companyType}
-              onChange={(e) => setCompanyType(e.target.value)}
-              style={dropStyle}
-            >
-              <option value="B2B">B2B (Business to Business)</option>
-              <option value="B2C">B2C (Business to Consumer)</option>
-            </select>
+                        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                          <button onClick={() => saveEdit(user.id)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#10b981', border: 'none', borderRadius: 7, color: '#fff', cursor: 'pointer', padding: '8px 16px', fontWeight: 600 }}>
+                            <Check size={15} /> {t('settings.team.saveChanges')}
+                          </button>
+                          <button onClick={cancelEdit} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#e2e8f0', border: 'none', borderRadius: 7, color: '#475569', cursor: 'pointer', padding: '8px 14px', fontWeight: 600 }}>
+                            <X size={15} /> {t('settings.team.cancel')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            )}
           </div>
-
-          <div className="form-group">
-            <label className="form-label">Role</label>
-            <select
-              className="form-input"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              style={dropStyle}
-            >
-              <option value="user">Staff</option>
-              <option value="manager">Manager</option>
-              <option value="admin">Owner / Admin</option>
-            </select>
-            <p
-              style={{
-                fontSize: 12,
-                color: '#9ca3af',
-                marginTop: 6,
-                fontStyle: 'italic',
-              }}
-            >
-              {ROLE_INFO[role]}
-            </p>
-          </div>
-
-          <button
-            type="submit"
-            disabled={creating}
-            className="btn btn-primary"
-            style={{
-              alignSelf: 'flex-start',
-              opacity: creating ? 0.7 : 1,
-            }}
-          >
-            {creating ? 'Creating…' : 'Add Team Member'}
-          </button>
-        </form>
+        </div>
       )}
     </SectionCard>
   )
 }
 
+
 // ════════════════════════════════════════════════════════════════════════════
 // 5. HOW I GET NOTIFIED
 // ════════════════════════════════════════════════════════════════════════════
 function NotificationsSection({ session, profile, onBack }) {
+  const { t } = useTranslation()
   const [wa, setWa] = useState(lsGet('notif_whatsapp', false))
   const [sms, setSms] = useState(lsGet('notif_sms', true))
   const [emailNotif, setEmailNotif] = useState(lsGet('notif_email', true))
@@ -1072,7 +1391,7 @@ function NotificationsSection({ session, profile, onBack }) {
     lsSet('notif_whatsapp', wa)
     lsSet('notif_sms', sms)
     lsSet('notif_email', emailNotif)
-    toast.success('Notification settings saved!')
+    toast.success(t('settings.notifications.savedSuccess'))
   }
 
   const ToggleSwitch = ({ label, desc, value, onChange }) => (
@@ -1138,25 +1457,25 @@ function NotificationsSection({ session, profile, onBack }) {
       onBack={onBack}
       icon={<Bell size={22} />}
       color="#ec4899"
-      title="How I Get Notified"
-      desc="Choose how you want to hear from the CRM when something needs your attention."
+      title={t('settings.notifications.title')}
+      desc={t('settings.notifications.desc')}
     >
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <ToggleSwitch
-          label="WhatsApp"
-          desc="Get a WhatsApp message when a new lead comes in or an invoice is overdue."
+          label={t('settings.notifications.whatsapp')}
+          desc={t('settings.notifications.whatsappDesc')}
           value={wa}
           onChange={setWa}
         />
         <ToggleSwitch
-          label="SMS"
-          desc="Get a text message when a customer hasn't paid in 7 days."
+          label={t('settings.notifications.sms')}
+          desc={t('settings.notifications.smsDesc')}
           value={sms}
           onChange={setSms}
         />
         <ToggleSwitch
-          label="Email"
-          desc="Get an email when a deal is updated or a task is assigned to you."
+          label={t('settings.notifications.email')}
+          desc={t('settings.notifications.emailDesc')}
           value={emailNotif}
           onChange={setEmailNotif}
         />
@@ -1165,7 +1484,7 @@ function NotificationsSection({ session, profile, onBack }) {
           className="btn btn-primary"
           style={{ alignSelf: 'flex-start', marginTop: 22 }}
         >
-          Save Notification Settings
+          {t('settings.notifications.saveBtn')}
         </button>
       </div>
     </SectionCard>
@@ -1178,6 +1497,7 @@ function NotificationsSection({ session, profile, onBack }) {
 const DEFAULT_STAGES = ['New Lead', 'Contacted', 'Quote Sent', 'Won', 'Lost']
 
 function PipelineSection({ session, profile, onBack }) {
+  const { t } = useTranslation()
   const [stages, setStages] = useState(() =>
     lsGet('pipeline_stages', DEFAULT_STAGES)
   )
@@ -1195,7 +1515,7 @@ function PipelineSection({ session, profile, onBack }) {
   }
   const confirmEdit = () => {
     if (!editVal.trim()) {
-      toast.error('Stage name cannot be empty')
+      toast.error(t('settings.pipeline.stageEmpty'))
       return
     }
     setStages(stages.map((s, i) => (i === editIdx ? editVal.trim() : s)))
@@ -1204,7 +1524,7 @@ function PipelineSection({ session, profile, onBack }) {
   }
   const removeStage = (i) => {
     if (stages.length <= 2) {
-      toast.error('You need at least 2 stages')
+      toast.error(t('settings.pipeline.minStages'))
       return
     }
     setStages(stages.filter((_, idx) => idx !== i))
@@ -1212,15 +1532,47 @@ function PipelineSection({ session, profile, onBack }) {
   const addStage = () => {
     if (!newStage.trim()) return
     if (stages.map((s) => s.toLowerCase()).includes(newStage.trim().toLowerCase())) {
-      toast.error('This stage already exists')
+      toast.error(t('settings.pipeline.stageExists'))
       return
     }
     setStages([...stages, newStage.trim()])
     setNewStage('')
   }
-  const handleSave = () => {
+  const handleSave = async () => {
+    const oldStages = lsGet('pipeline_stages', ['Prospecting', 'Scoping', 'Negotiation', 'Legal', 'Contract', 'Closed'])
     lsSet('pipeline_stages', stages)
-    toast.success('Sales steps saved!')
+
+    const loadingToast = toast.loading(t('settings.pipeline.syncing') || 'Syncing deals to updated pipeline...')
+    try {
+      // 1. Handle renamed stages
+      for (let i = 0; i < Math.min(oldStages.length, stages.length); i++) {
+        const oldName = oldStages[i]
+        const newName = stages[i]
+        if (oldName !== newName) {
+          await supabase
+            .from('opportunities')
+            .update({ stage: newName })
+            .eq('stage', oldName)
+        }
+      }
+
+      // 2. Handle deleted stages (fallback deals to the first stage of the new pipeline)
+      const deletedStages = oldStages.filter(s => !stages.includes(s))
+      if (deletedStages.length > 0 && stages.length > 0) {
+        const fallbackStage = stages[0]
+        for (const ds of deletedStages) {
+          await supabase
+            .from('opportunities')
+            .update({ stage: fallbackStage })
+            .eq('stage', ds)
+        }
+      }
+
+      toast.success(t('settings.pipeline.savedSuccess') || 'Pipeline updated successfully!', { id: loadingToast })
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to sync pipeline update', { id: loadingToast })
+    }
   }
 
   return (
@@ -1228,8 +1580,8 @@ function PipelineSection({ session, profile, onBack }) {
       onBack={onBack}
       icon={<ListChecks size={22} />}
       color="#f59e0b"
-      title="My Sales Steps"
-      desc="These stages appear on your deals board. Rename them to match how you actually work."
+      title={t('settings.pipeline.title')}
+      desc={t('settings.pipeline.desc')}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
         {stages.map((stage, i) => (
@@ -1279,7 +1631,7 @@ function PipelineSection({ session, profile, onBack }) {
                 <button
                   onClick={confirmEdit}
                   type="button"
-                  title="Save"
+                  title={t('settings.pipeline.save')}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -1293,7 +1645,7 @@ function PipelineSection({ session, profile, onBack }) {
                 <button
                   onClick={cancelEdit}
                   type="button"
-                  title="Cancel"
+                  title={t('settings.pipeline.cancel')}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -1320,7 +1672,7 @@ function PipelineSection({ session, profile, onBack }) {
                 <button
                   onClick={() => startEdit(i)}
                   type="button"
-                  title="Rename"
+                  title={t('settings.pipeline.rename')}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -1341,7 +1693,7 @@ function PipelineSection({ session, profile, onBack }) {
                 <button
                   onClick={() => removeStage(i)}
                   type="button"
-                  title="Remove"
+                  title={t('settings.pipeline.remove')}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -1370,7 +1722,7 @@ function PipelineSection({ session, profile, onBack }) {
         <input
           className="form-input"
           type="text"
-          placeholder="Add a new stage…"
+          placeholder={t('settings.pipeline.addPlaceholder')}
           value={newStage}
           onChange={(e) => setNewStage(e.target.value)}
           onKeyDown={(e) => {
@@ -1390,7 +1742,7 @@ function PipelineSection({ session, profile, onBack }) {
           }}
         >
           <Plus size={14} />
-          Add
+          {t('settings.pipeline.addBtn')}
         </button>
       </div>
 
@@ -1399,7 +1751,7 @@ function PipelineSection({ session, profile, onBack }) {
         className="btn btn-primary"
         style={{ alignSelf: 'flex-start' }}
       >
-        Save Sales Steps
+        {t('settings.pipeline.saveBtn')}
       </button>
     </SectionCard>
   )
@@ -1409,13 +1761,14 @@ function PipelineSection({ session, profile, onBack }) {
 // 7. BACKUP & SAFETY
 // ════════════════════════════════════════════════════════════════════════════
 function BackupSection({ session, profile, onBack }) {
+  const { t } = useTranslation()
   const [autoBackup, setAutoBackup] = useState(lsGet('auto_backup', false))
   const [requireOtp, setRequireOtp] = useState(lsGet('require_otp', false))
 
   const handleSave = () => {
     lsSet('auto_backup', autoBackup)
     lsSet('require_otp', requireOtp)
-    toast.success('Safety settings saved!')
+    toast.success(t('settings.backup.savedSuccess'))
   }
 
   const ToggleSwitch = ({ label, desc, value, onChange }) => (
@@ -1481,19 +1834,19 @@ function BackupSection({ session, profile, onBack }) {
       onBack={onBack}
       icon={<Shield size={22} />}
       color="#64748b"
-      title="Backup & Safety"
-      desc="Keep your data safe and control how you log in."
+      title={t('settings.backup.title')}
+      desc={t('settings.backup.desc')}
     >
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <ToggleSwitch
-          label="Auto-backup my data"
-          desc="Automatically save a copy of your CRM data every day so nothing is lost."
+          label={t('settings.backup.autoBackup')}
+          desc={t('settings.backup.autoBackupDesc')}
           value={autoBackup}
           onChange={setAutoBackup}
         />
         <ToggleSwitch
-          label="Extra login security"
-          desc="Get a one-time code on your phone every time you log in, for extra protection."
+          label={t('settings.backup.extraSecurity')}
+          desc={t('settings.backup.extraSecurityDesc')}
           value={requireOtp}
           onChange={setRequireOtp}
         />
@@ -1502,7 +1855,7 @@ function BackupSection({ session, profile, onBack }) {
           className="btn btn-primary"
           style={{ alignSelf: 'flex-start', marginTop: 22 }}
         >
-          Save Safety Settings
+          {t('settings.backup.saveBtn')}
         </button>
       </div>
     </SectionCard>

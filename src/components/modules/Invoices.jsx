@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
 import { Download, Edit2, Trash2, Settings } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
@@ -8,6 +9,7 @@ import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 
 export default function Invoices({ session, profile }) {
+  const { t } = useTranslation()
   const userIds = profile?.teamUserIds || [session.user.id]
   const [invoices, setInvoices] = useState([])
   const [customers, setCustomers] = useState([])
@@ -248,27 +250,27 @@ export default function Invoices({ session, profile }) {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Invoices</h1>
-          <p className="page-subtitle">Simple invoice generator and tracker.</p>
+          <h1 className="page-title">{t('modules.invoices.title')}</h1>
+          <p className="page-subtitle">{t('modules.invoices.subtitle')}</p>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setIsFieldBuilderOpen(true)}>
-            <Settings size={14} /> Edit fields
+            <Settings size={14} /> {t('modules.invoices.editFields')}
           </button>
           <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-            <span style={{ fontSize: 18 }}>+</span> Create Invoice
+            <span style={{ fontSize: 18 }}>+</span> {t('modules.invoices.createInvoice')}
           </button>
         </div>
       </div>
 
       <div className="table-container">
         <div className="table-header">
-          <h2 className="table-title">All Invoices ({invoices.length})</h2>
+          <h2 className="table-title">{t('modules.invoices.allInvoices')} ({invoices.length})</h2>
           <LocalSearch 
              data={invoices} 
              searchKeys={['quote_name', 'invoice_number']} 
              onSelect={(item) => handleOpenModal(item)}
-             placeholder="Search invoices..."
+             placeholder={t('modules.invoices.searchPlaceholder')}
              renderItem={(item) => (
                <>
                  <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{item.quote_name}</div>

@@ -1,13 +1,15 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
-import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import { Trash2, Edit2 } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 
 export default function Reports({ session, profile }) {
+  const { t } = useTranslation()
   const userIds = profile?.teamUserIds || [session.user.id]
   const [reports, setReports] = useState([])
   const [loading, setLoading] = useState(true)
@@ -28,9 +30,6 @@ export default function Reports({ session, profile }) {
   })
   const [viewingData, setViewingData] = useState(null)
 
-  // To preview the report before downloading
-  const [previewData, setPreviewData] = useState(null)
-  const previewRef = useRef(null)
   const navigate = useNavigate()
   
   const handleNavigateToRecord = (item, type) => {
@@ -211,12 +210,12 @@ export default function Reports({ session, profile }) {
   }
 
   const generatePDF = async (report) => {
-    const toastId = toast.loading('Compiling data & generating PDF...')
+    const toastId = toast.loading('Generating PDF...')
     try {
-      // 1. Fetch data based on report configuration
+      // 1. Fetch report data from Supabase
       const moduleTable = report.report_type === 'custom' ? 'leads' : report.report_type
       let query = supabase.from(moduleTable).select('*').in('user_id', userIds)
-      
+
       const f = report.filters || {}
       if (f.owner) {
         const ownerColMap = {
@@ -237,36 +236,84 @@ export default function Reports({ session, profile }) {
       const { data, error } = await query.order('created_at', { ascending: false })
       if (error) throw error
 
-      // 2. Set the preview state so it renders in DOM (hidden)
-      setPreviewData({ report, data })
-      
-      // 3. Wait for React to render the hidden preview
-      setTimeout(async () => {
-        if (!previewRef.current) return toast.error('Render failed', { id: toastId })
-        
-        const canvas = await html2canvas(previewRef.current, { scale: 2, logging: false })
-        const imgData = canvas.toDataURL('image/jpeg', 0.9)
-        
-        const pdf = new jsPDF('p', 'mm', 'a4')
-        const width = pdf.internal.pageSize.getWidth()
-        const height = (canvas.height * width) / canvas.width
-        pdf.addImage(imgData, 'JPEG', 0, 0, width, height)
-        pdf.save(`${report.report_name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`)
-        
-        setPreviewData(null) // Hide preview
-        
-        await supabase.from('activities').insert([{
-          user_id: session.user.id,
-          type: 'Report Downloaded',
-          description: `Downloaded ${report.report_name}`
-        }])
-        
-        toast.success('PDF generated successfully', { id: toastId })
-      }, 500)
-    } catch (error) {
-      console.error(error)
+      // 2. Build PDF directly with jsPDF + autoTable — no DOM capture needed
+
+      const doc = new jsPDF('p', 'mm', 'a4')
+      const pw = doc.internal.pageSize.getWidth()
+
+      // ── Header bar ─────────────────────────────────────────────────────────
+      doc.setFillColor(243, 122, 35)
+      doc.rect(0, 0, pw, 28, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(16)
+      doc.setFont('helvetica', 'bold')
+      doc.text('XOWIQ CRM Report', 14, 17)
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, pw - 14, 17, { align: 'right' })
+
+      // ── Report title & meta ─────────────────────────────────────────────────
+      doc.setTextColor(17, 24, 39)
+      doc.setFontSize(14)
+      doc.setFont('helvetica', 'bold')
+      doc.text(report.report_name, 14, 42)
+
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(107, 114, 128)
+      if (report.description) {
+        const descLines = doc.splitTextToSize(report.description, pw - 28)
+        doc.text(descLines, 14, 50)
+      }
+      doc.text(
+        `Module: ${report.report_type}  |  Records: ${data.length}  |  Created by: ${report.created_by || 'N/A'}`,
+        14, 62
+      )
+
+      // ── Data table ──────────────────────────────────────────────────────────
+      const cols = ['Name / Subject', 'Status / Stage', 'Amount', 'Created Date']
+      const rows = data.map(item => [
+        item.name || item.subject || item.account_name || item.invoice_name || item.quote_name || 'N/A',
+        item.status || item.stage || 'N/A',
+        (item.amount || item.total_price)
+          ? `${profile?.currency || '₹'}${Number(item.amount || item.total_price).toLocaleString()}`
+          : '—',
+        new Date(item.created_at).toLocaleDateString()
+      ])
+
+      autoTable(doc, {
+        head: [cols],
+        body: rows,
+        startY: 70,
+        styles: { fontSize: 9, cellPadding: 4 },
+        headStyles: { fillColor: [243, 122, 35], textColor: 255, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [249, 250, 251] },
+        margin: { left: 14, right: 14 }
+      })
+
+      // ── Page footers ────────────────────────────────────────────────────────
+      const pageCount = doc.internal.getNumberOfPages()
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i)
+        doc.setFontSize(8)
+        doc.setTextColor(156, 163, 175)
+        doc.text('XOWIQ CRM — Confidential Report', 14, doc.internal.pageSize.getHeight() - 8)
+        doc.text(`Page ${i} of ${pageCount}`, pw - 14, doc.internal.pageSize.getHeight() - 8, { align: 'right' })
+      }
+
+      // ── Download ────────────────────────────────────────────────────────────
+      doc.save(`${report.report_name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`)
+
+      await supabase.from('activities').insert([{
+        user_id: session.user.id,
+        type: 'Report Downloaded',
+        description: `Downloaded ${report.report_name}`
+      }])
+
+      toast.success('PDF downloaded!', { id: toastId })
+    } catch (err) {
+      console.error('PDF generation error:', err)
       toast.error('Failed to generate PDF', { id: toastId })
-      setPreviewData(null)
     }
   }
 
@@ -462,22 +509,22 @@ export default function Reports({ session, profile }) {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Reports & Analytics</h1>
-          <p className="page-subtitle">Custom insights based on your business data.</p>
+          <h1 className="page-title">{t('modules.reports.title')}</h1>
+          <p className="page-subtitle">{t('modules.reports.subtitle')}</p>
         </div>
         <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-          <span style={{ fontSize: 18 }}>+</span> Create Report
+          <span style={{ fontSize: 18 }}>+</span> {t('modules.reports.createReport')}
         </button>
       </div>
 
       <div className="table-container">
         <div className="table-header">
-          <h2 className="table-title">Available Reports ({reports.length})</h2>
+          <h2 className="table-title">{t('modules.reports.availableReports')} ({reports.length})</h2>
           <LocalSearch 
              data={reports} 
              searchKeys={['report_name', 'folder']} 
              onSelect={(item) => handleSelectReport(item)} 
-             placeholder="Search reports..." 
+             placeholder={t('modules.reports.searchPlaceholder')} 
              renderItem={(item) => (
                <>
                  <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{item.report_name}</div>
@@ -545,71 +592,7 @@ export default function Reports({ session, profile }) {
         </div>
       </div>
 
-      {/* Hidden Preview Container for PDF Export */}
-      {previewData && (
-        <div style={{ 
-          position: 'absolute', top: '-9999px', left: '-9999px', 
-          width: '800px', background: 'white', color: 'black', padding: '40px',
-          fontFamily: 'sans-serif' 
-        }} ref={previewRef}>
-          <div style={{ borderBottom: '2px solid #6366f1', paddingBottom: 20, marginBottom: 30, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <h1 style={{ margin: 0, fontSize: 32, color: '#111827' }}>XOWIQ CRM Report</h1>
-              <p style={{ margin: 0, color: '#6b7280', marginTop: 8 }}>{previewData.report.report_name}</p>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 14, color: '#6b7280' }}>Generated On</div>
-              <div style={{ fontWeight: 'bold' }}>{new Date().toLocaleDateString()}</div>
-            </div>
-          </div>
-          
-          <div style={{ marginBottom: 40 }}>
-            <h2 style={{ fontSize: 18, color: '#374151', marginBottom: 16 }}>Summary Description</h2>
-            <p style={{ color: '#4b5563', lineHeight: 1.6 }}>{previewData.report.description || 'No description provided for this report.'}</p>
-          </div>
-          
-          <div style={{ marginBottom: 40 }}>
-            <h2 style={{ fontSize: 18, color: '#374151', marginBottom: 16 }}>Report Filters</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13, background: '#f9fafb', padding: 16, borderRadius: 8 }}>
-               <div><span style={{color: '#6b7280'}}>Module:</span> <span style={{fontWeight: 600, textTransform: 'capitalize'}}>{previewData.report.report_type}</span></div>
-               <div><span style={{color: '#6b7280'}}>Owner Filter:</span> <span style={{fontWeight: 600}}>{previewData.report.filters?.owner || 'Any'}</span></div>
-               <div><span style={{color: '#6b7280'}}>Status:</span> <span style={{fontWeight: 600}}>{previewData.report.filters?.status || 'Any'}</span></div>
-               <div><span style={{color: '#6b7280'}}>Date Range:</span> <span style={{fontWeight: 600}}>{previewData.report.filters?.date_from || 'Start'} to {previewData.report.filters?.date_to || 'End'}</span></div>
-            </div>
-          </div>
-          
-          <div style={{ marginBottom: 40 }}>
-            <h2 style={{ fontSize: 18, color: '#374151', marginBottom: 16 }}>Data Records ({previewData.data.length})</h2>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '2px solid #e5e7eb' }}>
-                   <th style={{ padding: '12px 0' }}>Module ID / Name</th>
-                   <th>Status</th>
-                   <th>Amount/Total</th>
-                   <th>Created Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {previewData.data.map((item, idx) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '10px 0', fontWeight: 600 }}>{item.name || item.subject || item.report_name || item.account_name || item.invoice_name || item.quote_name || 'N/A'}</td>
-                    <td>{item.status || item.stage || 'N/A'}</td>
-                    <td style={{ fontWeight: 600 }}>{ (item.amount || item.total_price) ? `${profile?.currency || '$'}${Number(item.amount || item.total_price).toLocaleString()}` : '-' }</td>
-                    <td>{new Date(item.created_at).toLocaleDateString()}</td>
-                  </tr>
-                ))}
-                {previewData.data.length === 0 && (
-                  <tr><td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>No records found matching filters.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          
-          <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: 12, marginTop: 100, borderTop: '1px solid #e5e7eb', paddingTop: 20 }}>
-            This report was securely generated by XOWIQ CRM. Confidential information.
-          </div>
-        </div>
-      )}
+      {/* PDF is now generated directly with jsPDF — no hidden preview div needed */}
 
       {isModalOpen && renderModal()}
     </div>

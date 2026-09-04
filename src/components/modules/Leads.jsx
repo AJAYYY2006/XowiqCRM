@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
 import { Trash2, Edit2, ArrowRightCircle, Settings, Plus, LayoutGrid } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
@@ -9,6 +10,7 @@ import WhatsAppButton from '../ui/WhatsAppButton'
 import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../lib/whatsapp'
 
 export default function Leads({ session, profile }) {
+  const { t } = useTranslation()
   const companyType = session.user.user_metadata?.companyType || 'B2B'
   const isB2C = companyType === 'B2C'
   const [leads, setLeads] = useState([])
@@ -586,27 +588,27 @@ export default function Leads({ session, profile }) {
         <div>
           <div className="page-header">
             <div>
-              <h1 className="page-title">Leads Hub</h1>
-              <p className="page-subtitle">Manage and convert your prospective clients.</p>
+              <h1 className="page-title">{t('modules.leads.title')}</h1>
+              <p className="page-subtitle">{t('modules.leads.subtitle')}</p>
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
               <button className="btn btn-secondary" onClick={() => setIsFieldBuilderOpen(true)}>
-                <Settings size={18} style={{ marginRight: 6 }} /> Edit fields
+                <Settings size={18} style={{ marginRight: 6 }} /> {t('modules.leads.editFields')}
               </button>
               <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-                <Plus size={18} style={{ marginRight: 6 }} /> Add New Lead
+                <Plus size={18} style={{ marginRight: 6 }} /> {t('modules.leads.addNewLead')}
               </button>
             </div>
           </div>
 
           <div className="table-container">
             <div className="table-header">
-              <h2 className="table-title">All Leads ({leads.length})</h2>
+              <h2 className="table-title">{t('modules.leads.allLeads')} ({leads.length})</h2>
               <LocalSearch 
                  data={leads} 
                  searchKeys={['name', 'company', 'email', 'unique_id']} 
                  onSelect={(item) => handleOpenModal(item)} 
-                 placeholder="Search leads..." 
+                 placeholder={t('modules.leads.searchPlaceholder')} 
                  renderItem={(item) => (
                    <>
                      <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{item.name}</div>

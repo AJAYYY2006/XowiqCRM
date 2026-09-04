@@ -1,0 +1,1 @@
+import { supabase } from './src/lib/supabase.js'; async function run() { const { error } = await supabase.rpc('exec_sql', { query: "ALTER TABLE profiles ADD COLUMN status TEXT DEFAULT 'Active';" }); console.log("Error:", error); } run();
