@@ -1,6 +1,6 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Sparkles, LogIn, CheckCircle2, Shield, UserCheck, Headphones, ShoppingBag, Eye } from 'lucide-react'
+import { X, Sparkles, Zap, LogIn, CheckCircle2, Shield, UserCheck, Headphones, ShoppingBag, Eye } from 'lucide-react'
 import { SpotlightCard, ShinyButton, ShinyText } from '../reactbits'
 
 export const DEV_ACCOUNTS = [
@@ -113,12 +113,12 @@ export default function DevQuickLoginModal({ isOpen, onClose, onSelectAccount, o
           >
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                <span style={{ fontSize: 20 }}>⚡</span>
-                <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: '#f8fafc' }}>
+                <Zap size={20} className="text-amber-400" />
+                <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 500, color: '#f8fafc' }}>
                   <ShinyText text="Demo & Role Quick Login" speed={4} />
                 </h2>
               </div>
-              <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>
+              <p style={{ margin: 0, fontSize: 13, color: '#94a3b8', fontWeight: 300 }}>
                 Select any predefined role below to test the CRM with populated live data.
               </p>
             </div>
@@ -189,13 +189,13 @@ export default function DevQuickLoginModal({ isOpen, onClose, onSelectAccount, o
                     </div>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#f8fafc' }}>
+                        <span style={{ fontSize: '1.05rem', fontWeight: 500, color: '#f8fafc' }}>
                           {acc.roleName}
                         </span>
                         <span
                           style={{
                             fontSize: 10,
-                            fontWeight: 800,
+                            fontWeight: 500,
                             padding: '2px 8px',
                             borderRadius: 999,
                             background: acc.badgeColor,
@@ -207,7 +207,7 @@ export default function DevQuickLoginModal({ isOpen, onClose, onSelectAccount, o
                           {acc.badge}
                         </span>
                       </div>
-                      <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 2 }}>
+                      <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 2, fontWeight: 300 }}>
                         {acc.name} &bull; <span style={{ color: '#cbd5e1', fontFamily: 'monospace' }}>{acc.email}</span>
                       </div>
                     </div>
@@ -223,7 +223,7 @@ export default function DevQuickLoginModal({ isOpen, onClose, onSelectAccount, o
                         border: '1px solid rgba(255, 255, 255, 0.15)',
                         color: '#f8fafc',
                         fontSize: 12,
-                        fontWeight: 600,
+                        fontWeight: 500,
                         cursor: 'pointer',
                         transition: 'all 0.2s',
                         display: 'flex',

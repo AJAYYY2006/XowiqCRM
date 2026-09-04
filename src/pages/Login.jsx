@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
-import { SpotlightCard, ShinyButton, BlurText, ParticlesBackground, ShinyText } from '../components/reactbits'
+import { FlowaLogo } from '../components/flowa/FlowaNavbar'
 import DevQuickLoginModal, { DEV_ACCOUNTS } from '../components/ui/DevQuickLoginModal'
-import { Sparkles, KeyRound, Zap } from 'lucide-react'
+import { Sparkles, KeyRound, Zap, ArrowLeft, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Login() {
@@ -20,7 +20,7 @@ export default function Login() {
     setError('')
     setLoading(true)
 
-    const toastId = toast.loading('Authenticating workspace...')
+    const toastId = toast.loading('Authenticating XOWIQ workspace...')
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email: userEmail,
       password: userPassword
@@ -43,7 +43,6 @@ export default function Login() {
       .maybeSingle()
 
     const role = profileData?.role || signInData.user.user_metadata?.role || 'user'
-    const isAdmin = ['admin', 'administrator'].includes(role.toLowerCase())
 
     // Sync role back to user_metadata
     await supabase.auth.updateUser({ data: { role } })
@@ -66,12 +65,7 @@ export default function Login() {
 
     toast.success(`Welcome back, ${profileData?.name || 'User'}!`, { id: toastId })
     setLoading(false)
-
-    if (isAdmin) {
-      navigate('/dashboard')
-    } else {
-      navigate('/dashboard')
-    }
+    navigate('/dashboard')
   }
 
   const handleLogin = (e) => {
@@ -94,164 +88,116 @@ export default function Login() {
   }
 
   return (
-    <div className="auth-page" style={{ position: 'relative', overflow: 'hidden', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(ellipse at top, #0f172a, #070a13)', padding: '40px 16px' }}>
-      <ParticlesBackground quantity={35} color="#6366f1" />
-      <div className="auth-bg-blur" />
-      
-      <div style={{ width: '100%', maxWidth: 460, display: 'flex', flexDirection: 'column', gap: 16, position: 'relative', zIndex: 2 }}>
-        
+    <div className="min-h-screen flex flex-col justify-between bg-gradient-to-b from-[#ffeedd] via-[#e2e8f0] to-[#f8fafc] p-4 sm:p-6 font-['Poppins',sans-serif]">
+      {/* Top Bar with back link */}
+      <div className="max-w-5xl mx-auto w-full flex items-center justify-between pt-2">
+        <FlowaLogo />
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-slate-700 hover:text-slate-900 bg-white/80 hover:bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm transition-all no-underline"
+        >
+          <ArrowLeft size={14} />
+          <span>Back to Home</span>
+        </Link>
+      </div>
+
+      {/* Main Login Center Card */}
+      <div className="max-w-md w-full mx-auto my-8 space-y-4">
         {/* Quick Role Auto-Fill Bar */}
         <div
           onClick={() => setIsDevModalOpen(true)}
-          style={{
-            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(255, 89, 0, 0.15) 100%)',
-            border: '1px solid rgba(99, 102, 241, 0.35)',
-            borderRadius: 14,
-            padding: '12px 18px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            cursor: 'pointer',
-            backdropFilter: 'blur(10px)',
-            transition: 'all 0.25s',
-            boxShadow: '0 8px 25px -5px rgba(99, 102, 241, 0.2)'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(255, 89, 0, 0.6)'}
-          onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(99, 102, 241, 0.35)'}
+          className="bg-white/90 hover:bg-white backdrop-blur-xl border border-orange-200/80 rounded-2xl p-3.5 flex items-center justify-between cursor-pointer shadow-lg shadow-orange-950/10 transition-all hover:scale-[1.01]"
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, #ff5900, #f37a23)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-[#ff5900] text-white flex items-center justify-center shadow-md shadow-orange-500/30">
               <Zap size={16} />
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div className="text-xs font-medium text-slate-900 flex items-center gap-2">
                 <span>Demo Accounts Auto-Fill</span>
-                <span style={{ fontSize: 10, background: '#ff5900', color: 'white', padding: '1px 6px', borderRadius: 999 }}>5 ROLES</span>
+                <span className="text-[10px] font-medium bg-orange-100 text-[#ff5900] px-2 py-0.5 rounded-full">5 ROLES</span>
               </div>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>Click to switch or instant login</div>
+              <div className="text-[11px] text-slate-500 font-light">1-click login or role credentials</div>
             </div>
           </div>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#818cf8', display: 'flex', alignItems: 'center', gap: 4 }}>
-            Open ⚡
+          <span className="text-xs font-medium text-[#ff5900] flex items-center gap-1">
+            <span>Open</span>
+            <Zap size={13} className="text-[#ff5900]" />
           </span>
         </div>
 
-        {/* Main Auth Card */}
-        <SpotlightCard
-          className="auth-card"
-          spotlightColor="rgba(255, 89, 0, 0.2)"
-          borderColor="rgba(255, 255, 255, 0.12)"
-          style={{
-            width: '100%',
-            padding: '36px 32px',
-            background: 'rgba(15, 23, 42, 0.85)',
-            backdropFilter: 'blur(16px)',
-            borderRadius: 20,
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)'
-          }}
-        >
-          {/* Logo */}
-          <div className="auth-logo" style={{ display: 'flex', alignItems: 'center', gap: 0, fontWeight: 900, fontFamily: '"Fredoka", sans-serif', fontSize: '26px', letterSpacing: '-0.5px', marginBottom: '20px', justifyContent: 'center' }}>
-            <div style={{ backgroundColor: '#f37a23', color: '#ffffff', padding: '4px 6px', lineHeight: 1, borderRadius: '6px 0 0 6px' }}>
-              XOWIQ
-            </div>
-            <div style={{ color: '#ffffff', backgroundColor: '#1e293b', padding: '4px 6px', lineHeight: 1, borderRadius: '0 6px 6px 0' }}>
-              CRM
-            </div>
+        {/* Login Form Card */}
+        <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-8 border border-white/80 shadow-2xl shadow-orange-950/10">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-medium text-slate-950">Welcome Back</h1>
+            <p className="text-xs text-slate-500 font-light mt-1">Sign in to your XOWIQ CRM workspace</p>
           </div>
 
-          <h1 className="auth-title" style={{ textAlign: 'center', fontSize: '1.65rem', fontWeight: 800, marginBottom: 6, color: '#f8fafc' }}>
-            <BlurText text={t('auth.welcomeBack')} delay={40} />
-          </h1>
-          <p className="auth-subtitle" style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem', marginBottom: 24 }}>
-            {t('auth.signInSubtitle')}
-          </p>
+          <form onSubmit={handleLogin} className="space-y-4">
+            {error && (
+              <div className="p-3 rounded-xl bg-rose-50 text-rose-600 border border-rose-200 text-xs font-medium flex items-center gap-1.5">
+                <AlertCircle size={15} className="shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
 
-          <form className="auth-form" onSubmit={handleLogin}>
-            {error && <div className="auth-error" style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', marginBottom: 18, fontSize: 13 }}>⚠️ {error}</div>}
-
-            <div className="auth-input-group" style={{ marginBottom: 16 }}>
-              <label className="auth-label" style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#cbd5e1', marginBottom: 6 }}>{t('auth.emailLabel')}</label>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Work Email</label>
               <input
                 type="email"
-                className="auth-input"
-                placeholder={t('auth.emailPlaceholder')}
+                required
+                placeholder="alex@xowiq.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                required
-                style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255, 255, 255, 0.12)', color: '#ffffff', fontSize: 14 }}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:border-[#ff5900] shadow-sm font-light"
               />
             </div>
 
-            <div className="auth-input-group" style={{ marginBottom: 20 }}>
-              <label className="auth-label" style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#cbd5e1', marginBottom: 6 }}>{t('auth.passwordLabel')}</label>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Password</label>
               <input
                 type="password"
-                className="auth-input"
-                placeholder={t('auth.passwordPlaceholder')}
+                required
+                placeholder="••••••••"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                required
-                style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255, 255, 255, 0.12)', color: '#ffffff', fontSize: 14 }}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:border-[#ff5900] shadow-sm font-light"
               />
             </div>
 
-            <ShinyButton
+            <button
               type="submit"
-              variant="primary"
               disabled={loading}
-              style={{ width: '100%', padding: '13px', borderRadius: 10, fontSize: '1rem', fontWeight: 700 }}
+              className="w-full py-3 rounded-full bg-[#ff5900] hover:bg-[#e04f00] text-white font-medium text-sm shadow-lg shadow-orange-500/25 transition-all cursor-pointer flex items-center justify-center gap-2 border-none"
             >
-              {loading ? t('auth.signingIn') : t('auth.signInBtn')}
-            </ShinyButton>
+              <span>{loading ? 'Signing In...' : 'Sign In to Workspace'}</span>
+              <ArrowRight size={15} />
+            </button>
           </form>
 
           {/* Quick Role Fill Pills */}
-          <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10, textAlign: 'center' }}>
-              Quick Fill by Role:
+          <div className="mt-6 pt-5 border-t border-slate-100">
+            <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2.5 text-center">
+              Quick Role Switch:
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
+            <div className="flex flex-wrap gap-1.5 justify-center">
               {DEV_ACCOUNTS.map(acc => (
                 <button
                   key={acc.id}
                   onClick={() => handleSelectAccount(acc.email, acc.password)}
-                  style={{
-                    padding: '5px 10px',
-                    borderRadius: 8,
-                    background: 'rgba(30, 41, 59, 0.8)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    color: '#cbd5e1',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    transition: 'all 0.15s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#ff5900'
-                    e.currentTarget.style.color = '#ffffff'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
-                    e.currentTarget.style.color = '#cbd5e1'
-                  }}
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-orange-50 text-slate-700 hover:text-[#ff5900] text-[11px] font-medium transition-colors cursor-pointer border border-slate-200"
                 >
-                  <span>{acc.badge}</span>
+                  {acc.badge}
                 </button>
               ))}
             </div>
           </div>
+        </div>
+      </div>
 
-          <div className="auth-footer" style={{ textAlign: 'center', marginTop: 20, fontSize: 13, color: '#94a3b8' }}>
-            Need an Admin Account?{' '}
-            <Link to="/signup" style={{ color: '#ff5900', fontWeight: 600, textDecoration: 'none' }}>
-              Sign Up
-            </Link>
-          </div>
-        </SpotlightCard>
+      {/* Footer copyright */}
+      <div className="text-center text-xs text-slate-400 font-light pb-2">
+        © {new Date().getFullYear()} XOWIQ CRM Technologies Inc. All rights reserved.
       </div>
 
       {/* Dev Quick Login Modal */}

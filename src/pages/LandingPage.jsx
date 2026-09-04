@@ -1,431 +1,645 @@
+import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
-import { LayoutDashboard, Users, Building2, Briefcase, Ticket, BarChart3, Play, X, ArrowRight, Sparkles, Check } from 'lucide-react'
-import { useState } from 'react'
-import LanguageSwitcher from '../components/ui/LanguageSwitcher'
+import { motion } from 'framer-motion'
+import FlowaNavbar from '../components/flowa/FlowaNavbar'
+import FlowaFooter from '../components/flowa/FlowaFooter'
 import {
-  SplitText,
-  ShinyText,
-  CountUp,
-  SpotlightCard,
-  TiltCard,
-  AuroraBackground,
-  ParticlesBackground,
-  ShinyButton,
-} from '../components/reactbits'
-
-const IconWrapper = ({ children }) => (
-  <div style={{
-    width: 52,
-    height: 52,
-    background: 'linear-gradient(135deg, rgba(255, 89, 0, 0.15) 0%, rgba(243, 122, 35, 0.25) 100%)',
-    borderRadius: 14,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#ff5900',
-    marginBottom: 16,
-    border: '1px solid rgba(255, 89, 0, 0.2)',
-    boxShadow: '0 4px 15px -3px rgba(255, 89, 0, 0.2)'
-  }}>
-    {children}
-  </div>
-)
+  HeroAITalkingCard,
+  DeltaPrismGraphic,
+  WaveformGraphic,
+  RadarGraphic,
+  LeadManagementMockup,
+  SalesPipelineMockup,
+  AISalesInsightsMockup
+} from '../components/flowa/FlowaShowcases'
+import {
+  ArrowRight,
+  Check,
+  Sparkles,
+  Zap,
+  Shield,
+  Play,
+  Layers,
+  ChevronRight,
+  CheckCircle2,
+  TrendingUp,
+  FileText
+} from 'lucide-react'
 
 export default function LandingPage({ session }) {
   const navigate = useNavigate()
-  const { t } = useTranslation()
-  const [showVideo, setShowVideo] = useState(false)
-
-  const features = [
-    { icon: <IconWrapper><LayoutDashboard size={26} /></IconWrapper>, title: t('features.smartDashboard'), desc: t('features.smartDashboardDesc') },
-    { icon: <IconWrapper><Users size={26} /></IconWrapper>, title: t('features.leadManagement'), desc: t('features.leadManagementDesc') },
-    { icon: <IconWrapper><Building2 size={26} /></IconWrapper>, title: t('features.accountContacts'), desc: t('features.accountContactsDesc') },
-    { icon: <IconWrapper><Briefcase size={26} /></IconWrapper>, title: t('features.opportunityPipeline'), desc: t('features.opportunityPipelineDesc') },
-    { icon: <IconWrapper><Ticket size={26} /></IconWrapper>, title: t('features.ticketSupport'), desc: t('features.ticketSupportDesc') },
-    { icon: <IconWrapper><BarChart3 size={26} /></IconWrapper>, title: t('features.reportsInsights'), desc: t('features.reportsInsightsDesc') },
-  ]
-
-  const pricing = [
-    {
-      plan: t('pricingSection.starter'), price: 0, prefix: '$', period: '/month',
-      features: [
-        t('pricingSection.features.contacts500'), t('pricingSection.features.users3'),
-        t('pricingSection.features.basicDashboard'), t('pricingSection.features.emailSupport'),
-        t('pricingSection.features.storage5')
-      ],
-      popular: false, ctaLabel: t('pricingSection.getStartedFree')
-    },
-    {
-      plan: t('pricingSection.pro'), price: 29, prefix: '$', period: '/month',
-      features: [
-        t('pricingSection.features.unlimitedContacts'), t('pricingSection.features.users10'),
-        t('pricingSection.features.advancedAnalytics'), t('pricingSection.features.prioritySupport'),
-        t('pricingSection.features.storage50'), t('pricingSection.features.pdfReports'),
-        t('pricingSection.features.apiAccess')
-      ],
-      popular: true, ctaLabel: t('pricingSection.choosePro')
-    },
-    {
-      plan: t('pricingSection.enterprise'), price: 99, prefix: '$', period: '/month',
-      features: [
-        t('pricingSection.features.unlimitedEverything'), t('pricingSection.features.unlimitedUsers'),
-        t('pricingSection.features.customIntegrations'), t('pricingSection.features.dedicatedSupport'),
-        t('pricingSection.features.unlimitedStorage'), t('pricingSection.features.customWorkflows'),
-        t('pricingSection.features.ssoSaml')
-      ],
-      popular: false, ctaLabel: t('pricingSection.chooseEnterprise')
-    },
-  ]
+  const [annualBilling, setAnnualBilling] = useState(true)
 
   return (
-    <div className="landing" style={{ position: 'relative', overflowX: 'hidden' }}>
-      {/* Nav */}
-      <nav className="landing-nav" style={{ backdropFilter: 'blur(16px)', background: 'rgba(10, 15, 30, 0.75)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
-        <div className="landing-nav-logo" style={{ display: 'flex', alignItems: 'center', gap: 0, fontWeight: 900, fontFamily: '"Fredoka", sans-serif', fontSize: '26px', letterSpacing: '-0.5px' }}>
-          <div style={{ backgroundColor: '#f37a23', color: '#ffffff', padding: '4px 6px', lineHeight: 1, borderRadius: '6px 0 0 6px' }}>
-            XOWIQ
-          </div>
-          <div style={{ color: '#ffffff', backgroundColor: '#1e293b', padding: '4px 6px', lineHeight: 1, borderRadius: '0 6px 6px 0' }}>
-            CRM
-          </div>
-        </div>
-        <ul className="landing-nav-links">
-          <li><a href="#features">{t('nav.features')}</a></li>
-          <li><a href="#pricing">{t('nav.pricing')}</a></li>
-          <li><a href="#about">{t('nav.about')}</a></li>
-        </ul>
-        <div className="landing-nav-cta" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <LanguageSwitcher />
-          {session ? (
-            <ShinyButton variant="primary" onClick={() => navigate('/dashboard')}>
-              {t('nav.goToDashboard')}
-            </ShinyButton>
-          ) : (
-            <>
-              <Link to="/login" className="btn btn-secondary" style={{ borderRadius: 10 }}>{t('nav.signIn')}</Link>
-              <ShinyButton variant="primary" onClick={() => navigate('/signup')}>
-                {t('nav.getStartedFree')}
-              </ShinyButton>
-            </>
-          )}
-        </div>
-      </nav>
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-['Poppins',sans-serif] selection:bg-[#ff5900] selection:text-white overflow-x-hidden">
+      {/* Floating Pill Navbar */}
+      <FlowaNavbar session={session} />
 
-      {/* Dynamic Aurora & Particles Hero Section */}
-      <AuroraBackground className="hero-aurora-wrap">
-        <ParticlesBackground quantity={45} color="#6366f1" />
-        <section className="hero" style={{ position: 'relative', zIndex: 2, paddingTop: 140, paddingBottom: 100 }}>
-          <div className="hero-content" style={{ maxWidth: 960, margin: '0 auto', textAlign: 'center' }}>
-            
-            {/* Animated Badge */}
-            <div className="hero-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 16px', borderRadius: 999, background: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.35)', marginBottom: 24 }}>
-              <Sparkles size={16} color="#818cf8" />
-              <ShinyText text={`✨ ${t('hero.badge')}`} speed={3} />
-            </div>
+      {/* =========================================================================
+          SECTION 1: HERO SECTION - SIMPLE & SINGLE SENTENCE BASED
+          ========================================================================= */}
+      <section className="relative pt-32 sm:pt-40 pb-0 overflow-hidden bg-gradient-to-b from-[#ffeedd] via-[#e2e8f0] to-[#f8fafc]">
+        {/* Atmospheric soft lighting overlay */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-orange-400/20 via-indigo-500/10 to-transparent pointer-events-none" />
 
-            {/* Animated Split Headline */}
-            <h1 className="hero-title" style={{ fontSize: 'clamp(2.5rem, 5vw, 4.2rem)', fontWeight: 900, lineHeight: 1.15, letterSpacing: '-1.5px', marginBottom: 24 }}>
-              <SplitText text={t('hero.title1')} delay={40} />
-              <br />
-              <span className="gradient-text" style={{ background: 'linear-gradient(135deg, #ff5900 0%, #ff8a00 50%, #f37a23 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                <SplitText text={t('hero.title2')} delay={60} />
-              </span>
-            </h1>
-
-            <p className="hero-desc" style={{ fontSize: '1.2rem', color: '#94a3b8', maxWidth: 680, margin: '0 auto 36px', lineHeight: 1.6 }}>
-              {t('hero.desc')}
-            </p>
-
-            <div className="hero-actions" style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 56 }}>
-              <ShinyButton variant="primary" style={{ padding: '14px 32px', fontSize: '1.1rem' }} onClick={() => navigate('/signup')}>
-                <span>{t('hero.startFree')}</span>
-                <ArrowRight size={18} />
-              </ShinyButton>
-              <a href="#features" className="btn btn-secondary btn-large" style={{ padding: '14px 28px', fontSize: '1.1rem', borderRadius: 12 }}>
-                {t('hero.exploreFeatures')}
-              </a>
-            </div>
-
-            {/* Dynamic CountUp Statistics */}
-            <div className="hero-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 20, maxWidth: 840, margin: '0 auto' }}>
-              <SpotlightCard className="hero-stat-card" style={{ padding: '20px 16px', textAlign: 'center', background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(10px)' }}>
-                <div className="hero-stat-value" style={{ fontSize: '2.2rem', fontWeight: 900, color: '#f8fafc', marginBottom: 4 }}>
-                  <CountUp to={10} suffix="K+" duration={2.5} />
-                </div>
-                <div className="hero-stat-label" style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{t('hero.activeUsers')}</div>
-              </SpotlightCard>
-
-              <SpotlightCard className="hero-stat-card" style={{ padding: '20px 16px', textAlign: 'center', background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(10px)' }}>
-                <div className="hero-stat-value" style={{ fontSize: '2.2rem', fontWeight: 900, color: '#ff5900', marginBottom: 4 }}>
-                  <CountUp to={2} prefix="$" suffix="B+" duration={2.5} />
-                </div>
-                <div className="hero-stat-label" style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{t('hero.pipelineManaged')}</div>
-              </SpotlightCard>
-
-              <SpotlightCard className="hero-stat-card" style={{ padding: '20px 16px', textAlign: 'center', background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(10px)' }}>
-                <div className="hero-stat-value" style={{ fontSize: '2.2rem', fontWeight: 900, color: '#10b981', marginBottom: 4 }}>
-                  <CountUp to={98} suffix="%" duration={2} />
-                </div>
-                <div className="hero-stat-label" style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{t('hero.satisfactionRate')}</div>
-              </SpotlightCard>
-
-              <SpotlightCard className="hero-stat-card" style={{ padding: '20px 16px', textAlign: 'center', background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(10px)' }}>
-                <div className="hero-stat-value" style={{ fontSize: '2.2rem', fontWeight: 900, color: '#38bdf8', marginBottom: 4 }}>
-                  <CountUp to={99.9} decimals={1} suffix="%" duration={2.5} />
-                </div>
-                <div className="hero-stat-label" style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{t('hero.uptimeSLA')}</div>
-              </SpotlightCard>
-            </div>
-
-          </div>
-        </section>
-      </AuroraBackground>
-
-      {/* Features Grid with Spotlight Cards */}
-      <section className="section section-center" id="features" style={{ padding: '100px 24px', background: '#080c16' }}>
-        <div className="section-label" style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 20, background: 'rgba(255, 89, 0, 0.12)', color: '#ff5900', fontWeight: 700, fontSize: 12, marginBottom: 12 }}>
-          {t('features.label')}
-        </div>
-        <h2 className="section-title" style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: 16 }}>{t('features.title')}</h2>
-        <p className="section-desc" style={{ color: '#94a3b8', maxWidth: 600, margin: '0 auto 60px' }}>{t('features.desc')}</p>
-        
-        <div className="features-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24, maxWidth: 1100, margin: '0 auto' }}>
-          {features.map(f => (
-            <SpotlightCard
-              key={f.title}
-              spotlightColor="rgba(255, 89, 0, 0.15)"
-              borderColor="rgba(255, 255, 255, 0.08)"
-              style={{ padding: 32, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', textAlign: 'left', borderRadius: 16 }}
-            >
-              <div className="feature-icon">{f.icon}</div>
-              <h3 className="feature-title" style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: 10, color: '#f8fafc' }}>{f.title}</h3>
-              <p className="feature-desc" style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: 1.6 }}>{f.desc}</p>
-            </SpotlightCard>
-          ))}
-        </div>
-      </section>
-
-      {/* How it works with 3D Tilt Cards */}
-      <section className="section section-center" id="about" style={{ padding: '100px 24px', background: 'radial-gradient(ellipse at top, #111827, #080c16)' }}>
-        <div className="section-label" style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 20, background: 'rgba(99, 102, 241, 0.12)', color: '#818cf8', fontWeight: 700, fontSize: 12, marginBottom: 12 }}>
-          {t('howItWorks.label')}
-        </div>
-        <h2 className="section-title" style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: 16 }}>{t('howItWorks.title')}</h2>
-        <p className="section-desc" style={{ color: '#94a3b8', maxWidth: 600, margin: '0 auto 60px' }}>{t('howItWorks.desc')}</p>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 28, maxWidth: 960, margin: '0 auto' }}>
-          {[
-            { step: '01', title: t('howItWorks.step01'), desc: t('howItWorks.step01Desc') },
-            { step: '02', title: t('howItWorks.step02'), desc: t('howItWorks.step02Desc') },
-            { step: '03', title: t('howItWorks.step03'), desc: t('howItWorks.step03Desc') },
-          ].map(s => (
-            <TiltCard key={s.step} style={{ background: 'rgba(15, 23, 42, 0.7)', borderRadius: 16, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-              <div style={{ padding: 32, textAlign: 'left' }}>
-                <div style={{ fontSize: '3rem', fontWeight: 900, color: '#ff5900', marginBottom: 12, opacity: 0.6 }}>{s.step}</div>
-                <h3 style={{ marginBottom: 10, fontSize: '1.2rem', color: '#f8fafc' }}>{s.title}</h3>
-                <p style={{ fontSize: '0.95rem', color: '#94a3b8', lineHeight: 1.6 }}>{s.desc}</p>
-              </div>
-            </TiltCard>
-          ))}
-        </div>
-      </section>
-
-      {/* Video Demo Section */}
-      <section className="section section-center" style={{ padding: '80px 24px', background: '#080c16' }}>
-        <div className="section-label" style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 20, background: 'rgba(255, 89, 0, 0.12)', color: '#ff5900', fontWeight: 700, fontSize: 12, marginBottom: 12 }}>
-          {t('videoDemo.label')}
-        </div>
-        <h2 className="section-title" style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: 16 }}>{t('videoDemo.title')}</h2>
-        <p className="section-desc" style={{ marginBottom: 40, color: '#94a3b8' }}>{t('videoDemo.subtitle')}</p>
-        
-        <SpotlightCard 
-          onClick={() => setShowVideo(true)}
-          spotlightColor="rgba(255, 89, 0, 0.25)"
-          style={{
-            maxWidth: 900,
-            margin: '0 auto',
-            aspectRatio: '16/9',
-            borderRadius: 20,
-            cursor: 'pointer',
-            border: '2px solid rgba(255, 255, 255, 0.12)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)'
-          }}
-        >
-          <div style={{ position: 'relative', zIndex: 2, textAlign: 'center' }}>
-            <div style={{ 
-              width: 80, 
-              height: 80, 
-              background: 'linear-gradient(135deg, #ff5900 0%, #f37a23 100%)', 
-              borderRadius: '50%', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              margin: '0 auto 20px',
-              color: 'white',
-              boxShadow: '0 0 35px rgba(255, 89, 0, 0.5)',
-            }}>
-              <Play fill="white" size={32} />
-            </div>
-            <div style={{ color: 'white', fontWeight: 700, fontSize: '1.25rem' }}>{t('videoDemo.watchButton')}</div>
-            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', marginTop: 6 }}>{t('videoDemo.duration')}</div>
-          </div>
-        </SpotlightCard>
-      </section>
-
-      {/* Video Modal */}
-      {showVideo && (
-        <div className="modal-overlay" onClick={() => setShowVideo(false)}>
-          <div 
-            className="modal modal-xl" 
-            onClick={e => e.stopPropagation()}
-            style={{ 
-              padding: '0', 
-              background: '#000', 
-              overflow: 'hidden',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              width: '90vw',
-              maxWidth: '1100px'
-            }}
+        <div className="max-w-4xl mx-auto px-6 relative z-10 text-center">
+          {/* Top Pill / Badge */}
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="inline-flex items-center gap-2 bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full border border-orange-200/80 shadow-sm text-xs font-medium text-[#ff5900] mb-6"
           >
-            <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 10 }}>
-              <button 
-                onClick={() => setShowVideo(false)}
-                style={{
-                  background: 'rgba(255,255,255,0.15)',
-                  border: 'none',
-                  color: 'white',
-                  width: 40,
-                  height: 40,
-                  borderRadius: '50%',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backdropFilter: 'blur(10px)'
-                }}
-              >
-                <X size={22} />
-              </button>
+            <Sparkles size={13} className="text-[#ff5900]" />
+            <span>Intelligent Enterprise CRM Platform</span>
+          </motion.div>
+
+          {/* Main Hero Headline - Simple & Single Sentence */}
+          <motion.h1
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="text-4xl sm:text-6xl md:text-7xl font-medium text-slate-950 tracking-tight leading-[1.12] max-w-3xl mx-auto"
+          >
+            Turn every customer conversation into predictable revenue growth.
+          </motion.h1>
+
+          {/* Subtitle - Single Sentence */}
+          <motion.p
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="mt-6 text-base sm:text-lg md:text-xl text-slate-600 font-light max-w-2xl mx-auto leading-relaxed"
+          >
+            Unify leads, sales pipelines, billing, and team collaboration into one seamless AI-powered workspace.
+          </motion.p>
+
+          {/* Hero Dual CTA Buttons */}
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4"
+          >
+            <Link
+              to={session ? "/dashboard" : "/signup"}
+              className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-[#ff5900] hover:bg-[#e04f00] text-white font-medium text-sm sm:text-base shadow-xl shadow-orange-500/25 hover:shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 no-underline cursor-pointer flex items-center justify-center gap-2 border-none"
+            >
+              <span>Start Free Trial</span>
+              <ArrowRight size={16} />
+            </Link>
+
+            <Link
+              to="/contact"
+              className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-white/95 hover:bg-white text-slate-800 font-medium text-sm sm:text-base border border-slate-200 shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200 no-underline cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Play size={14} className="fill-slate-800" />
+              <span>Book a Demo</span>
+            </Link>
+          </motion.div>
+
+          {/* Micro trust row */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="mt-6 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-500 font-light"
+          >
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 size={13} className="text-emerald-500" />
+              <span>No credit card required</span>
             </div>
-            <div style={{ aspectRatio: '16/9', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexDirection: 'column', gap: 20, padding: 40, textAlign: 'center' }}>
-              <h3 style={{ fontSize: '1.8rem', fontWeight: 700 }}>{t('videoDemo.title')}</h3>
-              <p style={{ opacity: 0.8, maxWidth: 600 }}>Interactive CRM video overview walkthrough. Watch how deal pipelines, custom data schemas, quotes, and reports operate seamlessly.</p>
-              <ShinyButton variant="primary" onClick={() => setShowVideo(false)}>
-                Close Preview
-              </ShinyButton>
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 size={13} className="text-emerald-500" />
+              <span>5-minute workspace setup</span>
             </div>
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 size={13} className="text-emerald-500" />
+              <span>Full 5-role RBAC access</span>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Hero Curved Poppy Meadow Dome */}
+        <div className="relative mt-8 sm:mt-12 max-w-5xl mx-auto px-4 sm:px-6">
+          {/* Floating Live AI Talking Points Card */}
+          <div className="relative z-20 -mb-16 sm:-mb-24">
+            <HeroAITalkingCard />
+          </div>
+
+          {/* Grassy Curved Dome Hill Image */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1, delay: 0.2 }}
+            className="relative z-10 rounded-t-[40px] sm:rounded-t-[80px] overflow-hidden shadow-2xl border-t border-x border-white/60"
+          >
+            <img
+              src="/images/flowa/hero_dome_hill.jpg"
+              alt="Lush green hill with red poppy flowers under blue sky"
+              className="w-full h-64 sm:h-96 md:h-[480px] object-cover object-bottom"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-50 via-transparent to-transparent opacity-80" />
+          </motion.div>
+        </div>
+      </section>
+
+      {/* =========================================================================
+          SECTION 2: TRUSTED BY LOGOS
+          ========================================================================= */}
+      <section className="py-12 sm:py-16 bg-white border-y border-slate-100">
+        <div className="max-w-6xl mx-auto px-6 text-center">
+          <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400 mb-8">
+            POWERING 20,000+ HIGH-GROWTH REVENUE TEAMS WORLDWIDE
+          </p>
+
+          <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-14 opacity-70 grayscale hover:grayscale-0 transition-all duration-300">
+            {['Typeform', 'ActiveCampaign', 'CloudWatch', 'Techscribe', 'Prismflow'].map((brand, idx) => (
+              <div key={idx} className="flex items-center gap-2 text-slate-700 font-medium text-lg tracking-tight hover:text-[#ff5900] transition-colors">
+                <div className="w-6 h-6 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs font-medium">
+                  {brand.charAt(0)}
+                </div>
+                <span>{brand}</span>
+              </div>
+            ))}
           </div>
         </div>
-      )}
+      </section>
 
-      {/* Pricing Section */}
-      <section className="section section-center" id="pricing" style={{ padding: '100px 24px', background: 'radial-gradient(ellipse at top, #111827, #080c16)' }}>
-        <div className="section-label" style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 20, background: 'rgba(255, 89, 0, 0.12)', color: '#ff5900', fontWeight: 700, fontSize: 12, marginBottom: 12 }}>
-          {t('pricingSection.label')}
-        </div>
-        <h2 className="section-title" style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: 16 }}>{t('pricingSection.title')}</h2>
-        <p className="section-desc" style={{ color: '#94a3b8', maxWidth: 600, margin: '0 auto 60px' }}>{t('pricingSection.desc')}</p>
-        
-        <div className="pricing-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 28, maxWidth: 1050, margin: '0 auto' }}>
-          {pricing.map(p => (
-            <SpotlightCard
-              key={p.plan}
-              spotlightColor={p.popular ? 'rgba(255, 89, 0, 0.22)' : 'rgba(99, 102, 241, 0.15)'}
-              borderColor={p.popular ? 'rgba(255, 89, 0, 0.5)' : 'rgba(255, 255, 255, 0.08)'}
-              style={{
-                padding: 36,
-                background: p.popular ? 'rgba(30, 41, 59, 0.85)' : 'rgba(15, 23, 42, 0.7)',
-                borderRadius: 20,
-                textAlign: 'left',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                position: 'relative'
-              }}
+      {/* =========================================================================
+          SECTION 3: MADE FOR INTELLIGENT WORK (4-CARD GRID)
+          ========================================================================= */}
+      <section className="py-20 sm:py-28 bg-slate-50 relative">
+        <div className="max-w-6xl mx-auto px-6">
+          {/* Section Header */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
+            <div>
+              <div className="inline-flex items-center gap-1.5 text-xs font-medium text-[#ff5900] uppercase tracking-widest bg-orange-50 px-3 py-1 rounded-full mb-3 border border-orange-100">
+                <Sparkles size={12} />
+                <span>KEY CAPABILITIES</span>
+              </div>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-medium text-slate-950 tracking-tight">
+                Built for Intelligent CRM Operations
+              </h2>
+            </div>
+            <p className="text-slate-500 font-light max-w-md text-sm sm:text-base leading-relaxed">
+              Empower every department with tailored 5-role permissions, automatic Supabase syncing, and intelligent deal scoring.
+            </p>
+          </div>
+
+          {/* 4 Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Card 01: 5-Role RBAC Security */}
+            <motion.div
+              whileHover={{ y: -6 }}
+              className="bg-white rounded-3xl p-6 shadow-lg shadow-slate-200/50 border border-slate-200/80 flex flex-col justify-between"
             >
               <div>
-                {p.popular && (
-                  <div style={{
-                    position: 'absolute',
-                    top: 16,
-                    right: 16,
-                    background: 'linear-gradient(135deg, #ff5900, #f37a23)',
-                    color: 'white',
-                    fontSize: 11,
-                    fontWeight: 800,
-                    padding: '4px 12px',
-                    borderRadius: 999,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.5
-                  }}>
-                    {t('pricingSection.mostPopular')}
+                <div className="text-xs font-medium text-slate-400 mb-4">01.</div>
+                <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-100 mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-slate-900">5-Role RBAC Matrix</span>
+                    <span className="text-[10px] font-medium bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Active</span>
                   </div>
-                )}
-                <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#f8fafc', marginBottom: 12 }}>{p.plan}</div>
-                <div style={{ fontSize: '2.8rem', fontWeight: 900, color: p.popular ? '#ff5900' : '#f8fafc', marginBottom: 4 }}>
-                  <CountUp to={p.price} prefix={p.prefix} duration={1.5} />
-                  <span style={{ fontSize: '1rem', color: '#94a3b8', fontWeight: 500 }}> USD</span>
+                  <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                    <div className="bg-[#ff5900] h-full w-full rounded-full" />
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: 24 }}>{t('pricingSection.perUser')} {p.period}</div>
-                
-                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {p.features.map(f => (
-                    <li key={f} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.9rem', color: '#cbd5e1' }}>
-                      <Check size={16} color="#10b981" /> {f}
-                    </li>
-                  ))}
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-slate-900 mb-1">5-Role Access Control</h3>
+                <p className="text-xs font-light text-slate-500 leading-relaxed">
+                  Granular gates for Super Admin, Sales Manager, Support Lead, B2C Owner, and Staff Viewer.
+                </p>
+              </div>
+            </motion.div>
+
+            {/* Card 02: Fast Supabase Sync */}
+            <motion.div
+              whileHover={{ y: -6 }}
+              className="bg-white rounded-3xl p-6 shadow-lg shadow-slate-200/50 border border-slate-200/80 flex flex-col justify-between"
+            >
+              <div>
+                <div className="text-xs font-medium text-slate-400 mb-2">02.</div>
+                <DeltaPrismGraphic />
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-slate-900 mb-1">Fast Supabase Sync</h3>
+                <p className="text-xs font-light text-slate-500 leading-relaxed">
+                  Direct PostgreSQL integration with Row Level Security, instant queries, and audit logs.
+                </p>
+              </div>
+            </motion.div>
+
+            {/* Card 03: Speech-to-Text Voice AI */}
+            <motion.div
+              whileHover={{ y: -6 }}
+              className="bg-white rounded-3xl p-6 shadow-lg shadow-slate-200/50 border border-slate-200/80 flex flex-col justify-between"
+            >
+              <div>
+                <div className="text-xs font-medium text-slate-400 mb-2">03.</div>
+                <WaveformGraphic />
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-slate-900 mb-1">Voice AI Intelligence</h3>
+                <p className="text-xs font-light text-slate-500 leading-relaxed">
+                  Live meeting transcription, customer sentiment scores, and automatic action item extraction.
+                </p>
+              </div>
+            </motion.div>
+
+            {/* Card 04: Quotes & Invoices */}
+            <motion.div
+              whileHover={{ y: -6 }}
+              className="bg-white rounded-3xl p-6 shadow-lg shadow-slate-200/50 border border-slate-200/80 flex flex-col justify-between"
+            >
+              <div>
+                <div className="text-xs font-medium text-slate-400 mb-2">04.</div>
+                <RadarGraphic />
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-slate-900 mb-1">Quotes & PDF Billing</h3>
+                <p className="text-xs font-light text-slate-500 leading-relaxed">
+                  Generate verified PDF quotes and client invoices with 1-click tax calculations and downloads.
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================================================
+          SECTION 4: EVERYTHING YOUR TEAM NEEDS (3 LARGE SHOWCASE CARDS)
+          ========================================================================= */}
+      <section className="py-20 sm:py-28 bg-white">
+        <div className="max-w-6xl mx-auto px-6 space-y-16 sm:space-y-24">
+          {/* Header */}
+          <div className="text-center max-w-2xl mx-auto">
+            <div className="inline-flex items-center gap-1.5 text-xs font-medium text-[#ff5900] uppercase tracking-widest bg-orange-50 px-3 py-1 rounded-full mb-3 border border-orange-100">
+              <Layers size={12} />
+              <span>COMPLETE PLATFORM</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-medium text-slate-950 tracking-tight">
+              Everything Your Enterprise Needs to Close More Deals
+            </h2>
+            <p className="mt-4 text-slate-500 font-light text-sm sm:text-base leading-relaxed">
+              A unified system built to streamline pipelines, customer support tickets, service billing, and revenue predictability.
+            </p>
+          </div>
+
+          {/* Feature 1: Smart Lead Management */}
+          <div className="bg-slate-50/80 rounded-3xl sm:rounded-[36px] p-8 sm:p-12 border border-slate-200/80 shadow-sm grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+            <div className="lg:col-span-6 space-y-5">
+              <h3 className="text-2xl sm:text-3xl font-medium text-slate-950 tracking-tight">
+                Smart Lead Scoring & Conversion
+              </h3>
+              <p className="text-slate-600 font-light text-sm sm:text-base leading-relaxed">
+                Score incoming leads automatically, track engagement channels, and route opportunities to the right sales reps instantly.
+              </p>
+              <ul className="space-y-2.5 text-sm text-slate-700 font-light list-none p-0">
+                <li className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#ff5900] shrink-0"/> Multi-channel contact enrichment with verified data</li>
+                <li className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#ff5900] shrink-0"/> Automated stage progression and alert triggers</li>
+                <li className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#ff5900] shrink-0"/> Deal conversion probability indicators</li>
+              </ul>
+              <div className="pt-2">
+                <Link to="/features" className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#ff5900] hover:bg-[#e04f00] text-white font-medium text-sm no-underline shadow-md shadow-orange-500/20">
+                  <span>Explore Leads Pipeline</span>
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
+            </div>
+            <div className="lg:col-span-6">
+              <LeadManagementMockup />
+            </div>
+          </div>
+
+          {/* Feature 2: Visual Deal Pipeline */}
+          <div className="bg-slate-50/80 rounded-3xl sm:rounded-[36px] p-8 sm:p-12 border border-slate-200/80 shadow-sm grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+            <div className="lg:col-span-6 order-2 lg:order-1">
+              <SalesPipelineMockup />
+            </div>
+            <div className="lg:col-span-6 space-y-5 order-1 lg:order-2">
+              <h3 className="text-2xl sm:text-3xl font-medium text-slate-950 tracking-tight">
+                Drag-and-Drop Deal Kanban
+              </h3>
+              <p className="text-slate-600 font-light text-sm sm:text-base leading-relaxed">
+                Visualize every deal stage from initial discovery to closed-won with weighted forecasting and automated follow-up reminders.
+              </p>
+              <ul className="space-y-2.5 text-sm text-slate-700 font-light list-none p-0">
+                <li className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#ff5900] shrink-0"/> Custom opportunity stages for B2B and B2C sales</li>
+                <li className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#ff5900] shrink-0"/> Quarterly revenue projection models</li>
+                <li className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#ff5900] shrink-0"/> Task and SLA trigger automations</li>
+              </ul>
+              <div className="pt-2">
+                <Link to="/features" className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#ff5900] hover:bg-[#e04f00] text-white font-medium text-sm no-underline shadow-md shadow-orange-500/20">
+                  <span>View Pipeline Kanban</span>
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Feature 3: AI Speech & Sentiment Analysis */}
+          <div className="bg-slate-50/80 rounded-3xl sm:rounded-[36px] p-8 sm:p-12 border border-slate-200/80 shadow-sm grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+            <div className="lg:col-span-6 space-y-5">
+              <h3 className="text-2xl sm:text-3xl font-medium text-slate-950 tracking-tight">
+                AI Speech & Sentiment Insights
+              </h3>
+              <p className="text-slate-600 font-light text-sm sm:text-base leading-relaxed">
+                Transcribe customer calls automatically, generate concise executive summaries, and extract agreed action items directly into CRM profiles.
+              </p>
+              <ul className="space-y-2.5 text-sm text-slate-700 font-light list-none p-0">
+                <li className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#ff5900] shrink-0"/> Real-time speech transcription & sentiment scoring</li>
+                <li className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#ff5900] shrink-0"/> Instant objection detection and competitive cues</li>
+                <li className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#ff5900] shrink-0"/> Direct Supabase activity timeline sync</li>
+              </ul>
+              <div className="pt-2">
+                <Link to="/features" className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#ff5900] hover:bg-[#e04f00] text-white font-medium text-sm no-underline shadow-md shadow-orange-500/20">
+                  <span>Discover AI Intel</span>
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
+            </div>
+            <div className="lg:col-span-6">
+              <AISalesInsightsMockup />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================================================
+          SECTION 5: PRICING PLANS (3 TIERS WITH FEATURED NATURE BACKGROUND CARD)
+          ========================================================================= */}
+      <section className="py-20 sm:py-28 bg-slate-50">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <div className="inline-flex items-center gap-1.5 text-xs font-medium text-[#ff5900] uppercase tracking-widest bg-orange-50 px-3 py-1 rounded-full mb-3 border border-orange-100">
+              <Sparkles size={12} />
+              <span>PRICING MATRIX</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-medium text-slate-950 tracking-tight">
+              Choose The Intelligence That Fits Your Workflow
+            </h2>
+            <p className="mt-3 text-slate-500 font-light text-sm sm:text-base">
+              Scale with flexible plans designed for high-growth startups and established enterprise teams.
+            </p>
+
+            {/* Monthly / Annual Toggle */}
+            <div className="mt-8 inline-flex items-center gap-3 bg-white p-1.5 rounded-full border border-slate-200 shadow-sm">
+              <button
+                onClick={() => setAnnualBilling(false)}
+                className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  !annualBilling ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setAnnualBilling(true)}
+                className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  annualBilling ? 'bg-[#ff5900] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span>Annual Billing</span>
+                <span className="bg-emerald-400 text-slate-950 text-[10px] font-medium px-1.5 py-0.2 rounded-full">SAVE 20%</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Pricing Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+            {/* Plan 1: Starter */}
+            <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-md flex flex-col justify-between">
+              <div>
+                <h3 className="text-lg font-medium text-slate-900 mb-2">Starter</h3>
+                <p className="text-xs font-light text-slate-500 mb-6">Essential CRM tools for boutique teams.</p>
+                <div className="flex items-baseline gap-1 mb-6">
+                  <span className="text-4xl font-medium text-slate-950">
+                    ${annualBilling ? '39' : '49'}
+                  </span>
+                  <span className="text-xs text-slate-400 font-light">/ month</span>
+                </div>
+                <ul className="space-y-3 text-xs text-slate-600 font-light list-none p-0 mb-8">
+                  <li className="flex items-center gap-2"><Check size={14} className="text-[#ff5900]"/> Up to 5 team members</li>
+                  <li className="flex items-center gap-2"><Check size={14} className="text-[#ff5900]"/> Lead & contact management</li>
+                  <li className="flex items-center gap-2"><Check size={14} className="text-[#ff5900]"/> Deals & pipeline kanban</li>
+                  <li className="flex items-center gap-2"><Check size={14} className="text-[#ff5900]"/> 5GB document storage</li>
+                  <li className="flex items-center gap-2"><Check size={14} className="text-[#ff5900]"/> Standard email support</li>
+                </ul>
+              </div>
+              <Link
+                to="/signup"
+                className="w-full text-center py-3 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium text-xs no-underline transition-colors block"
+              >
+                Get Started
+              </Link>
+            </div>
+
+            {/* Plan 2: Pro (Featured with Poppy Landscape Background) */}
+            <div className="relative rounded-3xl overflow-hidden shadow-2xl border-2 border-[#ff5900] flex flex-col justify-between text-white group">
+              {/* Nature background */}
+              <img
+                src="/images/flowa/hero_poppy_hill.jpg"
+                alt="Pro plan poppy hill background"
+                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-orange-950/80 to-slate-900/85 backdrop-blur-[2px]" />
+
+              <div className="relative z-10 p-8">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-medium text-white">Pro Growth</h3>
+                  <span className="bg-[#ff5900] text-white text-[10px] font-medium uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-sm">
+                    MOST POPULAR
+                  </span>
+                </div>
+                <p className="text-xs text-orange-100/80 font-light mb-6">Complete AI CRM intelligence for scaling teams.</p>
+                <div className="flex items-baseline gap-1 mb-6">
+                  <span className="text-4xl font-medium text-white">
+                    ${annualBilling ? '119' : '149'}
+                  </span>
+                  <span className="text-xs text-orange-200 font-light">/ month</span>
+                </div>
+                <ul className="space-y-3 text-xs text-orange-50 font-light list-none p-0 mb-8">
+                  <li className="flex items-center gap-2"><Check size={14} className="text-orange-400"/> Up to 25 team members</li>
+                  <li className="flex items-center gap-2"><Check size={14} className="text-orange-400"/> 5-Role RBAC access controls</li>
+                  <li className="flex items-center gap-2"><Check size={14} className="text-orange-400"/> Quotes, invoices & PDF generator</li>
+                  <li className="flex items-center gap-2"><Check size={14} className="text-orange-400"/> Fast Express API & webhooks</li>
+                  <li className="flex items-center gap-2"><Check size={14} className="text-orange-400"/> 24/7 priority customer support</li>
                 </ul>
               </div>
 
-              <ShinyButton
-                variant={p.popular ? 'primary' : 'secondary'}
-                style={{ width: '100%' }}
-                onClick={() => navigate('/signup')}
+              <div className="relative z-10 p-8 pt-0">
+                <Link
+                  to="/signup"
+                  className="w-full text-center py-3.5 rounded-full bg-white hover:bg-orange-50 text-slate-950 font-medium text-xs no-underline shadow-xl transition-all hover:shadow-2xl block"
+                >
+                  Start 14-Day Free Trial
+                </Link>
+              </div>
+            </div>
+
+            {/* Plan 3: Custom / Enterprise */}
+            <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-md flex flex-col justify-between">
+              <div>
+                <h3 className="text-lg font-medium text-slate-900 mb-2">Custom</h3>
+                <p className="text-xs font-light text-slate-500 mb-6">Enterprise-grade security and governance.</p>
+                <div className="flex items-baseline gap-1 mb-6">
+                  <span className="text-4xl font-medium text-slate-950">
+                    Custom
+                  </span>
+                </div>
+                <ul className="space-y-3 text-xs text-slate-600 font-light list-none p-0 mb-8">
+                  <li className="flex items-center gap-2"><Check size={14} className="text-[#ff5900]"/> Unlimited team seats</li>
+                  <li className="flex items-center gap-2"><Check size={14} className="text-[#ff5900]"/> Custom AI LLM model training</li>
+                  <li className="flex items-center gap-2"><Check size={14} className="text-[#ff5900]"/> Enterprise SSO & audit logs</li>
+                  <li className="flex items-center gap-2"><Check size={14} className="text-[#ff5900]"/> Dedicated customer success manager</li>
+                  <li className="flex items-center gap-2"><Check size={14} className="text-[#ff5900]"/> 99.99% SLA uptime guarantee</li>
+                </ul>
+              </div>
+              <Link
+                to="/contact"
+                className="w-full text-center py-3 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs no-underline transition-colors block"
               >
-                {p.ctaLabel}
-              </ShinyButton>
-            </SpotlightCard>
-          ))}
+                Contact Sales
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="cta-section" style={{ padding: '100px 24px', textAlign: 'center', background: '#080c16', position: 'relative' }}>
-        <div style={{ maxWidth: 700, margin: '0 auto' }}>
-          <div className="section-label" style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 20, background: 'rgba(255, 89, 0, 0.12)', color: '#ff5900', fontWeight: 700, fontSize: 12, marginBottom: 16 }}>
-            {t('cta.label')}
+      {/* =========================================================================
+          SECTION 6: TESTIMONIALS ("Loved by Teams That Sell Smarter")
+          ========================================================================= */}
+      <section className="py-20 sm:py-28 bg-white border-t border-slate-100">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <div className="inline-flex items-center gap-1.5 text-xs font-medium text-[#ff5900] uppercase tracking-widest bg-orange-50 px-3 py-1 rounded-full mb-3 border border-orange-100">
+              <Sparkles size={12} />
+              <span>TESTIMONIALS</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-medium text-slate-950 tracking-tight">
+              Loved by High-Velocity Revenue Teams
+            </h2>
+            <p className="mt-3 text-slate-500 font-light text-sm sm:text-base">
+              Hear how enterprise sales leaders close deals 2x faster with XOWIQ CRM.
+            </p>
           </div>
-          <h2 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#f8fafc', marginBottom: 16 }}>{t('cta.title')}</h2>
-          <p style={{ color: '#94a3b8', marginBottom: 36, fontSize: '1.1rem', lineHeight: 1.6 }}>{t('cta.desc')}</p>
-          <ShinyButton variant="primary" style={{ padding: '14px 36px', fontSize: '1.1rem' }} onClick={() => navigate('/signup')}>
-            <span>{t('cta.button')}</span>
-            <ArrowRight size={18} />
-          </ShinyButton>
+
+          {/* Testimonials 2-row Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              {
+                quote: "XOWIQ's 5-role RBAC allowed us to seamlessly onboard our sales reps, support leads, and B2C managers with zero permission conflicts.",
+                author: "Elena Rostova",
+                role: "VP of Sales, CloudScale",
+                avatar: "E"
+              },
+              {
+                quote: "The direct Supabase sync and custom deal stages gave our executive team unprecedented visibility into our quarterly revenue pipeline.",
+                author: "David Chen",
+                role: "Head of Revenue Operations, FinFlow",
+                avatar: "D"
+              },
+              {
+                quote: "We replaced three disparate tools with XOWIQ CRM. Our deal conversion velocity jumped by 34% in the very first month.",
+                author: "Marcus Vance",
+                role: "Chief Commercial Officer, Apex AI",
+                avatar: "M"
+              },
+              {
+                quote: "The 1-click PDF quote and invoice generator cut our billing cycle down from 4 days to literally 3 minutes.",
+                author: "Sarah Connor",
+                role: "Sales Director, Horizon Tech",
+                avatar: "S"
+              },
+              {
+                quote: "The automated speech transcription and action item detection keeps our reps focused on closing instead of manual logging.",
+                author: "Alex Rivera",
+                role: "Chief Technology Officer, Nexus Systems",
+                avatar: "A"
+              },
+              {
+                quote: "The natural poppy landscape visual design makes working inside XOWIQ an absolute joy every morning.",
+                author: "Chloe Dubois",
+                role: "Founder & CEO, Studio Velo",
+                avatar: "C"
+              }
+            ].map((t, idx) => (
+              <motion.div
+                key={idx}
+                whileHover={{ y: -4 }}
+                className="bg-slate-50 rounded-3xl p-6 border border-slate-200/80 shadow-sm flex flex-col justify-between"
+              >
+                <p className="text-xs sm:text-sm text-slate-700 font-light leading-relaxed italic mb-6">
+                  "{t.quote}"
+                </p>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#ff5900] to-[#ff8237] text-white font-medium text-xs flex items-center justify-center shadow-sm">
+                    {t.avatar}
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-900">{t.author}</div>
+                    <div className="text-[11px] font-light text-slate-400">{t.role}</div>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="footer" style={{ padding: '40px 32px', background: '#05070e', borderTop: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
-        <div className="landing-nav-logo" style={{ display: 'flex', alignItems: 'center', gap: 0, fontWeight: 900, fontFamily: '"Fredoka", sans-serif', fontSize: '20px', letterSpacing: '-0.5px' }}>
-          <div style={{ backgroundColor: '#f37a23', color: '#ffffff', padding: '3px 5px', lineHeight: 1, borderRadius: '4px 0 0 4px' }}>
-            XOWIQ
-          </div>
-          <div style={{ color: '#ffffff', backgroundColor: '#1e293b', padding: '3px 5px', lineHeight: 1, borderRadius: '0 4px 4px 0' }}>
-            CRM
+      {/* =========================================================================
+          SECTION 7: PANORAMIC NATURE CTA BANNER
+          ========================================================================= */}
+      <section className="py-16 sm:py-24 bg-slate-50">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="relative rounded-[36px] sm:rounded-[48px] overflow-hidden shadow-2xl p-10 sm:p-20 text-center text-white border border-white/40">
+            {/* Background Image */}
+            <img
+              src="/images/flowa/cta_landscape.jpg"
+              alt="Panoramic poppy hill landscape"
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+            {/* Sunset Orange to Indigo Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-orange-950/80 to-slate-900/75 backdrop-blur-[1px]" />
+
+            <div className="relative z-10 max-w-3xl mx-auto space-y-6">
+              <div className="inline-flex items-center gap-1.5 text-xs font-medium text-white uppercase tracking-widest bg-white/20 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/30">
+                <Sparkles size={12} />
+                <span>START YOUR FREE TRIAL</span>
+              </div>
+
+              <h2 className="text-3xl sm:text-5xl font-medium text-white tracking-tight leading-tight drop-shadow-md">
+                Give Your Sales Team The Tools to Close More Deals
+              </h2>
+
+              <p className="text-sm sm:text-base text-orange-100 font-light max-w-xl mx-auto leading-relaxed">
+                Join thousands of high-performing revenue teams using XOWIQ CRM today. No credit card required.
+              </p>
+
+              <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
+                <Link
+                  to={session ? "/dashboard" : "/signup"}
+                  className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-[#ff5900] hover:bg-[#e04f00] text-white font-medium text-sm sm:text-base shadow-xl hover:scale-105 transition-all no-underline border-none"
+                >
+                  Start Free Trial
+                </Link>
+                <Link
+                  to="/contact"
+                  className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-white/20 hover:bg-white/30 text-white font-medium text-sm sm:text-base border border-white/40 backdrop-blur-md hover:scale-105 transition-all no-underline"
+                >
+                  Book a 1-on-1 Demo
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="footer-text" style={{ color: '#64748b', fontSize: 14 }}>{t('footer.copyright')}</div>
-        <div style={{ display: 'flex', gap: 20 }}>
-          <a href="#features" style={{ fontSize: 14, color: '#94a3b8', textDecoration: 'none' }}>{t('nav.features')}</a>
-          <a href="#pricing" style={{ fontSize: 14, color: '#94a3b8', textDecoration: 'none' }}>{t('nav.pricing')}</a>
-          <Link to="/login" style={{ fontSize: 14, color: '#94a3b8', textDecoration: 'none' }}>{t('footer.login')}</Link>
-        </div>
-      </footer>
+      </section>
+
+      {/* =========================================================================
+          SECTION 8: ENTERPRISE FOOTER
+          ========================================================================= */}
+      <FlowaFooter />
     </div>
   )
 }

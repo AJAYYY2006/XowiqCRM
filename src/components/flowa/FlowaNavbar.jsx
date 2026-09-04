@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Menu, X, ArrowRight, Sparkles } from 'lucide-react'
+import { Menu, X, ArrowRight, Zap } from 'lucide-react'
 
 export function FlowaLogo({ size = 28 }) {
   return (
-    <Link to="/" className="flex items-center gap-2.5 group cursor-pointer text-slate-900 no-underline">
-      <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-sky-400 flex items-center justify-center text-white shadow-md shadow-blue-500/25 group-hover:scale-105 transition-transform duration-300">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM8.46 14.88L7.05 13.46L11.29 9.22C11.68 8.83 12.31 8.83 12.7 9.22L16.94 13.46L15.53 14.88L12 11.35L8.46 14.88Z" fill="currentColor"/>
-        </svg>
+    <Link to="/" className="flex items-center gap-1.5 group cursor-pointer text-slate-900 no-underline font-['Poppins',sans-serif]">
+      <div className="flex items-center text-lg tracking-tight font-medium">
+        <div className="bg-[#ff5900] text-white px-2.5 py-1 rounded-l-xl shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform duration-300 flex items-center gap-1.5 font-medium">
+          <Zap size={14} className="fill-white" />
+          <span>XOWIQ</span>
+        </div>
+        <div className="bg-[#0f172a] text-white px-2 py-1 rounded-r-xl border-l border-white/20 font-light text-sm">
+          CRM
+        </div>
       </div>
-      <span className="font-['Outfit',sans-serif] font-bold text-xl tracking-tight text-slate-900">
-        Flowa
-      </span>
     </Link>
   )
 }
@@ -47,29 +48,29 @@ export default function FlowaNavbar({ session }) {
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-4 sm:px-8 pt-4 sm:pt-6">
+    <header className="fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-4 sm:px-8 pt-4 sm:pt-6 font-['Poppins',sans-serif]">
       <div
         className={`max-w-6xl mx-auto rounded-full transition-all duration-300 px-5 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between ${
           scrolled
-            ? 'bg-white/80 backdrop-blur-xl shadow-lg shadow-blue-900/5 border border-white/60'
-            : 'bg-white/60 backdrop-blur-md border border-white/40 shadow-sm'
+            ? 'bg-white/85 backdrop-blur-xl shadow-lg shadow-orange-950/5 border border-white/80'
+            : 'bg-white/70 backdrop-blur-md border border-white/50 shadow-sm'
         }`}
       >
         {/* Brand Logo */}
         <FlowaLogo />
 
         {/* Center Pill Navigation (Desktop) */}
-        <nav className="hidden md:flex items-center gap-1 bg-slate-100/80 p-1 rounded-full border border-slate-200/60 shadow-inner">
+        <nav className="hidden md:flex items-center gap-1 bg-slate-100/90 p-1 rounded-full border border-slate-200/60 shadow-inner">
           {navLinks.map((link) => {
             const active = isActive(link.path)
             return (
               <Link
                 key={link.name}
                 to={link.path}
-                className={`relative px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 no-underline ${
+                className={`relative px-4 py-1.5 rounded-full text-xs sm:text-sm transition-all duration-200 no-underline ${
                   active
-                    ? 'text-blue-600 font-semibold'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                    ? 'text-[#ff5900] font-medium'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60 font-light'
                 }`}
               >
                 {active && (
@@ -90,7 +91,7 @@ export default function FlowaNavbar({ session }) {
           {session ? (
             <button
               onClick={() => navigate('/dashboard')}
-              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs sm:text-sm px-5 py-2 rounded-full shadow-md shadow-blue-500/20 hover:shadow-lg transition-all duration-200 cursor-pointer"
+              className="inline-flex items-center gap-2 bg-[#ff5900] hover:bg-[#e04f00] text-white font-medium text-xs sm:text-sm px-5 py-2 rounded-full shadow-md shadow-orange-500/25 hover:shadow-lg transition-all duration-200 cursor-pointer border-none"
             >
               <span>Dashboard</span>
               <ArrowRight size={14} />
@@ -98,7 +99,7 @@ export default function FlowaNavbar({ session }) {
           ) : (
             <Link
               to="/login"
-              className="inline-flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-800 font-semibold text-xs sm:text-sm px-5 py-2 rounded-full border border-slate-200/80 shadow-sm hover:shadow transition-all duration-200 cursor-pointer no-underline"
+              className="inline-flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-800 font-medium text-xs sm:text-sm px-5 py-2 rounded-full border border-slate-200/80 shadow-sm hover:shadow transition-all duration-200 cursor-pointer no-underline"
             >
               <span>Login</span>
             </Link>
@@ -109,7 +110,7 @@ export default function FlowaNavbar({ session }) {
         <div className="flex md:hidden items-center gap-2">
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-full text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+            className="p-2 rounded-full text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer border-none bg-transparent"
             aria-label="Toggle Navigation Menu"
           >
             {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -132,10 +133,10 @@ export default function FlowaNavbar({ session }) {
                   key={link.name}
                   to={link.path}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-colors no-underline ${
+                  className={`px-4 py-2.5 rounded-xl text-sm transition-colors no-underline ${
                     isActive(link.path)
-                      ? 'bg-blue-50 text-blue-600 font-semibold'
-                      : 'text-slate-700 hover:bg-slate-50'
+                      ? 'bg-orange-50 text-[#ff5900] font-medium'
+                      : 'text-slate-700 hover:bg-slate-50 font-light'
                   }`}
                 >
                   {link.name}
@@ -147,7 +148,7 @@ export default function FlowaNavbar({ session }) {
               <Link
                 to="/login"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-full text-center py-2.5 rounded-xl bg-blue-600 text-white font-medium text-sm no-underline shadow-md shadow-blue-500/20"
+                className="w-full text-center py-2.5 rounded-xl bg-[#ff5900] text-white font-medium text-sm no-underline shadow-md shadow-orange-500/20"
               >
                 {session ? 'Go to Dashboard' : 'Sign In'}
               </Link>

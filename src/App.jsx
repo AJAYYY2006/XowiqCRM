@@ -5,6 +5,10 @@ import { useTranslation } from 'react-i18next'
 import { supabase } from './lib/supabase'
 import { RoleProvider } from './contexts/RoleContext'
 import LandingPage from './pages/LandingPage'
+import AboutPage from './pages/AboutPage'
+import FeaturesPage from './pages/FeaturesPage'
+import PricingPage from './pages/PricingPage'
+import ContactPage from './pages/ContactPage'
 import Login from './pages/Login'
 import SignUp from './pages/SignUp'
 import Dashboard from './pages/Dashboard'
@@ -91,6 +95,12 @@ export default function App() {
         />
         <Routes>
           <Route path="/" element={<LandingPage session={session} />} />
+          <Route path="/home" element={<LandingPage session={session} />} />
+          <Route path="/about" element={<AboutPage session={session} />} />
+          <Route path="/features" element={<FeaturesPage session={session} />} />
+          <Route path="/feature" element={<FeaturesPage session={session} />} />
+          <Route path="/pricing" element={<PricingPage session={session} />} />
+          <Route path="/contact" element={<ContactPage session={session} />} />
           <Route path="/login" element={session ? <Navigate to={loggedInRedirect} replace /> : <Login />} />
           <Route path="/signup" element={session ? <Navigate to={loggedInRedirect} replace /> : <SignUp />} />
 
