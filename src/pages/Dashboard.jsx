@@ -23,6 +23,9 @@ import Tickets from '../components/modules/Tickets'
 import Tasks from '../components/modules/Tasks'
 import SettingsPage from '../components/modules/Settings'
 import Services from '../components/modules/Services'
+import { useRole } from '../contexts/RoleContext'
+import RoleGuard from '../components/auth/RoleGuard'
+import { ROLE_DEFINITIONS } from '../config/roles'
 
 // ─── KPI Panel ───────────────────────────────────────────────────────────────
 function KPIPanel({ session, profile }) {
@@ -912,15 +915,14 @@ export default function Dashboard({ session }) {
   const { t } = useTranslation()
   const [profile, setProfile] = useState(null)
   
-  // role extraction
-  const role = (session.user.user_metadata?.role || 'user').toLowerCase()
-  const isAdmin = ['admin', 'administrator'].includes(role)
+  // RBAC hook
+  const { role, roleInfo, isAdmin, isManager, isSupport, isB2C, hasAccess, switchRole } = useRole()
   
   // default active section depends on role
-  const [activeSection, setActiveSection] = useState(isAdmin ? 'kpi' : 'crm') // 'kpi' | 'users' | 'team_records' | 'crm'
+  const [activeSection, setActiveSection] = useState(isAdmin ? 'kpi' : 'crm')
+  const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false)
 
   const companyType = session.user.user_metadata?.companyType || profile?.company_type || 'B2B'
-  const isB2C = companyType === 'B2C'
 
   const fetchProfile = async () => {
     const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
@@ -960,7 +962,7 @@ export default function Dashboard({ session }) {
         }
       }
 
-      // Strategy 4: Merge localStorage users — only real UUIDs (skip pending-* IDs)
+      // Strategy 4: Merge localStorage users
       const localKey = `xowiq_created_users_${session.user.id}`
       const localUsers = JSON.parse(localStorage.getItem(localKey) || '[]')
       localUsers.forEach(lu => {
@@ -976,7 +978,6 @@ export default function Dashboard({ session }) {
   useEffect(() => {
     fetchProfile()
 
-    // Real-time: auto-refresh teamUserIds when any profile is created/updated
     const channel = supabase.channel('admin-team-profile-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
         fetchProfile()
@@ -992,31 +993,35 @@ export default function Dashboard({ session }) {
     navigate('/')
   }
 
-  // CRM nav items mapped with translations
-  const crmNavItems = isB2C ? [
-    { path: '', label: t('sidebar.dashboard'), icon: <LayoutDashboard size={16} /> },
-    { path: 'accounts', label: t('sidebar.customerProfiles'), icon: <Users size={16} /> },
-    { path: 'services', label: t('sidebar.services'), icon: <Package size={16} /> },
-    { path: 'leads', label: t('sidebar.leads'), icon: <UserSquare2 size={16} /> },
-    { path: 'opportunities', label: t('sidebar.opportunities'), icon: <Briefcase size={16} /> },
-    { path: 'invoices', label: t('sidebar.invoices'), icon: <Quote size={16} /> },
-    { path: 'tasks', label: t('sidebar.tasks'), icon: <Search size={16} /> },
-    { path: 'tickets', label: t('sidebar.tickets'), icon: <Ticket size={16} /> },
-    { path: 'reports', label: t('sidebar.reports'), icon: <BarChart3 size={16} /> },
-    { path: 'settings', label: t('sidebar.settings'), icon: <Settings size={16} /> },
+  // Master CRM Navigation definition
+  const rawNavItems = isB2C ? [
+    { id: 'dashboard', path: '', label: t('sidebar.dashboard'), icon: <LayoutDashboard size={16} /> },
+    { id: 'accounts', path: 'accounts', label: t('sidebar.customerProfiles'), icon: <Users size={16} /> },
+    { id: 'services', path: 'services', label: t('sidebar.services'), icon: <Package size={16} /> },
+    { id: 'leads', path: 'leads', label: t('sidebar.leads'), icon: <UserSquare2 size={16} /> },
+    { id: 'deals', path: 'opportunities', label: t('sidebar.opportunities'), icon: <Briefcase size={16} /> },
+    { id: 'invoices', path: 'invoices', label: t('sidebar.invoices'), icon: <Quote size={16} /> },
+    { id: 'tasks', path: 'tasks', label: t('sidebar.tasks'), icon: <Search size={16} /> },
+    { id: 'tickets', path: 'tickets', label: t('sidebar.tickets'), icon: <Ticket size={16} /> },
+    { id: 'reports', path: 'reports', label: t('sidebar.reports'), icon: <BarChart3 size={16} /> },
+    { id: 'settings', path: 'settings', label: t('sidebar.settings'), icon: <Settings size={16} /> },
   ] : [
-    { path: '', label: t('sidebar.dashboard'), icon: <LayoutDashboard size={16} /> },
-    { path: 'leads', label: t('sidebar.leads'), icon: <UserSquare2 size={16} /> },
-    { path: 'contacts', label: t('sidebar.contacts'), icon: <Users size={16} /> },
-    { path: 'accounts', label: t('sidebar.accounts'), icon: <Building2 size={16} /> },
-    { path: 'opportunities', label: t('sidebar.opportunities'), icon: <Briefcase size={16} /> },
-    { path: 'quotes', label: t('sidebar.quotesAndProposals'), icon: <Quote size={16} /> },
-    { path: 'reports', label: t('sidebar.reports'), icon: <BarChart3 size={16} /> },
-    { path: 'tickets', label: t('sidebar.tickets'), icon: <Ticket size={16} /> },
-    { path: 'tasks', label: t('sidebar.tasks'), icon: <Search size={16} /> },
-    { path: 'settings', label: t('sidebar.settings'), icon: <Settings size={16} /> },
+    { id: 'dashboard', path: '', label: t('sidebar.dashboard'), icon: <LayoutDashboard size={16} /> },
+    { id: 'leads', path: 'leads', label: t('sidebar.leads'), icon: <UserSquare2 size={16} /> },
+    { id: 'contacts', path: 'contacts', label: t('sidebar.contacts'), icon: <Users size={16} /> },
+    { id: 'accounts', path: 'accounts', label: t('sidebar.accounts'), icon: <Building2 size={16} /> },
+    { id: 'deals', path: 'opportunities', label: t('sidebar.opportunities'), icon: <Briefcase size={16} /> },
+    { id: 'quotes', path: 'quotes', label: t('sidebar.quotesAndProposals'), icon: <Quote size={16} /> },
+    { id: 'invoices', path: 'invoices', label: t('sidebar.invoices', 'Invoices'), icon: <Quote size={16} /> },
+    { id: 'services', path: 'services', label: t('sidebar.services', 'Services'), icon: <Package size={16} /> },
+    { id: 'reports', path: 'reports', label: t('sidebar.reports'), icon: <BarChart3 size={16} /> },
+    { id: 'tickets', path: 'tickets', label: t('sidebar.tickets'), icon: <Ticket size={16} /> },
+    { id: 'tasks', path: 'tasks', label: t('sidebar.tasks'), icon: <Search size={16} /> },
+    { id: 'settings', path: 'settings', label: t('sidebar.settings'), icon: <Settings size={16} /> },
   ]
 
+  // Filter navigation items by active user role permissions
+  const crmNavItems = rawNavItems.filter(item => hasAccess(item.id))
   const currentCrmPath = location.pathname.replace('/dashboard', '').replace(/^\//, '')
 
   return (
@@ -1025,16 +1030,24 @@ export default function Dashboard({ session }) {
       <aside className="sidebar" style={{ overflowY: 'auto' }}>
         {/* Logo */}
         <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: 0, fontWeight: 900, fontFamily: '"Fredoka", sans-serif', fontSize: '22px', letterSpacing: '-0.5px' }}>
-          <div style={{ backgroundColor: '#f37a23', color: '#ffffff', padding: '3px 5px', lineHeight: 1 }}>XOWIQ</div>
-          <div style={{ color: '#000000', padding: '3px 5px', lineHeight: 1 }}>CRM</div>
+          <div style={{ backgroundColor: '#f37a23', color: '#ffffff', padding: '3px 5px', lineHeight: 1, borderRadius: '4px 0 0 4px' }}>XOWIQ</div>
+          <div style={{ color: '#ffffff', backgroundColor: '#1e293b', padding: '3px 5px', lineHeight: 1, borderRadius: '0 4px 4px 0' }}>CRM</div>
         </div>
-        {/* Admin badge */}
-        <div style={{ margin: '4px 0 16px', padding: '6px 12px', background: 'linear-gradient(135deg,#fff7ed,#fef3c7)', border: '1.5px solid #fed7aa', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Shield size={13} style={{ color: '#f37a23', flexShrink: 0 }} />
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 800, color: '#f37a23', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t('dashboard.adminPanel')}</div>
-            <div style={{ fontSize: 10, color: '#92400e' }}>{companyType} Mode</div>
+        
+        {/* Role & Mode Badge */}
+        <div style={{ margin: '6px 0 16px', padding: '8px 12px', background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95))', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Shield size={14} style={{ color: roleInfo.color }} />
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: roleInfo.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {roleInfo.label}
+              </div>
+              <div style={{ fontSize: 10, color: '#94a3b8' }}>{companyType} Mode</div>
+            </div>
           </div>
+          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(255, 255, 255, 0.08)', color: '#cbd5e1', fontWeight: 700 }}>
+            {role.toUpperCase()}
+          </span>
         </div>
 
         {/* Admin-only sections */}
@@ -1075,7 +1088,7 @@ export default function Dashboard({ session }) {
         <nav className="sidebar-nav">
           {crmNavItems.map(item => (
             <button
-              key={item.path}
+              key={item.id}
               className={`nav-item ${(!isAdmin || location.pathname.match(/\/dashboard\/.+/)) && currentCrmPath === item.path ? 'active' : ''}`}
               onClick={() => {
                 setActiveSection('crm')
@@ -1091,16 +1104,16 @@ export default function Dashboard({ session }) {
 
         {/* Sidebar Footer */}
         <div className="sidebar-footer">
-          <div style={{ padding: '12px', background: 'var(--bg-card)', border: '1.5px solid transparent', borderRadius: 'var(--radius-md)', marginBottom: 8 }}>
+          <div style={{ padding: '12px', background: 'var(--bg-card)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 'var(--radius-md)', marginBottom: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--accent-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 15, color: '#fff', flexShrink: 0 }}>
                 {profile?.name?.[0]?.toUpperCase() || session.user.email?.[0]?.toUpperCase()}
               </div>
               <div style={{ overflow: 'hidden', flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {profile?.name || 'Admin'}
+                  {profile?.name || 'User'}
                 </div>
-                <div style={{ fontSize: 10, color: '#f37a23', fontWeight: 700 }}>● {t('dashboard.administrator')}</div>
+                <div style={{ fontSize: 10, color: roleInfo.color, fontWeight: 700 }}>● {roleInfo.label}</div>
               </div>
             </div>
           </div>
@@ -1118,47 +1131,183 @@ export default function Dashboard({ session }) {
           alignItems: 'center', background: '#FFFBDC', position: 'sticky', top: 0, zIndex: 40, padding: '0 32px',
           justifyContent: 'space-between'
         }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
-            {profile?.company_name || session.user.user_metadata?.companyName || 'Admin Dashboard'}
-          </h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ padding: '4px 14px', background: '#fff7ed', border: '1.5px solid #fed7aa', borderRadius: 20, fontSize: 12, fontWeight: 700, color: '#f37a23' }}>
-              🛡 Admin · {companyType}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+              {profile?.company_name || session.user.user_metadata?.companyName || 'XOWIQ CRM'}
+            </h2>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* Active Role Selector / Indicator */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}
+                style={{
+                  padding: '6px 14px',
+                  background: 'rgba(255, 255, 255, 0.85)',
+                  border: '1.5px solid #fed7aa',
+                  borderRadius: 20,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: '#f37a23',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  cursor: 'pointer'
+                }}
+              >
+                <span>{roleInfo.badge}</span>
+                <span style={{ fontSize: 10, color: '#64748b' }}>▼</span>
+              </button>
+
+              {isRoleMenuOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: 0,
+                    marginTop: 8,
+                    background: '#0f172a',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: 12,
+                    padding: 8,
+                    width: 220,
+                    boxShadow: '0 20px 40px -10px rgba(0,0,0,0.7)',
+                    zIndex: 100
+                  }}
+                >
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', padding: '6px 10px' }}>
+                    Switch Active Role:
+                  </div>
+                  {[
+                    { key: 'admin', label: '👑 Super Admin' },
+                    { key: 'manager', label: '💼 Sales Manager' },
+                    { key: 'agent', label: '🎧 Support Agent' },
+                    { key: 'b2c', label: '🛍️ B2C Store Owner' },
+                    { key: 'user', label: '👁️ Staff / Viewer' }
+                  ].map(r => (
+                    <button
+                      key={r.key}
+                      onClick={() => {
+                        switchRole(r.key)
+                        setIsRoleMenuOpen(false)
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        textAlign: 'left',
+                        background: role === r.key ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+                        color: role === r.key ? '#818cf8' : '#cbd5e1',
+                        border: 'none',
+                        borderRadius: 8,
+                        fontSize: 12,
+                        fontWeight: role === r.key ? 700 : 500,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {r.label} {role === r.key && '✓'}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '4px 12px', background: '#fff7ed', border: '1.5px solid #fed7aa', borderRadius: 20, fontSize: 12, fontWeight: 700, color: '#f37a23' }}>
+              {companyType} Mode
             </div>
           </div>
         </header>
 
         <div style={{ padding: '32px' }}>
-          {/* All sections unified into a single Routes block */}
+          {/* Protected Sub-routes via RoleGuard */}
           <Routes>
-            {/* KPI Dashboard is the default for admins, but non-admins get DashboardHome */}
             <Route index element={
               isAdmin 
                 ? <KPIPanel session={session} profile={profile} />
                 : <DashboardHome session={session} profile={profile} />
             } />
 
-            {/* Admin-only explicitly named paths */}
-            {isAdmin && (
-              <>
-                <Route path="users" element={<UserManagementPanel session={session} profile={profile} onUserCreated={fetchProfile} />} />
-                <Route path="team_records" element={<TeamRecordsPanel session={session} profile={profile} />} />
-              </>
-            )}
+            {/* Admin-only paths */}
+            <Route path="users" element={
+              <RoleGuard moduleId="users">
+                <UserManagementPanel session={session} profile={profile} onUserCreated={fetchProfile} />
+              </RoleGuard>
+            } />
 
-            {/* Common CRM modules mapped directly under /dashboard */}
-            {isAdmin && <Route path="crm" element={<DashboardHome session={session} profile={profile} />} />}
-            <Route path="leads" element={<Leads session={session} profile={profile} />} />
-            <Route path="contacts" element={<Contacts session={session} profile={profile} />} />
-            <Route path="accounts" element={<Accounts session={session} profile={profile} />} />
-            <Route path="services" element={<Services session={session} profile={profile} />} />
-            <Route path="opportunities/*" element={<Opportunities session={session} profile={profile} />} />
-            <Route path="quotes" element={<Quotes session={session} profile={profile} />} />
-            <Route path="invoices" element={<Invoices session={session} profile={profile} />} />
-            <Route path="reports" element={<Reports session={session} profile={profile} />} />
-            <Route path="tickets" element={<Tickets session={session} profile={profile} />} />
-            <Route path="tasks" element={<Tasks session={session} profile={profile} />} />
-            <Route path="settings" element={<SettingsPage session={session} profile={profile} />} />
+            <Route path="team_records" element={
+              <RoleGuard moduleId="team_records">
+                <TeamRecordsPanel session={session} profile={profile} />
+              </RoleGuard>
+            } />
+
+            {/* Common & Protected CRM modules */}
+            <Route path="crm" element={<DashboardHome session={session} profile={profile} />} />
+
+            <Route path="leads" element={
+              <RoleGuard moduleId="leads">
+                <Leads session={session} profile={profile} />
+              </RoleGuard>
+            } />
+
+            <Route path="contacts" element={
+              <RoleGuard moduleId="contacts">
+                <Contacts session={session} profile={profile} />
+              </RoleGuard>
+            } />
+
+            <Route path="accounts" element={
+              <RoleGuard moduleId="accounts">
+                <Accounts session={session} profile={profile} />
+              </RoleGuard>
+            } />
+
+            <Route path="services" element={
+              <RoleGuard moduleId="services">
+                <Services session={session} profile={profile} />
+              </RoleGuard>
+            } />
+
+            <Route path="opportunities/*" element={
+              <RoleGuard moduleId="deals">
+                <Opportunities session={session} profile={profile} />
+              </RoleGuard>
+            } />
+
+            <Route path="quotes" element={
+              <RoleGuard moduleId="quotes">
+                <Quotes session={session} profile={profile} />
+              </RoleGuard>
+            } />
+
+            <Route path="invoices" element={
+              <RoleGuard moduleId="invoices">
+                <Invoices session={session} profile={profile} />
+              </RoleGuard>
+            } />
+
+            <Route path="reports" element={
+              <RoleGuard moduleId="reports">
+                <Reports session={session} profile={profile} />
+              </RoleGuard>
+            } />
+
+            <Route path="tickets" element={
+              <RoleGuard moduleId="tickets">
+                <Tickets session={session} profile={profile} />
+              </RoleGuard>
+            } />
+
+            <Route path="tasks" element={
+              <RoleGuard moduleId="tasks">
+                <Tasks session={session} profile={profile} />
+              </RoleGuard>
+            } />
+
+            <Route path="settings" element={
+              <RoleGuard moduleId="settings">
+                <SettingsPage session={session} profile={profile} />
+              </RoleGuard>
+            } />
           </Routes>
         </div>
       </main>

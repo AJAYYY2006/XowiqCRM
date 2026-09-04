@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import { supabase } from './lib/supabase'
+import { RoleProvider } from './contexts/RoleContext'
 import LandingPage from './pages/LandingPage'
 import Login from './pages/Login'
 import SignUp from './pages/SignUp'
@@ -12,7 +13,6 @@ function ProtectedRoute({ session, children }) {
   if (!session) return <Navigate to="/login" replace />
   return children
 }
-
 
 export default function App() {
   const { t } = useTranslation()
@@ -29,30 +29,28 @@ export default function App() {
         .maybeSingle()
       setProfile(data || null)
     } catch {
-      // Non-critical — profile is used for display only
       setProfile(null)
     }
   }
 
   useEffect(() => {
-    // One-time force sign-out to migrate users to the unified dashboard
+    // Force sign-out migration if needed
     if (!localStorage.getItem('xowiq_unified_dashboard_migration')) {
       supabase.auth.signOut().then(() => {
-        localStorage.setItem('xowiq_unified_dashboard_migration', 'done');
-        window.location.href = '/login';
-      });
-      return;
+        localStorage.setItem('xowiq_unified_dashboard_migration', 'done')
+        window.location.href = '/login'
+      })
+      return
     }
 
-    // Always resolve loading — never hang
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       if (session?.user?.id) {
         fetchProfile(session.user.id)
       }
-      setLoading(false)   // ← always called, no async await blocking this
+      setLoading(false)
     }).catch(() => {
-      setLoading(false)   // ← even if getSession itself throws
+      setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -78,34 +76,36 @@ export default function App() {
   const loggedInRedirect = '/dashboard'
 
   return (
-    <BrowserRouter>
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          style: {
-            background: '#1a2235',
-            color: '#f1f5f9',
-            border: '1px solid rgba(99,102,241,0.3)',
-            borderRadius: '10px',
-          },
-        }}
-      />
-      <Routes>
-        <Route path="/" element={<LandingPage session={session} />} />
-        <Route path="/login" element={session ? <Navigate to={loggedInRedirect} replace /> : <Login />} />
-        <Route path="/signup" element={session ? <Navigate to={loggedInRedirect} replace /> : <SignUp />} />
-
-        <Route
-          path="/dashboard/*"
-          element={
-            <ProtectedRoute session={session}>
-              <Dashboard session={session} />
-            </ProtectedRoute>
-          }
+    <RoleProvider session={session} profile={profile}>
+      <BrowserRouter>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            style: {
+              background: '#1a2235',
+              color: '#f1f5f9',
+              border: '1px solid rgba(99,102,241,0.3)',
+              borderRadius: '10px',
+            },
+          }}
         />
+        <Routes>
+          <Route path="/" element={<LandingPage session={session} />} />
+          <Route path="/login" element={session ? <Navigate to={loggedInRedirect} replace /> : <Login />} />
+          <Route path="/signup" element={session ? <Navigate to={loggedInRedirect} replace /> : <SignUp />} />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+          <Route
+            path="/dashboard/*"
+            element={
+              <ProtectedRoute session={session}>
+                <Dashboard session={session} />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </RoleProvider>
   )
 }
