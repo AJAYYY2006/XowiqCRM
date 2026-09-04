@@ -1,16 +1,18 @@
-# XOWIQ CRM
+# XOWIQ CRM — Enterprise Architecture & Platform
 
-> **Enterprise-Grade Customer Relationship Management Platform** built with React, Vite, Supabase, and Tailwind-inspired clean CSS architecture.
+> **Enterprise-Grade Customer Relationship Management Platform** featuring a dual **Client & Server** architecture, full **Role-Based Access Control (RBAC)**, **Tailwind CSS** modern UI design, and an ultra-fast **Express API Server** integrated with **Supabase PostgreSQL**.
 
 ---
 
 ## 📋 Table of Contents
 
 - [Overview](#-overview)
-- [Architecture & Folder Structure](#-architecture--folder-structure)
+- [Client & Server Architecture](#-client--server-architecture)
+- [Role-Based Access Control (RBAC)](#-role-based-access-control-rbac)
 - [Tech Stack](#-tech-stack)
 - [Getting Started](#-getting-started)
 - [Environment Configuration](#-environment-configuration)
+- [Fast API Endpoints](#-fast-api-endpoints)
 - [Database & Migrations](#-database--migrations)
 - [Available Scripts](#-available-scripts)
 - [Modules & Capabilities](#-modules--capabilities)
@@ -20,47 +22,74 @@
 
 ## 🚀 Overview
 
-XOWIQ CRM is a multi-tenant, role-based CRM application designed to manage the complete customer lifecycle from Lead generation, Account management, Opportunities, Quotes, Invoices, Services, Support Tickets, and Tasks to comprehensive Analytics & Reports.
+XOWIQ CRM is a modern, high-performance customer lifecycle management system supporting complete lead funnels, opportunity kanbans, accounts, contacts, quotes, PDF invoices, customer services, support tickets, assignable tasks, and real-time executive reports.
 
 ---
 
-## 📁 Architecture & Folder Structure
+## 📁 Client & Server Architecture
 
-The project follows a clean, modular, and scalable directory structure:
+The repository is cleanly structured into decoupled client and server layers:
 
 ```
 CRM/
-├── database/                   # Database migrations & documentation
-│   ├── migrations/             # Numbered SQL migration files (001 - 015)
-│   └── README.md               # Database schema & setup instructions
-├── docs/                       # Technical & feature documentation
-│   ├── FEATURES_ROLES_AND_MODULES.md
-│   └── TECH_STACK_AND_FEATURES.md
+├── database/                   # Database migrations (001 - 017) & documentation
+│   ├── migrations/             # Numbered SQL migration files
+│   └── README.md               # Database setup guide
+├── docs/                       # Architectural & feature specifications
 ├── public/                     # Static public assets
-├── scripts/                    # Maintenance & utility scripts
-├── src/                        # Main frontend application source code
-│   ├── assets/                 # Static media files
-│   │   ├── icons/              # SVG icons
-│   │   └── images/             # UI images & previews
+├── scripts/                    # Database migrations & seeding utilities
+│   ├── migrate.js              # Automatic pg migration runner
+│   └── seed_dev_users.js       # Pre-populates 5 role demo accounts
+├── server/                     # Fast Express REST API Server
+│   └── src/
+│       ├── config/             # Server env & Supabase service client
+│       ├── controllers/        # Analytics, Leads, Deals, Export, Webhook, Health
+│       ├── middleware/         # JWT Auth, Role Guard, Error Handler
+│       ├── routes/             # Master /api/v1 router
+│       └── index.js            # Express server entrypoint (Port 5000)
+├── src/                        # React 19 Frontend Application
+│   ├── assets/                 # Icons & images
 │   ├── components/             # Reusable UI & business components
-│   │   ├── modules/            # Business modules (Leads, Accounts, Invoices, etc.)
-│   │   └── ui/                 # Shared UI components (Search, Modals, Language, etc.)
-│   ├── lib/                    # Library configurations (Supabase client)
-│   ├── locales/                # i18n translation bundles (en, es, etc.)
-│   ├── pages/                  # Top-level view routes (Dashboard, Login, SignUp, Landing)
-│   ├── styles/                 # Global styles & design system CSS
-│   ├── App.jsx                 # Main application router
+│   │   ├── auth/               # RoleGuard & DevLoginModal
+│   │   ├── modules/            # Leads, Deals, Accounts, Contacts, Invoices, etc.
+│   │   ├── reactbits/          # Animated UI components (SpotlightCard, ShinyButton, etc.)
+│   │   └── ui/                 # Modals, Table, MetricCards, etc.
+│   ├── config/                 # Centralized RBAC matrix (roles.js)
+│   ├── contexts/               # RoleContext & AuthContext
+│   ├── lib/                    # Supabase client & apiClient (Fast API SDK)
+│   ├── locales/                # Multi-language translation bundles
+│   ├── pages/                  # Landing, Login, SignUp, Dashboard
+│   ├── styles/                 # Tailwind CSS & Global design system (index.css)
+│   ├── App.jsx                 # Main application router with RoleGuard
 │   ├── i18n.js                 # Localization configuration
-│   └── main.jsx                # React application entrypoint
-├── .env                        # Local environment variables (git-ignored)
+│   └── main.jsx                # React entrypoint
+├── .env                        # Local environment variables
 ├── .env.example                # Template environment variables
-├── .gitignore                  # Git ignore rules
-├── eslint.config.js            # ESLint code quality configuration
-├── index.html                  # HTML template
 ├── package.json                # Project dependencies & npm scripts
-├── vercel.json                 # Deployment routing configuration
-└── vite.config.js              # Vite bundler configuration
+├── vite.config.js              # Vite 8 bundler with Tailwind CSS plugin
+└── vercel.json                 # Single-page routing configuration
 ```
+
+---
+
+## 🛡️ Role-Based Access Control (RBAC)
+
+The application supports 5 fine-grained business roles with client & server enforcement:
+
+| Role | Key | Access Scope |
+|---|---|---|
+| **Super Admin** | `admin` | Full unrestricted access to all 13 modules, settings, and user management |
+| **Sales Manager** | `manager` | Overview, Leads, Deals, Accounts, Contacts, Quotes, Invoices, Tasks, Reports |
+| **Support Lead** | `support` | Overview, Accounts, Contacts, Services, Tickets, Tasks, Reports |
+| **B2C Retail Owner** | `b2c` | Overview, Leads, Deals, Accounts, Contacts, Quotes, Invoices, Tasks, Reports |
+| **Staff / Viewer** | `viewer` | Read-only access to Overview, Leads, Deals, Accounts, Contacts, Reports |
+
+### Seeded Dev Accounts (Password for all: `Password@123`):
+1. **Super Admin**: `admin@xowiq.com`
+2. **Sales Manager**: `sales@xowiq.com`
+3. **Support Lead**: `support@xowiq.com`
+4. **B2C Owner**: `b2c.demo@xowiq.com`
+5. **Staff Viewer**: `viewer@xowiq.com`
 
 ---
 
@@ -68,15 +97,16 @@ CRM/
 
 | Layer | Technology |
 |---|---|
+| **Styling & Design** | **Tailwind CSS v4** + Modern Glassmorphism + React Bits |
 | **Frontend Framework** | React 19 + Vite 8 |
-| **Routing** | React Router DOM v7 |
-| **Backend / Database** | Supabase (PostgreSQL + Auth + RLS + Storage) |
+| **Frontend Routing** | React Router DOM v7 with `RoleGuard` & `RoleContext` |
+| **Backend Fast API** | Express 5 + Helmet + CORS + Compression + Morgan |
+| **Database & Auth** | Supabase (PostgreSQL 15 + RLS + JWT + Service Role) |
 | **State & Localization** | i18next + react-i18next |
-| **Icons & UI** | Lucide React |
+| **Icons & Visuals** | Lucide React |
 | **Charts & Analytics** | Recharts |
 | **Drag & Drop** | @dnd-kit (Core, Sortable, Utilities) |
-| **Export & Reporting** | jsPDF + jsPDF-AutoTable + html2canvas |
-| **Notifications** | react-hot-toast |
+| **Document Generation** | jsPDF + jsPDF-AutoTable + html2canvas |
 
 ---
 
@@ -87,75 +117,45 @@ CRM/
 - **Node.js**: >= 18.0.0
 - **npm**: >= 9.0.0
 
-### Installation
+### Quick Start
 
-1. Clone the repository and navigate into the folder:
-   ```bash
-   cd CRM
-   ```
-
-2. Install dependencies:
+1. Install dependencies:
    ```bash
    npm install
    ```
 
-3. Set up environment variables:
+2. Run both Frontend and Fast API Server concurrently:
    ```bash
-   cp .env.example .env
-   # Update .env with your Supabase URL and Anon Key
+   npm run dev:all
    ```
 
-4. Run development server:
+   - **Frontend App**: `http://localhost:5173`
+   - **Backend API**: `http://localhost:5000/api/v1`
+
+3. (Optional) Run services individually:
    ```bash
+   # Start Vite client only
    npm run dev
-   ```
 
-5. Build for production:
-   ```bash
-   npm run build
+   # Start Fast API server only
+   npm run server
    ```
 
 ---
 
-## 🔐 Environment Configuration
+## 🌐 Fast API Endpoints
 
-Create a `.env` file in the root directory:
+The Express backend (`server/src/index.js`) exposes the following endpoints under `/api/v1`:
 
-```ini
-# Supabase Configuration
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
-
-# Optional: Database Direct URLs (for migrations/CLI)
-DATABASE_URL="postgresql://postgres:password@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
-DIRECT_URL="postgresql://postgres:password@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres"
-```
-
-> **Note**: Variables prefixed with `VITE_` are exposed to the frontend bundle via `import.meta.env`.
-
----
-
-## 🗄️ Database & Migrations
-
-All SQL schema migrations are located in [`database/migrations/`](./database/migrations/) and numbered sequentially:
-
-- `001_add_contact_number_column.sql`
-- `002_add_currency_column.sql`
-- `003_add_custom_data_to_customer_services.sql`
-- `004_add_custom_data_to_tasks.sql`
-- `005_add_custom_data_to_tickets.sql`
-- `006_add_service_type.sql`
-- `007_add_settings_profile_columns.sql`
-- `008_b2c_profile_columns.sql`
-- `009_create_b2c_stages.sql`
-- `010_create_custom_fields_table.sql`
-- `011_create_services_tables.sql`
-- `012_fix_corrupted_users.sql`
-- `013_fix_opportunities_stage_constraint.sql`
-- `014_fix_signup_error.sql`
-- `015_setup_admin_and_confirm.sql`
-
-For instructions on executing migrations, refer to [`database/README.md`](./database/README.md).
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/api/v1/health` | System uptime and PostgreSQL connection latency | ❌ Public |
+| `GET` | `/api/v1/analytics/dashboard` | Aggregated revenue, conversion rates, counts | ✅ JWT (Role-checked) |
+| `GET` | `/api/v1/leads` | Filterable lead pipeline | ✅ JWT |
+| `POST` | `/api/v1/leads` | Create lead record with validation | ✅ JWT (Writer role) |
+| `GET` | `/api/v1/deals` | Opportunities list & stage tracking | ✅ JWT |
+| `GET` | `/api/v1/export/csv` | Secure CSV export for leads/deals/invoices | ✅ Admin / Manager |
+| `POST` | `/api/v1/webhooks/incoming` | Inbound CRM webhooks for third-party integrations | 🔒 API Signature |
 
 ---
 
@@ -163,28 +163,18 @@ For instructions on executing migrations, refer to [`database/README.md`](./data
 
 | Command | Description |
 |---|---|
-| `npm run dev` | Starts the Vite local development server with HMR |
-| `npm run build` | Bundles the application for production in `dist/` |
-| `npm run preview` | Previews the production build locally |
-| `npm run lint` | Runs ESLint to check for code quality issues |
-
----
-
-## 🧩 Modules & Capabilities
-
-- **Leads & Opportunities**: Pipeline visualization, stage tracking, drag-and-drop status changes.
-- **Accounts & Contacts**: 360-degree view of clients, B2B & B2C custom fields.
-- **Quotes & Invoices**: Generate, track, and export invoices as PDF.
-- **Customer Services & Tickets**: Track active client subscriptions, support ticket lifecycles.
-- **Tasks & Collaboration**: Assignable tasks with priority badges and deadline management.
-- **Reports & BI Dashboard**: Revenue summaries, conversion funnels, and real-time metric charts.
-- **Role-Based Settings & Custom Fields**: Dynamic schema extensions and profile management.
-- **Multi-language Support**: Seamless switching between languages.
+| `npm run dev:all` | Runs frontend client & backend API concurrently with colored prefixes |
+| `npm run dev` | Starts the Vite development server with HMR |
+| `npm run server` | Starts the Express Fast API server on port 5000 |
+| `npm run build` | Builds the client for production in `dist/` |
+| `npm run seed` | Seeds the 5 demo role accounts and demo records |
+| `npm run migrate` | Applies all SQL migrations against the Supabase database |
+| `npm run lint` | Runs ESLint |
 
 ---
 
 ## 📚 Documentation
 
-For in-depth documentation, see the [`docs/`](./docs/) directory:
+For in-depth guides, explore the [`docs/`](./docs/) directory:
 - [Features, Roles & Modules](./docs/FEATURES_ROLES_AND_MODULES.md)
 - [Tech Stack & Architecture](./docs/TECH_STACK_AND_FEATURES.md)
