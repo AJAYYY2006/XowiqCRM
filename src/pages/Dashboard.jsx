@@ -23,6 +23,8 @@ import Tickets from '../components/modules/Tickets'
 import Tasks from '../components/modules/Tasks'
 import SettingsPage from '../components/modules/Settings'
 import Services from '../components/modules/Services'
+import ExecutiveSuperAdminDashboard from '../components/dashboard/ExecutiveSuperAdminDashboard'
+import AppSidebar from '../components/layout/AppSidebar'
 import { useRole } from '../contexts/RoleContext'
 import RoleGuard from '../components/auth/RoleGuard'
 import { ROLE_DEFINITIONS } from '../config/roles'
@@ -158,129 +160,13 @@ function KPIPanel({ session, profile }) {
 
   return (
     <div style={{ padding: '0 0 40px' }}>
-      {/* Header */}
-      <div className="page-header" style={{ marginBottom: 24 }}>
-        <div>
-          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <BarChart3 size={26} style={{ color: '#f37a23' }} /> {t('kpi.title')}
-          </h1>
-          <p className="page-subtitle">{t('kpi.subtitle')}</p>
-        </div>
-        <button
-          onClick={fetchKPIs}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
-        >
-          <RefreshCw size={14} /> {t('kpi.refresh')}
-        </button>
-      </div>
-
-      {/* Aggregate Stats */}
-      <div className="dashboard-grid" style={{ marginBottom: 28 }}>
-        {[
-          { label: t('kpi.totalLeads'), value: totals.leads, icon: <UserSquare2 size={20} />, color: '#3b82f6' },
-          { label: t('kpi.customers'), value: totals.customers, icon: <Users size={20} />, color: '#ec4899' },
-          { label: t('kpi.dealsWonCount'), value: totals.dealsCount, icon: <Target size={20} />, color: '#10b981' },
-          { label: t('kpi.dealsWonValue'), value: `${profile?.currency || '$'}${totals.dealsValue.toLocaleString()}`, icon: <Briefcase size={20} />, color: '#84cc16' },
-          { label: t('kpi.tasksCompleted'), value: totals.tasks, icon: <CheckCircle size={20} />, color: '#8b5cf6' },
-          { label: t('kpi.ticketsResolved'), value: totals.tickets, icon: <Ticket size={20} />, color: '#f59e0b' },
-          { label: t('kpi.activeMembers'), value: users.length, icon: <Shield size={20} />, color: '#f37a23' },
-        ].map((s, i) => (
-          <div key={i} className="stat-card" style={{ border: `2px solid ${s.color}18` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ color: s.color }}>{s.icon}</div>
-              <div className="stat-label" style={{ color: '#64748b', fontSize: 12, fontWeight: 600 }}>{s.label}</div>
-            </div>
-            <div className="stat-value" style={{ color: s.color, fontSize: 28 }}>{s.value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Per-user table */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-            <Activity size={16} style={{ display: 'inline', marginRight: 6, color: '#f37a23' }} />
-            {t('kpi.userBreakdown')}
-          </h3>
-          <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-            <input
-              type="text"
-              placeholder={t('kpi.searchUsers')}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ paddingLeft: 32, paddingRight: 12, paddingTop: 7, paddingBottom: 7, border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none', width: 200 }}
-            />
-          </div>
-        </div>
-
-        {filtered.length === 0 ? (
-          <div className="empty-state" style={{ padding: 48 }}>
-            <Users size={36} style={{ color: '#cbd5e1', marginBottom: 12 }} />
-            <p>{t('kpi.noUsers')}</p>
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: '#f8fafc' }}>
-                  {[
-                    t('kpi.colUser'),
-                    t('kpi.colRole'),
-                    t('kpi.colLeads'),
-                    t('kpi.colCustomers'),
-                    t('kpi.colDealsWon'),
-                    t('kpi.colDealsValue'),
-                    t('kpi.colTasksDone'),
-                    t('kpi.colTickets'),
-                    t('kpi.colLastActive')
-                  ].map(h => (
-                    <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f1f5f9' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((u, i) => {
-                  const kpi = kpiData[u.id] || {}
-                  const lastActive = kpi.lastActive
-                    ? new Date(kpi.lastActive).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-                    : t('kpi.noActivity')
-                  return (
-                    <tr key={u.id} style={{ borderBottom: '1px solid #f8fafc', transition: 'background 0.15s' }}
-                      onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
-                      onMouseLeave={e => e.currentTarget.style.background = ''}
-                    >
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,#f37a23,#ef4444)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
-                            {u.name?.[0]?.toUpperCase() || u.email?.[0]?.toUpperCase()}
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>{u.name || t('kpi.unknown')}</div>
-                            <div style={{ fontSize: 11, color: '#94a3b8' }}>{u.email}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ padding: '14px 16px' }}>
-                        <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>
-                          {u.role || 'user'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700, color: '#3b82f6', fontSize: 15 }}>{kpi.leads ?? '—'}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700, color: '#ec4899', fontSize: 15 }}>{kpi.customers ?? '—'}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700, color: '#10b981', fontSize: 15 }}>{kpi.dealsCount ?? '—'}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700, color: '#84cc16', fontSize: 15 }}>{profile?.currency || '$'}{(kpi.dealsValue || 0).toLocaleString()}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700, color: '#8b5cf6', fontSize: 15 }}>{kpi.tasks ?? '—'}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700, color: '#f59e0b', fontSize: 15 }}>{kpi.tickets ?? '—'}</td>
-                      <td style={{ padding: '14px 16px', fontSize: 12, color: '#64748b' }}>{lastActive}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <ExecutiveSuperAdminDashboard
+        session={session}
+        profile={profile}
+        users={users}
+        kpiData={kpiData}
+        currency={profile?.currency || '$'}
+      />
     </div>
   )
 }
@@ -921,6 +807,14 @@ export default function Dashboard({ session }) {
   // default active section depends on role
   const [activeSection, setActiveSection] = useState(isAdmin ? 'kpi' : 'crm')
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    return localStorage.getItem('xowiq_sidebar_collapsed') === 'true'
+  })
+
+  const handleSetIsCollapsed = (val) => {
+    setIsCollapsed(val)
+    localStorage.setItem('xowiq_sidebar_collapsed', String(val))
+  }
 
   const companyType = session.user.user_metadata?.companyType || profile?.company_type || 'B2B'
 
@@ -993,146 +887,49 @@ export default function Dashboard({ session }) {
     navigate('/')
   }
 
-  // Master CRM Navigation definition
-  const rawNavItems = isB2C ? [
-    { id: 'dashboard', path: '', label: t('sidebar.dashboard'), icon: <LayoutDashboard size={16} /> },
-    { id: 'accounts', path: 'accounts', label: t('sidebar.customerProfiles'), icon: <Users size={16} /> },
-    { id: 'services', path: 'services', label: t('sidebar.services'), icon: <Package size={16} /> },
-    { id: 'leads', path: 'leads', label: t('sidebar.leads'), icon: <UserSquare2 size={16} /> },
-    { id: 'deals', path: 'opportunities', label: t('sidebar.opportunities'), icon: <Briefcase size={16} /> },
-    { id: 'invoices', path: 'invoices', label: t('sidebar.invoices'), icon: <Quote size={16} /> },
-    { id: 'tasks', path: 'tasks', label: t('sidebar.tasks'), icon: <Search size={16} /> },
-    { id: 'tickets', path: 'tickets', label: t('sidebar.tickets'), icon: <Ticket size={16} /> },
-    { id: 'reports', path: 'reports', label: t('sidebar.reports'), icon: <BarChart3 size={16} /> },
-    { id: 'settings', path: 'settings', label: t('sidebar.settings'), icon: <Settings size={16} /> },
-  ] : [
-    { id: 'dashboard', path: '', label: t('sidebar.dashboard'), icon: <LayoutDashboard size={16} /> },
-    { id: 'leads', path: 'leads', label: t('sidebar.leads'), icon: <UserSquare2 size={16} /> },
-    { id: 'contacts', path: 'contacts', label: t('sidebar.contacts'), icon: <Users size={16} /> },
-    { id: 'accounts', path: 'accounts', label: t('sidebar.accounts'), icon: <Building2 size={16} /> },
-    { id: 'deals', path: 'opportunities', label: t('sidebar.opportunities'), icon: <Briefcase size={16} /> },
-    { id: 'quotes', path: 'quotes', label: t('sidebar.quotesAndProposals'), icon: <Quote size={16} /> },
-    { id: 'invoices', path: 'invoices', label: t('sidebar.invoices', 'Invoices'), icon: <Quote size={16} /> },
-    { id: 'services', path: 'services', label: t('sidebar.services', 'Services'), icon: <Package size={16} /> },
-    { id: 'reports', path: 'reports', label: t('sidebar.reports'), icon: <BarChart3 size={16} /> },
-    { id: 'tickets', path: 'tickets', label: t('sidebar.tickets'), icon: <Ticket size={16} /> },
-    { id: 'tasks', path: 'tasks', label: t('sidebar.tasks'), icon: <Search size={16} /> },
-    { id: 'settings', path: 'settings', label: t('sidebar.settings'), icon: <Settings size={16} /> },
-  ]
-
-  // Filter navigation items by active user role permissions
-  const crmNavItems = rawNavItems.filter(item => hasAccess(item.id))
-  const currentCrmPath = location.pathname.replace('/dashboard', '').replace(/^\//, '')
-
   return (
     <div className="app-layout">
-      {/* ── Sidebar ── */}
-      <aside className="sidebar" style={{ overflowY: 'auto' }}>
-        {/* Logo */}
-        <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: 0, fontWeight: 900, fontFamily: '"Fredoka", sans-serif', fontSize: '22px', letterSpacing: '-0.5px' }}>
-          <div style={{ backgroundColor: '#f37a23', color: '#ffffff', padding: '3px 5px', lineHeight: 1, borderRadius: '4px 0 0 4px' }}>XOWIQ</div>
-          <div style={{ color: '#ffffff', backgroundColor: '#1e293b', padding: '3px 5px', lineHeight: 1, borderRadius: '0 4px 4px 0' }}>CRM</div>
-        </div>
-        
-        {/* Role & Mode Badge */}
-        <div style={{ margin: '6px 0 16px', padding: '8px 12px', background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95))', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Shield size={14} style={{ color: roleInfo.color }} />
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 800, color: roleInfo.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {roleInfo.label}
-              </div>
-              <div style={{ fontSize: 10, color: '#94a3b8' }}>{companyType} Mode</div>
-            </div>
-          </div>
-          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(255, 255, 255, 0.08)', color: '#cbd5e1', fontWeight: 700 }}>
-            {role.toUpperCase()}
-          </span>
-        </div>
+      {/* ── Modern App Sidebar (All Roles & Collapsible) ── */}
+      <AppSidebar
+        session={session}
+        profile={profile}
+        role={role}
+        roleInfo={roleInfo}
+        switchRole={switchRole}
+        hasAccess={hasAccess}
+        isAdmin={isAdmin}
+        isCollapsed={isCollapsed}
+        setIsCollapsed={handleSetIsCollapsed}
+        activeSection={activeSection}
+        setActiveSection={setActiveSection}
+        onLogout={handleLogout}
+      />
 
-        {/* Admin-only sections */}
-        {isAdmin && (
-          <>
-            <div className="sidebar-section-label">{t('dashboard.adminTools')}</div>
-            <nav className="sidebar-nav">
-              <button
-                className={`nav-item ${activeSection === 'kpi' && !location.pathname.includes('/dashboard/') ? 'active' : ''}`}
-                onClick={() => { setActiveSection('kpi'); navigate('/dashboard') }}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}
-              >
-                <span className="nav-icon"><BarChart3 size={18} /></span> {t('dashboard.kpiDashboard')}
-              </button>
-              <button
-                className={`nav-item ${activeSection === 'users' ? 'active' : ''}`}
-                onClick={() => { setActiveSection('users'); navigate('/dashboard/users') }}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}
-              >
-                <span className="nav-icon"><Users size={18} /></span> {t('dashboard.userManagement')}
-              </button>
-              <button
-                className={`nav-item ${activeSection === 'team_records' ? 'active' : ''}`}
-                onClick={() => { setActiveSection('team_records'); navigate('/dashboard/team_records') }}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}
-              >
-                <span className="nav-icon"><ClipboardList size={18} /></span> {t('dashboard.teamRecords')}
-              </button>
-            </nav>
-          </>
-        )}
-
-        {/* CRM Section */}
-        <div className="sidebar-section-label" style={{ marginTop: 12 }}>
-          {isAdmin ? t('dashboard.myCrm') : t('sidebar.mainMenu')}
-          {isAdmin && <ChevronRight size={12} style={{ display: 'inline', marginLeft: 4 }} />}
-        </div>
-        <nav className="sidebar-nav">
-          {crmNavItems.map(item => (
-            <button
-              key={item.id}
-              className={`nav-item ${(!isAdmin || location.pathname.match(/\/dashboard\/.+/)) && currentCrmPath === item.path ? 'active' : ''}`}
-              onClick={() => {
-                setActiveSection('crm')
-                navigate(`/dashboard${item.path ? '/' + item.path : ''}`)
-              }}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', fontSize: 13 }}
-            >
-              <span className="nav-icon">{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
-        </nav>
-
-        {/* Sidebar Footer */}
-        <div className="sidebar-footer">
-          <div style={{ padding: '12px', background: 'var(--bg-card)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 'var(--radius-md)', marginBottom: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--accent-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 15, color: '#fff', flexShrink: 0 }}>
-                {profile?.name?.[0]?.toUpperCase() || session.user.email?.[0]?.toUpperCase()}
-              </div>
-              <div style={{ overflow: 'hidden', flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {profile?.name || 'User'}
-                </div>
-                <div style={{ fontSize: 10, color: roleInfo.color, fontWeight: 700 }}>● {roleInfo.label}</div>
-              </div>
-            </div>
-          </div>
-          <button className="nav-item" onClick={handleLogout} style={{ color: 'var(--danger)', width: '100%', gap: 10 }}>
-            <LogOut size={18} /> {t('dashboard.signOut')}
-          </button>
-        </div>
-      </aside>
-
-      {/* ── Main Content ── */}
-      <main className="main-content">
+      {/* ── Main Content Area ── */}
+      <main
+        className="main-content"
+        style={{
+          marginLeft: isCollapsed ? '76px' : '260px',
+          transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          minHeight: '100vh',
+          backgroundColor: '#f8fafc'
+        }}
+      >
         {/* Top bar */}
         <header className="dashboard-top-nav" style={{
-          height: '76px', borderBottom: '1px solid var(--border-subtle)', display: 'flex',
-          alignItems: 'center', background: '#FFFBDC', position: 'sticky', top: 0, zIndex: 40, padding: '0 32px',
+          height: '70px',
+          borderBottom: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          background: '#ffffff',
+          position: 'sticky',
+          top: 0,
+          zIndex: 40,
+          padding: '0 32px',
           justifyContent: 'space-between'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: '#0f172a' }}>
               {profile?.company_name || session.user.user_metadata?.companyName || 'XOWIQ CRM'}
             </h2>
           </div>
