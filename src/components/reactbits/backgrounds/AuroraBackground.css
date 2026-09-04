@@ -1,0 +1,93 @@
+.aurora-container {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+  overflow: hidden;
+  background-color: #0b0f19;
+}
+
+.aurora-layers {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.aurora-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.45;
+  will-change: transform;
+}
+
+.aurora-blob-1 {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, #6366f1 0%, rgba(99, 102, 241, 0) 70%);
+  top: -100px;
+  left: -100px;
+  animation: floatAurora1 18s ease-in-out infinite alternate;
+}
+
+.aurora-blob-2 {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, #a855f7 0%, rgba(168, 85, 247, 0) 70%);
+  top: 30%;
+  right: -50px;
+  animation: floatAurora2 14s ease-in-out infinite alternate;
+}
+
+.aurora-blob-3 {
+  width: 550px;
+  height: 550px;
+  background: radial-gradient(circle, #06b6d4 0%, rgba(6, 182, 212, 0) 70%);
+  bottom: -150px;
+  left: 20%;
+  animation: floatAurora3 22s ease-in-out infinite alternate;
+}
+
+.aurora-blob-4 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, #ec4899 0%, rgba(236, 72, 153, 0) 70%);
+  top: 10%;
+  left: 40%;
+  animation: floatAurora4 16s ease-in-out infinite alternate;
+}
+
+.aurora-radial-mask {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 30%, #0b0f19 90%);
+}
+
+.aurora-content {
+  position: relative;
+  z-index: 10;
+}
+
+@keyframes floatAurora1 {
+  0% { transform: translate(0px, 0px) scale(1); }
+  50% { transform: translate(80px, 100px) scale(1.15); }
+  100% { transform: translate(-50px, 50px) scale(0.9); }
+}
+
+@keyframes floatAurora2 {
+  0% { transform: translate(0px, 0px) scale(1); }
+  50% { transform: translate(-100px, 80px) scale(1.2); }
+  100% { transform: translate(40px, -60px) scale(0.95); }
+}
+
+@keyframes floatAurora3 {
+  0% { transform: translate(0px, 0px) scale(1); }
+  50% { transform: translate(60px, -90px) scale(1.1); }
+  100% { transform: translate(-80px, -40px) scale(0.85); }
+}
+
+@keyframes floatAurora4 {
+  0% { transform: translate(0px, 0px) scale(0.9); }
+  50% { transform: translate(-70px, -50px) scale(1.1); }
+  100% { transform: translate(90px, 70px) scale(1); }
+}

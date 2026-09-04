@@ -1,0 +1,34 @@
+.glow-border-card-wrapper {
+  position: relative;
+  border-radius: var(--border-radius, 1rem);
+  padding: var(--border-width, 2px);
+  overflow: hidden;
+  background: transparent;
+  display: flex;
+}
+
+.glow-border-effect {
+  position: absolute;
+  inset: -100%;
+  background: var(--glow-bg, conic-gradient(from 0deg, #6366f1, #a855f7, #ec4899, #3b82f6, #6366f1));
+  animation: rotateGlow var(--speed, 4s) linear infinite;
+  z-index: 1;
+}
+
+.glow-border-inner {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  background: #0f172a;
+  border-radius: calc(var(--border-radius, 1rem) - var(--border-width, 2px));
+  height: 100%;
+}
+
+@keyframes rotateGlow {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}

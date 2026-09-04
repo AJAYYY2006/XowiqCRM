@@ -1,5 +1,4 @@
 -- 1. Correct the after-insert trigger function to match the actual database schema
--- (the profiles table does not have company_name or company_type columns, so trying to insert into them causes a silent failure)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
@@ -23,7 +22,6 @@ CREATE OR REPLACE FUNCTION public.handle_new_user_before()
 RETURNS trigger AS $$
 BEGIN
   new.email_confirmed_at := now();
-  new.confirmed_at := now();
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -36,5 +34,6 @@ CREATE TRIGGER on_auth_user_created_before
 
 -- 4. Confirm any existing unconfirmed accounts in auth.users
 UPDATE auth.users
-SET email_confirmed_at = now(), confirmed_at = now()
+SET email_confirmed_at = now()
 WHERE email_confirmed_at IS NULL;
+

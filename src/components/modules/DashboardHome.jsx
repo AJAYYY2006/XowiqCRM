@@ -7,6 +7,7 @@ import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 import toast from 'react-hot-toast'
 import { AlertCircle, Bell, CheckCircle, Clock, Calendar, Mail, MessageSquare, RotateCw, Download } from 'lucide-react'
+import { SpotlightCard, CountUp } from '../reactbits'
 
 export default function DashboardHome({ session, profile }) {
   const { t } = useTranslation()
@@ -347,37 +348,37 @@ export default function DashboardHome({ session, profile }) {
         </div>
       </div>
 
-      {/* Top Stats */}
+         {/* Top Stats */}
       <div className="dashboard-grid">
         {isB2C ? (
           <>
-            <div className="stat-card">
+            <SpotlightCard className="stat-card" style={{ padding: '20px', borderRadius: 14 }}>
               <div className="stat-label"><strong style={{ fontWeight: 900, color: '#0f172a' }}>{t('dashHome.totalB2CCustomers')}</strong></div>
-              <div className="stat-value">{stats.customersCount}</div>
+              <div className="stat-value"><CountUp to={stats.customersCount} duration={1.2} /></div>
               <div className="stat-change up">{t('dashHome.growingActively')}</div>
-            </div>
-            <div className="stat-card">
+            </SpotlightCard>
+            <SpotlightCard className="stat-card" style={{ padding: '20px', borderRadius: 14 }}>
               <div className="stat-label"><strong style={{ fontWeight: 900, color: '#0f172a' }}>{t('dashHome.monthlyRevenue')}</strong></div>
-              <div className="stat-value">{profile?.currency || '$'}{stats.revenue.toLocaleString()}</div>
+              <div className="stat-value">{profile?.currency || '$'}<CountUp to={stats.revenue} duration={1.5} /></div>
               <div className="stat-change up">{t('dashHome.fromLastMonth12')}</div>
-            </div>
-            <div className="stat-card">
+            </SpotlightCard>
+            <SpotlightCard className="stat-card" style={{ padding: '20px', borderRadius: 14 }}>
               <div className="stat-label"><strong style={{ fontWeight: 900, color: '#0f172a' }}>{t('dashHome.activeTickets')}</strong></div>
-              <div className="stat-value">{stats.ticketsCount}</div>
+              <div className="stat-value"><CountUp to={stats.ticketsCount} duration={1.2} /></div>
               <div className="stat-change up"><strong style={{ fontWeight: 900, color: '#0f172a' }}>{t('dashHome.responseNeeded')}</strong></div>
-            </div>
-            <div className="stat-card">
+            </SpotlightCard>
+            <SpotlightCard className="stat-card" style={{ padding: '20px', borderRadius: 14 }}>
               <div className="stat-label"><strong style={{ fontWeight: 900, color: '#0f172a' }}>{t('dashHome.pendingReminders')}</strong></div>
-              <div className="stat-value">{priorityTasks.length}</div>
+              <div className="stat-value"><CountUp to={priorityTasks.length} duration={1.2} /></div>
               <div className="stat-change up" style={{ color: '#e11d48' }}>{t('dashHome.actionUrgently')}</div>
-            </div>
-            <div className="stat-card">
+            </SpotlightCard>
+            <SpotlightCard className="stat-card" style={{ padding: '20px', borderRadius: 14 }}>
               <div className="stat-label"><strong style={{ fontWeight: 900, color: '#0f172a' }}>{t('dashHome.unpaidInvoices')}</strong></div>
-              <div className="stat-value">{stats.pendingInvoicesCount}</div>
+              <div className="stat-value"><CountUp to={stats.pendingInvoicesCount} duration={1.2} /></div>
               <div className="stat-change down">{t('dashHome.collectPayments')}</div>
-            </div>
+            </SpotlightCard>
             {/* Monthly Goal Progress Indicator Card */}
-            <div className="stat-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <SpotlightCard className="stat-card" style={{ padding: '20px', borderRadius: 14, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div className="stat-label"><strong style={{ fontWeight: 900, color: '#0f172a' }}>🎯 {t('dashHome.revenueGoal', 'Monthly Goal')}</strong></div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, margin: '8px 0' }}>
                 <div style={{ position: 'relative', width: 44, height: 44, flexShrink: 0 }}>
@@ -402,36 +403,36 @@ export default function DashboardHome({ session, profile }) {
                   </div>
                 </div>
                 <div>
-                  <div className="stat-value" style={{ fontSize: 16 }}>{profile?.currency || '$'}{revenueGoal.toLocaleString()}</div>
+                  <div className="stat-value" style={{ fontSize: 16 }}>{profile?.currency || '$'}<CountUp to={revenueGoal} duration={1.5} /></div>
                   <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{t('dashHome.goalTarget', 'Target Goal')}</div>
                 </div>
               </div>
               <div className="stat-change up" style={{ color: stats.revenue >= revenueGoal ? '#10b981' : '#64748b', fontSize: 11 }}>
-                {stats.revenue >= revenueGoal ? t('dashHome.goalAchieved', 'Goal Achieved! 🎉') : `${profile?.currency || '$'}{Math.max(0, revenueGoal - stats.revenue).toLocaleString()} remaining`}
+                {stats.revenue >= revenueGoal ? t('dashHome.goalAchieved', 'Goal Achieved! 🎉') : `${profile?.currency || '$'}${Math.max(0, revenueGoal - stats.revenue).toLocaleString()} remaining`}
               </div>
-            </div>
+            </SpotlightCard>
           </>
         ) : (
           <>
-            <div className="stat-card">
+            <SpotlightCard className="stat-card" style={{ padding: '20px', borderRadius: 14 }}>
               <div className="stat-label">{t('dashHome.pipelineValue')}</div>
-              <div className="stat-value">{profile?.currency || '$'}{stats.revenue.toLocaleString()}</div>
+              <div className="stat-value">{profile?.currency || '$'}<CountUp to={stats.revenue} duration={1.5} /></div>
               <div className="stat-change up">{t('dashHome.fromLastMonth8')}</div>
-            </div>
-            <div className="stat-card">
+            </SpotlightCard>
+            <SpotlightCard className="stat-card" style={{ padding: '20px', borderRadius: 14 }}>
               <div className="stat-label">{t('dashHome.leadsCreated')}</div>
-              <div className="stat-value">{stats.leadsCount}</div>
-            </div>
-            <div className="stat-card">
+              <div className="stat-value"><CountUp to={stats.leadsCount} duration={1.2} /></div>
+            </SpotlightCard>
+            <SpotlightCard className="stat-card" style={{ padding: '20px', borderRadius: 14 }}>
               <div className="stat-label">{t('dashHome.activeDeals')}</div>
-              <div className="stat-value">{stats.opportunitiesCount}</div>
-            </div>
-            <div className="stat-card">
+              <div className="stat-value"><CountUp to={stats.opportunitiesCount} duration={1.2} /></div>
+            </SpotlightCard>
+            <SpotlightCard className="stat-card" style={{ padding: '20px', borderRadius: 14 }}>
               <div className="stat-label">{t('dashHome.systemAlerts')}</div>
-              <div className="stat-value">{priorityTasks.length}</div>
-            </div>
+              <div className="stat-value"><CountUp to={priorityTasks.length} duration={1.2} /></div>
+            </SpotlightCard>
             {/* Monthly Goal Progress Indicator Card */}
-            <div className="stat-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <SpotlightCard className="stat-card" style={{ padding: '20px', borderRadius: 14, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div className="stat-label"><strong style={{ fontWeight: 900, color: '#0f172a' }}>🎯 {t('dashHome.revenueGoal', 'Monthly Goal')}</strong></div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, margin: '8px 0' }}>
                 <div style={{ position: 'relative', width: 44, height: 44, flexShrink: 0 }}>
@@ -456,14 +457,14 @@ export default function DashboardHome({ session, profile }) {
                   </div>
                 </div>
                 <div>
-                  <div className="stat-value" style={{ fontSize: 16 }}>{profile?.currency || '$'}{revenueGoal.toLocaleString()}</div>
+                  <div className="stat-value" style={{ fontSize: 16 }}>{profile?.currency || '$'}<CountUp to={revenueGoal} duration={1.5} /></div>
                   <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{t('dashHome.goalTarget', 'Target Goal')}</div>
                 </div>
               </div>
               <div className="stat-change up" style={{ color: stats.revenue >= revenueGoal ? '#10b981' : '#64748b', fontSize: 11 }}>
-                {stats.revenue >= revenueGoal ? t('dashHome.goalAchieved', 'Goal Achieved! 🎉') : `${profile?.currency || '$'}{Math.max(0, revenueGoal - stats.revenue).toLocaleString()} remaining`}
+                {stats.revenue >= revenueGoal ? t('dashHome.goalAchieved', 'Goal Achieved! 🎉') : `${profile?.currency || '$'}${Math.max(0, revenueGoal - stats.revenue).toLocaleString()} remaining`}
               </div>
-            </div>
+            </SpotlightCard>
           </>
         )}
       </div>

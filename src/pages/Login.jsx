@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
+import { SpotlightCard, ShinyButton, BlurText, ParticlesBackground } from '../components/reactbits'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -39,7 +40,7 @@ export default function Login() {
     // Sync role back to user_metadata so Dashboard can read it
     await supabase.auth.updateUser({ data: { role } })
 
-    // Sync profiles table with metadata (companyName, companyType, created_by, created_by_admin_id)
+    // Sync profiles table with metadata
     try {
       const meta = signInData.user.user_metadata || {}
       await supabase.from('profiles').upsert({
@@ -66,27 +67,48 @@ export default function Login() {
   }
 
   return (
-    <div className="auth-page">
+    <div className="auth-page" style={{ position: 'relative', overflow: 'hidden', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(ellipse at top, #0f172a, #070a13)' }}>
+      <ParticlesBackground quantity={30} color="#6366f1" />
       <div className="auth-bg-blur" />
-      <div className="auth-card">
+      
+      <SpotlightCard
+        className="auth-card"
+        spotlightColor="rgba(255, 89, 0, 0.2)"
+        borderColor="rgba(255, 255, 255, 0.12)"
+        style={{
+          width: '100%',
+          maxWidth: 440,
+          padding: 40,
+          background: 'rgba(15, 23, 42, 0.85)',
+          backdropFilter: 'blur(16px)',
+          borderRadius: 20,
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
+          position: 'relative',
+          zIndex: 2,
+        }}
+      >
         {/* Logo */}
         <div className="auth-logo" style={{ display: 'flex', alignItems: 'center', gap: 0, fontWeight: 900, fontFamily: '"Fredoka", sans-serif', fontSize: '26px', letterSpacing: '-0.5px', marginBottom: '24px', justifyContent: 'center' }}>
-          <div style={{ backgroundColor: '#f37a23', color: '#ffffff', padding: '4px 6px', lineHeight: 1 }}>
+          <div style={{ backgroundColor: '#f37a23', color: '#ffffff', padding: '4px 6px', lineHeight: 1, borderRadius: '6px 0 0 6px' }}>
             XOWIQ
           </div>
-          <div style={{ color: '#000000', padding: '4px 6px', lineHeight: 1 }}>
+          <div style={{ color: '#ffffff', backgroundColor: '#1e293b', padding: '4px 6px', lineHeight: 1, borderRadius: '0 6px 6px 0' }}>
             CRM
           </div>
         </div>
 
-        <h1 className="auth-title">{t('auth.welcomeBack')}</h1>
-        <p className="auth-subtitle">{t('auth.signInSubtitle')}</p>
+        <h1 className="auth-title" style={{ textAlign: 'center', fontSize: '1.75rem', fontWeight: 800, marginBottom: 8, color: '#f8fafc' }}>
+          <BlurText text={t('auth.welcomeBack')} delay={50} />
+        </h1>
+        <p className="auth-subtitle" style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.95rem', marginBottom: 28 }}>
+          {t('auth.signInSubtitle')}
+        </p>
 
         <form className="auth-form" onSubmit={handleLogin}>
-          {error && <div className="auth-error"> {error}</div>}
+          {error && <div className="auth-error" style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', marginBottom: 20, fontSize: 13 }}>⚠️ {error}</div>}
 
-          <div className="auth-input-group">
-            <label className="auth-label">{t('auth.emailLabel')}</label>
+          <div className="auth-input-group" style={{ marginBottom: 18 }}>
+            <label className="auth-label" style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#cbd5e1', marginBottom: 6 }}>{t('auth.emailLabel')}</label>
             <input
               type="email"
               className="auth-input"
@@ -94,11 +116,12 @@ export default function Login() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
+              style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255, 255, 255, 0.12)', color: '#ffffff', fontSize: 14 }}
             />
           </div>
 
-          <div className="auth-input-group">
-            <label className="auth-label">{t('auth.passwordLabel')}</label>
+          <div className="auth-input-group" style={{ marginBottom: 24 }}>
+            <label className="auth-label" style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#cbd5e1', marginBottom: 6 }}>{t('auth.passwordLabel')}</label>
             <input
               type="password"
               className="auth-input"
@@ -106,21 +129,27 @@ export default function Login() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
+              style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255, 255, 255, 0.12)', color: '#ffffff', fontSize: 14 }}
             />
           </div>
 
-          <button type="submit" className="auth-btn" disabled={loading}>
+          <ShinyButton
+            type="submit"
+            variant="primary"
+            disabled={loading}
+            style={{ width: '100%', padding: '14px', borderRadius: 10, fontSize: '1rem', fontWeight: 700 }}
+          >
             {loading ? t('auth.signingIn') : t('auth.signInBtn')}
-          </button>
+          </ShinyButton>
         </form>
 
-        <div className="auth-footer">
+        <div className="auth-footer" style={{ textAlign: 'center', marginTop: 24, fontSize: 14, color: '#94a3b8' }}>
           Need an Admin Account?{' '}
-          <Link to="/signup" style={{ color: 'var(--accent)', fontWeight: 600 }}>
+          <Link to="/signup" style={{ color: '#ff5900', fontWeight: 600, textDecoration: 'none' }}>
             Sign Up
           </Link>
         </div>
-      </div>
+      </SpotlightCard>
     </div>
   )
 }

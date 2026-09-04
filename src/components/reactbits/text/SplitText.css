@@ -1,0 +1,11 @@
+.split-text-container {
+  display: inline-flex;
+  flex-wrap: wrap;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.split-text-item {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+}

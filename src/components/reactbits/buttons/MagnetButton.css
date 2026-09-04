@@ -1,0 +1,9 @@
+.magnet-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  will-change: transform;
+}

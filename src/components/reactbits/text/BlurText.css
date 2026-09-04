@@ -1,0 +1,9 @@
+.blur-text-wrapper {
+  display: inline-flex;
+  flex-wrap: wrap;
+}
+
+.blur-text-element {
+  display: inline-block;
+  will-change: transform, filter, opacity;
+}
