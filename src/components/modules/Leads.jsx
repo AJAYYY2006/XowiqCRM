@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
-import { Trash2, Edit2, ArrowRightCircle, Settings, Plus, LayoutGrid } from 'lucide-react'
+import { Trash2, Edit2, ArrowRightCircle, Settings, Plus, LayoutGrid, UploadCloud } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 import toast from 'react-hot-toast'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
+import BulkUploadModal from '../ui/BulkUploadModal'
 import WhatsAppButton from '../ui/WhatsAppButton'
 import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../lib/whatsapp'
 
@@ -29,6 +30,7 @@ export default function Leads({ session, profile }) {
   
   const [customFieldConfigs, setCustomFieldConfigs] = useState([])
   const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
 
   // Form State
   const [formData, setFormData] = useState({
@@ -180,18 +182,27 @@ export default function Leads({ session, profile }) {
   const handleOpenModal = (lead = null) => {
     if (lead) {
       setEditingLead(lead)
+      // Start with every configured field blank, fill core fields from the DB columns,
+      // then layer any values saved in custom_data on top so nothing shows empty.
+      const seeded = {}
+      customFieldConfigs.forEach(f => { seeded[f.field_key] = '' })
+      Object.assign(seeded, {
+        lead_name: lead.name || '',
+        email: lead.email || '',
+        company: lead.company || '',
+        contact_number: lead.contact_number || ''
+      })
+      Object.entries(lead.custom_data || {}).forEach(([k, v]) => {
+        if (v !== null && v !== undefined && v !== '') seeded[k] = v
+      })
       setFormData({
-        name: lead.name,
+        name: lead.name || '',
         company: lead.company || '',
         email: lead.email || '',
+        contact_number: lead.contact_number || '',
         lead_owner: lead.lead_owner || '',
-        status: lead.status,
-        custom_data: lead.custom_data || {
-          lead_name: lead.name || '',
-          email: lead.email || '',
-          company: lead.company || '',
-          contact_number: lead.contact_number || ''
-        }
+        status: lead.status || 'new',
+        custom_data: seeded
       })
     } else {
       setEditingLead(null)
@@ -363,15 +374,17 @@ export default function Leads({ session, profile }) {
     e.preventDefault()
     let toastId;
     
-    // Strip custom_data from formData — the leads table has no custom_data column.
-    // Map custom_data values to top-level columns instead.
+    // Core fields live in their own columns; everything the user typed is also kept
+    // in custom_data so non-core custom fields are preserved between edits.
     const { custom_data, ...dbFields } = formData
     const dbSafe = {
       ...dbFields,
       name: custom_data?.lead_name || dbFields.name,
-      email: custom_data?.email || dbFields.email,
-      company: custom_data?.company || dbFields.company,
-      contact_number: custom_data?.contact_number || dbFields.contact_number || ''
+      email: custom_data?.email || dbFields.email || null,
+      company: custom_data?.company || dbFields.company || null,
+      contact_number: custom_data?.contact_number || dbFields.contact_number || '',
+      lead_owner: dbFields.lead_owner || profile?.name || session.user.email,
+      custom_data: custom_data || {}
     }
 
     try {
@@ -594,6 +607,9 @@ export default function Leads({ session, profile }) {
             <div style={{ display: 'flex', gap: 12 }}>
               <button className="btn btn-secondary" onClick={() => setIsFieldBuilderOpen(true)}>
                 <Settings size={18} style={{ marginRight: 6 }} /> {t('modules.leads.editFields')}
+              </button>
+              <button className="btn btn-secondary" onClick={() => setIsImportOpen(true)}>
+                <UploadCloud size={18} style={{ marginRight: 6 }} /> {t('bulkImport.button', 'Import Excel/CSV')}
               </button>
               <button className="btn btn-primary" onClick={() => handleOpenModal()}>
                 <Plus size={18} style={{ marginRight: 6 }} /> {t('modules.leads.addNewLead')}
@@ -873,8 +889,47 @@ export default function Leads({ session, profile }) {
                         placeholder="Enter contact number..."
                       />
                     </div>
+                    <div className="form-group">
+                      <label className="form-label">Email Address</label>
+                      <input
+                        type="email"
+                        className="form-input"
+                        value={formData.email || formData.custom_data?.email || ''}
+                        onChange={e => setFormData({
+                          ...formData,
+                          email: e.target.value,
+                          custom_data: { ...formData.custom_data, email: e.target.value }
+                        })}
+                        placeholder="Enter email address..."
+                      />
+                    </div>
                   </>
                 )}
+
+                <div className="form-group">
+                  <label className="form-label">Lead Owner</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={formData.lead_owner || ''}
+                    onChange={e => setFormData({ ...formData, lead_owner: e.target.value })}
+                    placeholder="Enter lead owner..."
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Status</label>
+                  <select
+                    className="form-input"
+                    value={formData.status || 'new'}
+                    onChange={e => setFormData({ ...formData, status: e.target.value })}
+                  >
+                    <option value="new">New</option>
+                    <option value="contacted">Contacted</option>
+                    <option value="working">Working</option>
+                    <option value="lost">Lost</option>
+                    {editingLead && <option value="converted">Converted</option>}
+                  </select>
+                </div>
               </div>
               
               <div className="form-actions">
@@ -885,6 +940,15 @@ export default function Leads({ session, profile }) {
           </div>
         </div>
       )}
+
+      <BulkUploadModal
+        module="leads"
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        session={session}
+        profile={profile}
+        onImported={fetchLeads}
+      />
 
       <FieldBuilderModal 
         module="lead"

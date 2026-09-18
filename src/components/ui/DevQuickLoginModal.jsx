@@ -113,7 +113,7 @@ export default function DevQuickLoginModal({ isOpen, onClose, onSelectAccount, o
           >
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                <Zap size={20} className="text-amber-400" />
+                <img src="/images/xowiq-icon.png" alt="XOWIQ" style={{ width: 24, height: 24, borderRadius: 6 }} />
                 <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 500, color: '#f8fafc' }}>
                   <ShinyText text="Demo & Role Quick Login" speed={4} />
                 </h2>

@@ -28,7 +28,13 @@ export default function ExecutiveSuperAdminDashboard({
   users = [],
   kpiData = {},
   onExportPDF,
-  currency = '$'
+  currency = '$',
+  monthlyRevenue: monthlyRevenueProp = [],
+  activityHeatmap: activityHeatmapProp = [],
+  invoiceStats = { totalRevenue: 0, paidCount: 0, unpaidCount: 0, overdueCount: 0 },
+  contactsCount = 0,
+  accountsCount = 0,
+  quotesAccepted = 0
 }) {
   // Active month state for Analytics Chart
   const [selectedMonth, setSelectedMonth] = useState('Jun')
@@ -38,76 +44,85 @@ export default function ExecutiveSuperAdminDashboard({
   const [detailModal, setDetailModal] = useState(null)
   const [searchUser, setSearchUser] = useState('')
 
-  // Analytics monthly data
-  const monthlyAnalytics = [
-    { month: 'Jan', revenue: 2150, convRate: '7.2%', height: 48 },
-    { month: 'Feb', revenue: 1890, convRate: '6.8%', height: 42 },
-    { month: 'Mar', revenue: 3200, convRate: '9.4%', height: 75 },
-    { month: 'Apr', revenue: 2650, convRate: '8.1%', height: 60 },
-    { month: 'May', revenue: 2400, convRate: '7.9%', height: 55 },
-    { month: 'Jun', revenue: 2766, convRate: '8.7%', height: 68 }, // highlighted in screenshot
-    { month: 'Jul', revenue: 2300, convRate: '7.5%', height: 52 },
-    { month: 'Aug', revenue: 2950, convRate: '8.9%', height: 65 },
-    { month: 'Sept', revenue: 2540, convRate: '8.0%', height: 58 },
-    { month: 'Okt', revenue: 2100, convRate: '7.1%', height: 46 },
-    { month: 'Nov', revenue: 3100, convRate: '9.1%', height: 72 },
-    { month: 'Dec', revenue: 3450, convRate: '9.8%', height: 82 },
+  // ── Compute real aggregate KPIs from kpiData prop ─────────────────────────
+  const allKpis = Object.values(kpiData || {})
+  const totalActiveSales = allKpis.reduce((s, k) => s + (k.dealsValue || 0), 0)
+  const totalDealsCount  = allKpis.reduce((s, k) => s + (k.dealsCount || 0), 0)
+  const totalLeads       = allKpis.reduce((s, k) => s + (k.leads || 0), 0)
+  const totalCustomers   = allKpis.reduce((s, k) => s + (k.customers || 0), 0)
+  const convRate = totalLeads > 0 ? ((totalCustomers / totalLeads) * 100).toFixed(1) : '0.0'
+  // Sales performance score: % of users with at least 1 deal won (0–100)
+  const perfScore = users.length > 0
+    ? Math.round((allKpis.filter(k => (k.dealsCount || 0) > 0).length / users.length) * 100)
+    : 0
+  // Arc path: full arc spans from x=20,y=115 to x=200,y=115 (180°)
+  // We map perfScore (0-100) to a point along that arc
+  const perfAngle = (perfScore / 100) * Math.PI          // 0 → π
+  const arcCx = 110, arcCy = 115, arcR = 90
+  const arcX = Math.round(arcCx - arcR * Math.cos(perfAngle))
+  const arcY = Math.round(arcCy - arcR * Math.sin(perfAngle))
+  const perfArcD = `M 20 115 A 90 90 0 ${perfScore > 50 ? 1 : 0} 1 ${arcX} ${arcY}`
+
+  // Analytics monthly data — use real data from props, fallback to zeros
+  const defaultMonthlyAnalytics = [
+    { month: 'Jan',  revenue: 0, convRate: '0.0%', height: 0 },
+    { month: 'Feb',  revenue: 0, convRate: '0.0%', height: 0 },
+    { month: 'Mar',  revenue: 0, convRate: '0.0%', height: 0 },
+    { month: 'Apr',  revenue: 0, convRate: '0.0%', height: 0 },
+    { month: 'May',  revenue: 0, convRate: '0.0%', height: 0 },
+    { month: 'Jun',  revenue: 0, convRate: '0.0%', height: 0 },
+    { month: 'Jul',  revenue: 0, convRate: '0.0%', height: 0 },
+    { month: 'Aug',  revenue: 0, convRate: '0.0%', height: 0 },
+    { month: 'Sep',  revenue: 0, convRate: '0.0%', height: 0 },
+    { month: 'Oct',  revenue: 0, convRate: '0.0%', height: 0 },
+    { month: 'Nov',  revenue: 0, convRate: '0.0%', height: 0 },
+    { month: 'Dec',  revenue: 0, convRate: '0.0%', height: 0 },
   ]
+  const monthlyAnalytics = monthlyRevenueProp.length > 0 ? monthlyRevenueProp : defaultMonthlyAnalytics
 
   const activeAnalytics = monthlyAnalytics.find(m => m.month === selectedMonth) || monthlyAnalytics[5]
 
-  // Visit by time heatmap data matrix (3 time slots x 7 days)
-  // Intensity levels: 0 (light gray), 1 (light peach), 2 (medium orange), 3 (vibrant dark orange)
-  const heatmapData = [
+  // Y-axis max for Analytics chart (auto-scale based on real data)
+  const maxChartRevenue = Math.max(...monthlyAnalytics.map(m => m.revenue), 1)
+  const yAxisLabels = (() => {
+    if (maxChartRevenue <= 1) return ['$4K', '$3K', '$2K', '$1K', '0']
+    const step = maxChartRevenue / 4
+    return [4, 3, 2, 1, 0].map(i => {
+      const val = step * i
+      if (val >= 1000000) return `${currency}${(val / 1000000).toFixed(1)}M`
+      if (val >= 1000) return `${currency}${(val / 1000).toFixed(1)}K`
+      return `${currency}${Math.round(val)}`
+    })
+  })()
+
+  // Visit by time heatmap — use real data from props, fallback to zeros
+  const defaultHeatmap = [
     {
-      timeSlot: '12 AM- 8 AM',
-      days: [
-        { day: 'Mon', level: 2, count: '6,420 visits' },
-        { day: 'Tue', level: 0, count: '1,200 visits' },
-        { day: 'Wed', level: 1, count: '3,850 visits' },
-        { day: 'Thu', level: 1, count: '4,100 visits' },
-        { day: 'Fri', level: 0, count: '1,560 visits' },
-        { day: 'Sat', level: 1, count: '3,200 visits' },
-        { day: 'Sun', level: 0, count: '1,100 visits' },
-      ]
+      timeSlot: '12 AM - 8 AM',
+      days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => ({ day: d, level: 0, count: '0 activities' }))
     },
     {
       timeSlot: '8 AM - 4 PM',
-      days: [
-        { day: 'Mon', level: 3, count: '14,890 visits' },
-        { day: 'Tue', level: 1, count: '4,650 visits' },
-        { day: 'Wed', level: 3, count: '15,200 visits' },
-        { day: 'Thu', level: 2, count: '8,400 visits' },
-        { day: 'Fri', level: 1, count: '5,100 visits' },
-        { day: 'Sat', level: 2, count: '7,800 visits' },
-        { day: 'Sun', level: 3, count: '16,400 visits' },
-      ]
+      days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => ({ day: d, level: 0, count: '0 activities' }))
     },
     {
       timeSlot: '4 PM - 12 AM',
-      days: [
-        { day: 'Mon', level: 1, count: '4,200 visits' },
-        { day: 'Tue', level: 2, count: '7,900 visits' },
-        { day: 'Wed', level: 0, count: '1,800 visits' },
-        { day: 'Thu', level: 0, count: '2,100 visits' },
-        { day: 'Fri', level: 3, count: '12,650 visits' },
-        { day: 'Sat', level: 1, count: '4,800 visits' },
-        { day: 'Sun', level: 2, count: '8,900 visits' },
-      ]
+      days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => ({ day: d, level: 0, count: '0 activities' }))
     }
   ]
+  const heatmapData = activityHeatmapProp.length > 0 ? activityHeatmapProp : defaultHeatmap
 
   const getHeatmapColor = (level) => {
     switch (level) {
       case 3:
-        return 'bg-[#ff5900] text-white shadow-sm' // 10,000+
+        return 'bg-[#ff5900] text-white shadow-sm'
       case 2:
-        return 'bg-[#fdba74] text-slate-800' // medium orange
+        return 'bg-[#fdba74] text-slate-800'
       case 1:
-        return 'bg-[#fed7aa]/70 text-slate-700' // light peach
+        return 'bg-[#fed7aa]/70 text-slate-700'
       case 0:
       default:
-        return 'bg-[#f1f5f9] text-slate-400' // subtle gray
+        return 'bg-[#f1f5f9] text-slate-400'
     }
   }
 
@@ -155,14 +170,10 @@ export default function ExecutiveSuperAdminDashboard({
             <div className="mt-4 flex items-end justify-between">
               <div>
                 <div className="text-2xl sm:text-3xl font-medium text-slate-950 tracking-tight">
-                  $24,064
+                  {currency}{totalActiveSales.toLocaleString()}
                 </div>
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 font-light">
-                  <span>vs last month</span>
-                  <span className="inline-flex items-center gap-0.5 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-medium text-[11px]">
-                    <TrendingUp size={11} />
-                    <span>12%</span>
-                  </span>
+                  <span>total closed deal value</span>
                 </div>
               </div>
 
@@ -177,7 +188,7 @@ export default function ExecutiveSuperAdminDashboard({
 
           <div className="mt-6 pt-4 border-t border-slate-100">
             <button
-              onClick={() => setDetailModal({ title: 'Active Sales', value: '$24,064', desc: '184 active enterprise pipeline deals across all 5 assigned sales channels.' })}
+              onClick={() => setDetailModal({ title: 'Active Sales', value: `${currency}${totalActiveSales.toLocaleString()}`, desc: `Total closed deal value across ${totalDealsCount} won deals from your team.` })}
               className="text-xs font-medium text-slate-800 hover:text-[#ff5900] flex items-center gap-1 transition-colors cursor-pointer bg-transparent border-none p-0"
             >
               <span>See Details</span>
@@ -186,12 +197,12 @@ export default function ExecutiveSuperAdminDashboard({
           </div>
         </div>
 
-        {/* CARD 2: PRODUCT REVENUE */}
+        {/* CARD 2: INVOICE REVENUE */}
         <div className="p-6 flex flex-col justify-between hover:bg-slate-50/50 transition-colors">
           <div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
-                <span>Product Revenue</span>
+                <span>Invoice Revenue</span>
                 <Info size={13} className="text-slate-400 cursor-help" />
               </div>
             </div>
@@ -199,14 +210,10 @@ export default function ExecutiveSuperAdminDashboard({
             <div className="mt-4 flex items-end justify-between">
               <div>
                 <div className="text-2xl sm:text-3xl font-medium text-slate-950 tracking-tight">
-                  $15,490
+                  {currency}{invoiceStats.totalRevenue.toLocaleString()}
                 </div>
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 font-light">
-                  <span>vs last month</span>
-                  <span className="inline-flex items-center gap-0.5 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-medium text-[11px]">
-                    <TrendingUp size={11} />
-                    <span>9%</span>
-                  </span>
+                  <span>{invoiceStats.paidCount} paid · {invoiceStats.unpaidCount} unpaid · {invoiceStats.overdueCount} overdue</span>
                 </div>
               </div>
 
@@ -227,7 +234,7 @@ export default function ExecutiveSuperAdminDashboard({
 
           <div className="mt-6 pt-4 border-t border-slate-100">
             <button
-              onClick={() => setDetailModal({ title: 'Product Revenue', value: '$15,490', desc: 'Direct revenue accrued from paid subscriptions and automated PDF invoices.' })}
+              onClick={() => setDetailModal({ title: 'Invoice Revenue', value: `${currency}${invoiceStats.totalRevenue.toLocaleString()}`, desc: `${invoiceStats.paidCount} paid invoices totalling ${currency}${invoiceStats.totalRevenue.toLocaleString()}. ${invoiceStats.unpaidCount} unpaid, ${invoiceStats.overdueCount} overdue.` })}
               className="text-xs font-medium text-slate-800 hover:text-[#ff5900] flex items-center gap-1 transition-colors cursor-pointer bg-transparent border-none p-0"
             >
               <span>See Details</span>
@@ -236,12 +243,12 @@ export default function ExecutiveSuperAdminDashboard({
           </div>
         </div>
 
-        {/* CARD 3: PRODUCT SOLD */}
+        {/* CARD 3: BUSINESS CLOSED */}
         <div className="p-6 flex flex-col justify-between hover:bg-slate-50/50 transition-colors">
           <div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
-                <span>Product Sold</span>
+                <span>Business Closed</span>
                 <Info size={13} className="text-slate-400 cursor-help" />
               </div>
             </div>
@@ -249,14 +256,10 @@ export default function ExecutiveSuperAdminDashboard({
             <div className="mt-4 flex items-end justify-between">
               <div>
                 <div className="text-2xl sm:text-3xl font-medium text-slate-950 tracking-tight">
-                  2,355
+                  {totalDealsCount + quotesAccepted}
                 </div>
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 font-light">
-                  <span>vs last month</span>
-                  <span className="inline-flex items-center gap-0.5 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-medium text-[11px]">
-                    <TrendingUp size={11} />
-                    <span>7%</span>
-                  </span>
+                  <span>{totalDealsCount} deals · {quotesAccepted} quotes accepted</span>
                 </div>
               </div>
 
@@ -281,7 +284,7 @@ export default function ExecutiveSuperAdminDashboard({
 
           <div className="mt-6 pt-4 border-t border-slate-100">
             <button
-              onClick={() => setDetailModal({ title: 'Product Sold', value: '2,355 Units', desc: 'Total SaaS enterprise seats, addon packages, and service plans activated.' })}
+              onClick={() => setDetailModal({ title: 'Business Closed', value: `${totalDealsCount + quotesAccepted} items`, desc: `${totalDealsCount} closed/won deals and ${quotesAccepted} accepted quotes across your team.` })}
               className="text-xs font-medium text-slate-800 hover:text-[#ff5900] flex items-center gap-1 transition-colors cursor-pointer bg-transparent border-none p-0"
             >
               <span>See Details</span>
@@ -303,14 +306,10 @@ export default function ExecutiveSuperAdminDashboard({
             <div className="mt-4 flex items-end justify-between">
               <div>
                 <div className="text-2xl sm:text-3xl font-medium text-slate-950 tracking-tight">
-                  12,5%
+                  {convRate}%
                 </div>
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 font-light">
-                  <span>vs last month</span>
-                  <span className="inline-flex items-center gap-0.5 bg-rose-50 text-rose-600 px-2 py-0.5 rounded-full font-medium text-[11px]">
-                    <TrendingDown size={11} />
-                    <span>2%</span>
-                  </span>
+                  <span>leads → customers</span>
                 </div>
               </div>
 
@@ -327,7 +326,7 @@ export default function ExecutiveSuperAdminDashboard({
 
           <div className="mt-6 pt-4 border-t border-slate-100">
             <button
-              onClick={() => setDetailModal({ title: 'Conversion Rate', value: '12.5%', desc: 'Visitor to demo-booking and qualified lead conversion ratio this quarter.' })}
+              onClick={() => setDetailModal({ title: 'Conversion Rate', value: `${convRate}%`, desc: `${totalCustomers} leads converted out of ${totalLeads} total leads across your team.` })}
               className="text-xs font-medium text-slate-800 hover:text-[#ff5900] flex items-center gap-1 transition-colors cursor-pointer bg-transparent border-none p-0"
             >
               <span>See Details</span>
@@ -364,24 +363,23 @@ export default function ExecutiveSuperAdminDashboard({
                   strokeLinecap="round"
                 />
 
-                {/* Inner Orange Progress Arc (82%) */}
-                <path
-                  d="M 20 115 A 90 90 0 0 1 180 60"
-                  fill="none"
-                  stroke="#ff5900"
-                  strokeWidth="12"
-                  strokeLinecap="round"
-                  className="transition-all duration-1000"
-                />
+                {/* Inner Orange Progress Arc (real score) */}
+                {perfScore > 0 && (
+                  <path
+                    d={perfArcD}
+                    fill="none"
+                    stroke="#ff5900"
+                    strokeWidth="12"
+                    strokeLinecap="round"
+                    className="transition-all duration-1000"
+                  />
+                )}
               </svg>
 
               {/* Center Score Indicator */}
               <div className="text-center -mt-16">
                 <div className="flex items-center justify-center gap-1.5">
-                  <span className="text-4xl font-medium text-slate-950 tracking-tight">82</span>
-                  <span className="bg-emerald-50 text-emerald-600 text-[11px] font-medium px-1.5 py-0.5 rounded-full">
-                    +1
-                  </span>
+                  <span className="text-4xl font-medium text-slate-950 tracking-tight">{perfScore}</span>
                 </div>
                 <div className="text-xs text-slate-400 font-light mt-0.5">of 100 points</div>
               </div>
@@ -453,23 +451,13 @@ export default function ExecutiveSuperAdminDashboard({
 
             {/* Main Chart Area */}
             <div className="relative pt-6 pb-2">
-              {/* Y-Axis Guidelines */}
+              {/* Y-Axis Guidelines — auto-scaled from real data */}
               <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-8 text-[11px] text-slate-400 font-light">
-                <div className="border-b border-dashed border-slate-100 flex items-center justify-between">
-                  <span>$4K</span>
-                </div>
-                <div className="border-b border-dashed border-slate-100 flex items-center justify-between">
-                  <span>$3K</span>
-                </div>
-                <div className="border-b border-dashed border-slate-100 flex items-center justify-between">
-                  <span>$2K</span>
-                </div>
-                <div className="border-b border-dashed border-slate-100 flex items-center justify-between">
-                  <span>$1K</span>
-                </div>
-                <div className="border-b border-slate-200 flex items-center justify-between">
-                  <span>0</span>
-                </div>
+                {yAxisLabels.map((label, idx) => (
+                  <div key={idx} className={`${idx < yAxisLabels.length - 1 ? 'border-b border-dashed border-slate-100' : 'border-b border-slate-200'} flex items-center justify-between`}>
+                    <span>{label}</span>
+                  </div>
+                ))}
               </div>
 
               {/* Bars Grid */}
@@ -610,11 +598,11 @@ export default function ExecutiveSuperAdminDashboard({
           </div>
         </div>
 
-        {/* RIGHT: TOTAL VISIT DONUT BREAKDOWN (42% width) */}
+        {/* RIGHT: CRM DATA BREAKDOWN (42% width) */}
         <div className="lg:col-span-5 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800 mb-4">
-              <span>Total Visit</span>
+              <span>CRM Overview</span>
               <Info size={13} className="text-slate-400 cursor-help" />
             </div>
 
@@ -623,14 +611,10 @@ export default function ExecutiveSuperAdminDashboard({
               <div className="space-y-4">
                 <div>
                   <div className="text-3xl font-medium text-slate-950 tracking-tight">
-                    191,886
+                    {contactsCount + accountsCount + totalCustomers + totalLeads}
                   </div>
                   <div className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500 font-light">
-                    <span>vs last month</span>
-                    <span className="inline-flex items-center gap-0.5 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-medium text-[11px]">
-                      <TrendingUp size={11} />
-                      <span>8.5%</span>
-                    </span>
+                    <span>total CRM records</span>
                   </div>
                 </div>
 
@@ -638,61 +622,77 @@ export default function ExecutiveSuperAdminDashboard({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-[#ff5900]" />
-                      <span className="text-slate-700 font-medium">Mobile</span>
+                      <span className="text-slate-700 font-medium">Contacts</span>
                     </div>
-                    <span className="font-medium text-slate-900">115,132</span>
+                    <span className="font-medium text-slate-900">{contactsCount}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#ea580c]" />
+                      <span className="text-slate-700 font-medium">Accounts</span>
+                    </div>
+                    <span className="font-medium text-slate-900">{accountsCount}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#fdba74]" />
+                      <span className="text-slate-500 font-light">Converted Leads</span>
+                    </div>
+                    <span className="font-medium text-slate-900">{totalCustomers}</span>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-[#fed7aa]" />
-                      <span className="text-slate-500 font-light">Website</span>
+                      <span className="text-slate-500 font-light">Active Leads</span>
                     </div>
-                    <span className="font-medium text-slate-900">76,754</span>
+                    <span className="font-medium text-slate-900">{totalLeads}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Right Column: 2-Tone Donut Pie Chart with 60% & 40% Badges */}
-              <div className="relative flex items-center justify-center">
-                <svg width="150" height="150" viewBox="0 0 150 150">
-                  {/* Website Slice: 40% (Soft Peach #fed7aa) */}
-                  <circle
-                    cx="75"
-                    cy="75"
-                    r="52"
-                    fill="none"
-                    stroke="#fed7aa"
-                    strokeWidth="24"
-                    strokeDasharray="130 327"
-                    strokeDashoffset="-196"
-                    className="transition-all duration-700"
-                  />
-
-                  {/* Mobile Slice: 60% (Sunset Orange #ff5900) */}
-                  <circle
-                    cx="75"
-                    cy="75"
-                    r="52"
-                    fill="none"
-                    stroke="#ff5900"
-                    strokeWidth="24"
-                    strokeDasharray="196 327"
-                    strokeDashoffset="0"
-                    className="transition-all duration-700"
-                  />
-                </svg>
-
-                {/* 40% Badge Callout (Top-Right) */}
-                <div className="absolute top-2 right-2 bg-white px-2 py-0.5 rounded-full text-[11px] font-medium text-slate-800 shadow-md border border-slate-100">
-                  40%
-                </div>
-
-                {/* 60% Badge Callout (Bottom-Left) */}
-                <div className="absolute bottom-2 left-2 bg-white px-2 py-0.5 rounded-full text-[11px] font-medium text-slate-800 shadow-md border border-slate-100">
-                  60%
-                </div>
-              </div>
+              {/* Right Column: 4-Segment Donut Pie Chart */}
+              {(() => {
+                const segments = [
+                  { value: contactsCount, color: '#ff5900' },
+                  { value: accountsCount, color: '#ea580c' },
+                  { value: totalCustomers, color: '#fdba74' },
+                  { value: totalLeads, color: '#fed7aa' },
+                ]
+                const total = segments.reduce((s, seg) => s + seg.value, 0)
+                const circumference = 2 * Math.PI * 52
+                let offset = 0
+                return (
+                  <div className="relative flex items-center justify-center">
+                    <svg width="150" height="150" viewBox="0 0 150 150">
+                      {total > 0 ? segments.map((seg, i) => {
+                        const pct = seg.value / total
+                        const dash = pct * circumference
+                        const thisOffset = offset
+                        offset += dash
+                        return (
+                          <circle key={i} cx="75" cy="75" r="52" fill="none" stroke={seg.color} strokeWidth="24"
+                            strokeDasharray={`${dash.toFixed(1)} ${circumference.toFixed(1)}`}
+                            strokeDashoffset={`-${thisOffset.toFixed(1)}`}
+                            className="transition-all duration-700" />
+                        )
+                      }) : (
+                        <circle cx="75" cy="75" r="52" fill="none" stroke="#e2e8f0" strokeWidth="24" />
+                      )}
+                    </svg>
+                    {total > 0 && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="text-lg font-medium text-slate-950">{total}</div>
+                          <div className="text-[10px] text-slate-400 font-light">total</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
           </div>
         </div>
@@ -735,10 +735,13 @@ export default function ExecutiveSuperAdminDashboard({
                 <tr className="border-b border-slate-100 text-slate-400 font-medium uppercase tracking-wider text-[10px]">
                   <th className="pb-3 font-medium">Team Member</th>
                   <th className="pb-3 font-medium">Role</th>
-                  <th className="pb-3 font-medium">Leads Assigned</th>
+                  <th className="pb-3 font-medium">Leads</th>
+                  <th className="pb-3 font-medium">Contacts</th>
                   <th className="pb-3 font-medium">Deals Won</th>
                   <th className="pb-3 font-medium">Closed Value</th>
-                  <th className="pb-3 font-medium">Tasks Resolved</th>
+                  <th className="pb-3 font-medium">Invoices</th>
+                  <th className="pb-3 font-medium">Quotes</th>
+                  <th className="pb-3 font-medium">Tasks</th>
                   <th className="pb-3 font-medium">Tickets</th>
                   <th className="pb-3 font-medium text-right">Status</th>
                 </tr>
@@ -766,11 +769,14 @@ export default function ExecutiveSuperAdminDashboard({
                         </span>
                       </td>
 
-                      <td className="py-3.5 font-medium text-slate-800">{kpi.leads ?? 14}</td>
-                      <td className="py-3.5 font-medium text-emerald-600">{kpi.dealsCount ?? 6}</td>
-                      <td className="py-3.5 font-medium text-slate-900">{currency}{(kpi.dealsValue || 38500).toLocaleString()}</td>
-                      <td className="py-3.5 text-slate-600">{kpi.tasks ?? 19}</td>
-                      <td className="py-3.5 text-slate-600">{kpi.tickets ?? 3}</td>
+                      <td className="py-3.5 font-medium text-slate-800">{kpi.leads ?? 0}</td>
+                      <td className="py-3.5 font-medium text-blue-600">{kpi.contacts ?? 0}</td>
+                      <td className="py-3.5 font-medium text-emerald-600">{kpi.dealsCount ?? 0}</td>
+                      <td className="py-3.5 font-medium text-slate-900">{currency}{(kpi.dealsValue ?? 0).toLocaleString()}</td>
+                      <td className="py-3.5 font-medium text-amber-600">{kpi.invoicesPaid ?? 0}</td>
+                      <td className="py-3.5 font-medium text-violet-600">{kpi.quotesAccepted ?? 0}</td>
+                      <td className="py-3.5 text-slate-600">{kpi.tasks ?? 0}</td>
+                      <td className="py-3.5 text-slate-600">{kpi.tickets ?? 0}</td>
 
                       <td className="py-3.5 text-right">
                         <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600">

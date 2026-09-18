@@ -455,6 +455,9 @@
     "taskUpdateFailed": "பணியை புதுப்பிக்கத் தவறியது",
     "revenue": "வருவாய்"
   },
+  "bulkImport": {
+    "button": "Excel/CSV இறக்குமதி"
+  },
   "modules": {
     "accounts": {
       "customerProfiles": "வாடிக்கையாளர் சுயவிவரங்கள்",

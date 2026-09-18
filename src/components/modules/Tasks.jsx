@@ -3,9 +3,10 @@ import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
-import { Trash2, Edit2, Calendar, User, Tag, Link2, CheckCircle2, Clock, PlayCircle, AlertCircle, CheckCircle, Settings, Save } from 'lucide-react'
+import { Trash2, Edit2, Calendar, User, Tag, Link2, CheckCircle2, Clock, PlayCircle, AlertCircle, CheckCircle, Settings, Save, UploadCloud } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
+import BulkUploadModal from '../ui/BulkUploadModal'
 
 const TASK_TYPES = ['Follow-up', 'Demo', 'Onboarding', 'Renewal', 'Support', 'Email', 'Message', 'Call', 'Events']
 const STATUS_STAGES = ['Pending', 'In Progress', 'Completed', 'Overdue']
@@ -79,6 +80,7 @@ export default function Tasks({ session, profile }) {
 
   const [taskConfigs, setTaskConfigs] = useState([])
   const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
 
   const fetchTaskConfigs = async () => {
     try {
@@ -547,6 +549,9 @@ export default function Tasks({ session, profile }) {
           <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setIsFieldBuilderOpen(true)}>
             <Settings size={14} /> {t('modules.tasks.editFields')}
           </button>
+          <button className="btn btn-secondary" onClick={() => setIsImportOpen(true)}>
+            <UploadCloud size={14} style={{ marginRight: 6 }} /> {t('bulkImport.button', 'Import Excel/CSV')}
+          </button>
           <button className="btn btn-primary" onClick={() => handleOpenModal()}>
             <span style={{ fontSize: 18 }}>+</span> {t('modules.tasks.createTask')}
           </button>
@@ -733,6 +738,15 @@ export default function Tasks({ session, profile }) {
           </div>
         </div>
       )}
+
+      <BulkUploadModal
+        module="tasks"
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        session={session}
+        profile={profile}
+        onImported={fetchTasks}
+      />
 
       <FieldBuilderModal 
         module="task"

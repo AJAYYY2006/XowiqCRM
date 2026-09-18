@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
-import { Plus, Edit2, Trash2, Package, DollarSign, Clock, Save, GripVertical, Settings2, Palette, Zap, Layers } from 'lucide-react'
+import { Plus, Edit2, Trash2, Package, DollarSign, Clock, Save, GripVertical, Settings2, Palette, Zap, Layers, UploadCloud } from 'lucide-react'
+import BulkUploadModal from '../ui/BulkUploadModal'
 import LocalSearch from '../ui/LocalSearch'
 
 // ── Currency conversion ────────────────────────────────────────────────────
@@ -39,6 +40,7 @@ export default function Services({ session, profile }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingService, setEditingService] = useState(null)
   
+  const [isImportOpen, setIsImportOpen] = useState(false)
   const [formData, setFormData] = useState({
     service_name: '',
     price: 0,
@@ -383,9 +385,14 @@ export default function Services({ session, profile }) {
           <h1 className="page-title"><Package size={28} style={{ color: '#f37a23', marginRight: 12, verticalAlign: 'bottom' }} />{t('modules.services.title')}</h1>
           <p className="page-subtitle">{t('modules.services.subtitle')}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-          <Plus size={18} /> {t('modules.services.addNewService')}
-        </button>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button className="btn btn-secondary" onClick={() => setIsImportOpen(true)}>
+            <UploadCloud size={18} style={{ marginRight: 6 }} /> {t('bulkImport.button', 'Import Excel/CSV')}
+          </button>
+          <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+            <Plus size={18} /> {t('modules.services.addNewService')}
+          </button>
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: 24, padding: '0 20px' }}>
@@ -677,6 +684,15 @@ export default function Services({ session, profile }) {
           box-shadow: 0 20px 25px -5px rgba(243, 122, 35, 0.1), 0 10px 10px -5px rgba(243, 122, 35, 0.04);
         }
       `}} />
+      <BulkUploadModal
+        module="services"
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        session={session}
+        profile={profile}
+        onImported={fetchServices}
+      />
+
       <style>{`
         .kanban-scroll-container::-webkit-scrollbar { height: 8px; }
         .kanban-scroll-container::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }

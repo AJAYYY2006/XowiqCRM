@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
-import { Trash2, Edit2, Settings, Plus } from 'lucide-react'
+import { Trash2, Edit2, Settings, Plus, UploadCloud } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 import toast from 'react-hot-toast'
 import WhatsAppButton from '../ui/WhatsAppButton'
 import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../lib/whatsapp'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
+import BulkUploadModal from '../ui/BulkUploadModal'
 
 export default function Contacts({ session, profile }) {
   const { t } = useTranslation()
@@ -24,6 +25,7 @@ export default function Contacts({ session, profile }) {
     name: '', email: '', phone: '', account_id: '', contact_owner: ''
   })
   const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
 
   // Contact Detail State
   const [conTasks, setConTasks] = useState([])
@@ -408,6 +410,9 @@ export default function Contacts({ session, profile }) {
               <button className="btn btn-secondary" onClick={() => setIsFieldBuilderOpen(true)}>
                 <Settings size={18} style={{ marginRight: 6 }} /> {t('modules.contacts.editFields')}
               </button>
+              <button className="btn btn-secondary" onClick={() => setIsImportOpen(true)}>
+                <UploadCloud size={18} style={{ marginRight: 6 }} /> {t('bulkImport.button', 'Import Excel/CSV')}
+              </button>
               <button className="btn btn-primary" onClick={() => handleOpenModal()}>
                 <Plus size={18} style={{ marginRight: 6 }} /> {t('modules.contacts.addNewContact')}
               </button>
@@ -614,6 +619,15 @@ export default function Contacts({ session, profile }) {
         </div>
       )}
       
+      <BulkUploadModal
+        module="contacts"
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        session={session}
+        profile={profile}
+        onImported={fetchData}
+      />
+
       <FieldBuilderModal 
         module="contact"
         businessId={session.user.id}

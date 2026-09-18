@@ -455,6 +455,9 @@
     "taskUpdateFailed": "Failed to update task",
     "revenue": "Revenue"
   },
+  "bulkImport": {
+    "button": "Import Excel/CSV"
+  },
   "modules": {
     "accounts": {
       "customerProfiles": "Customer Profiles",

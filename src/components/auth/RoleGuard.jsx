@@ -5,7 +5,7 @@ import { ShieldAlert, ArrowLeft, Lock, Sparkles } from 'lucide-react'
 import { SpotlightCard, ShinyButton } from '../reactbits'
 
 export default function RoleGuard({ moduleId, allowedRoles, children, fallbackRedirect }) {
-  const { role, roleInfo, hasAccess, switchRole } = useRole()
+  const { role, roleInfo, hasAccess, switchRole, canSwitchRole } = useRole()
   const navigate = useNavigate()
 
   // 1. If explicit allowedRoles array is provided
@@ -19,7 +19,7 @@ export default function RoleGuard({ moduleId, allowedRoles, children, fallbackRe
       if (fallbackRedirect) {
         return <Navigate to={fallbackRedirect} replace />
       }
-      return <AccessDeniedView moduleId={moduleId} currentRole={roleInfo} onSwitchRole={switchRole} onGoBack={() => navigate('/dashboard')} />
+      return <AccessDeniedView moduleId={moduleId} currentRole={roleInfo} onSwitchRole={switchRole} canSwitchRole={canSwitchRole} onGoBack={() => navigate('/dashboard')} />
     }
   }
 
@@ -28,13 +28,13 @@ export default function RoleGuard({ moduleId, allowedRoles, children, fallbackRe
     if (fallbackRedirect) {
       return <Navigate to={fallbackRedirect} replace />
     }
-    return <AccessDeniedView moduleId={moduleId} currentRole={roleInfo} onSwitchRole={switchRole} onGoBack={() => navigate('/dashboard')} />
+    return <AccessDeniedView moduleId={moduleId} currentRole={roleInfo} onSwitchRole={switchRole} canSwitchRole={canSwitchRole} onGoBack={() => navigate('/dashboard')} />
   }
 
   return children
 }
 
-function AccessDeniedView({ moduleId, currentRole, onSwitchRole, onGoBack }) {
+function AccessDeniedView({ moduleId, currentRole, onSwitchRole, onGoBack, canSwitchRole }) {
   return (
     <div
       style={{
@@ -59,6 +59,13 @@ function AccessDeniedView({ moduleId, currentRole, onSwitchRole, onGoBack }) {
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)'
         }}
       >
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+          <img
+            src="/images/xowiq-logo-dark.png"
+            alt="XOWIQ CRM"
+            style={{ height: 32, width: 'auto' }}
+          />
+        </div>
         <div
           style={{
             width: 72,
@@ -99,14 +106,16 @@ function AccessDeniedView({ moduleId, currentRole, onSwitchRole, onGoBack }) {
             <span>Return to Dashboard</span>
           </button>
 
-          <ShinyButton
-            variant="primary"
-            onClick={() => onSwitchRole('admin')}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', borderRadius: 10 }}
-          >
-            <Sparkles size={16} />
-            <span>Switch to Admin Mode</span>
-          </ShinyButton>
+          {canSwitchRole && (
+            <ShinyButton
+              variant="primary"
+              onClick={() => onSwitchRole('admin')}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', borderRadius: 10 }}
+            >
+              <Sparkles size={16} />
+              <span>Switch to Admin Mode</span>
+            </ShinyButton>
+          )}
         </div>
       </SpotlightCard>
     </div>

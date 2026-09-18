@@ -1,20 +1,17 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Menu, X, ArrowRight, Zap } from 'lucide-react'
+import { Menu, X, ArrowRight } from 'lucide-react'
 
-export function FlowaLogo({ size = 28 }) {
+export function FlowaLogo({ height = 34, className = "" }) {
   return (
-    <Link to="/" className="flex items-center gap-1.5 group cursor-pointer text-slate-900 no-underline font-['Poppins',sans-serif]">
-      <div className="flex items-center text-lg tracking-tight font-medium">
-        <div className="bg-[#ff5900] text-white px-2.5 py-1 rounded-l-xl shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform duration-300 flex items-center gap-1.5 font-medium">
-          <Zap size={14} className="fill-white" />
-          <span>XOWIQ</span>
-        </div>
-        <div className="bg-[#0f172a] text-white px-2 py-1 rounded-r-xl border-l border-white/20 font-light text-sm">
-          CRM
-        </div>
-      </div>
+    <Link to="/" className={`flex items-center group cursor-pointer no-underline ${className}`}>
+      <img
+        src="/images/xowiq-logo.png"
+        alt="XOWIQ CRM"
+        style={{ height: `${height}px`, width: 'auto', display: 'block' }}
+        className="group-hover:scale-105 transition-transform duration-300"
+      />
     </Link>
   )
 }

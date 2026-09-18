@@ -57,13 +57,14 @@ export default function SignUp() {
           zIndex: 2,
         }}
       >
-        <div className="auth-logo" style={{ display: 'flex', alignItems: 'center', gap: 0, fontWeight: 500, fontFamily: '"Poppins", sans-serif', fontSize: '24px', letterSpacing: '-0.5px', marginBottom: '24px', justifyContent: 'center' }}>
-          <div style={{ backgroundColor: '#ff5900', color: '#ffffff', padding: '5px 8px', lineHeight: 1, borderRadius: '6px 0 0 6px' }}>
-            XOWIQ
-          </div>
-          <div style={{ color: '#ffffff', backgroundColor: '#1e293b', padding: '5px 8px', lineHeight: 1, borderRadius: '0 6px 6px 0' }}>
-            CRM
-          </div>
+        <div className="auth-logo" style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: '24px', justifyContent: 'center' }}>
+          <Link to="/" style={{ textDecoration: 'none' }}>
+            <img
+              src="/images/xowiq-logo-dark.png"
+              alt="XOWIQ CRM"
+              style={{ height: '38px', width: 'auto', display: 'block' }}
+            />
+          </Link>
         </div>
 
         {success ? (

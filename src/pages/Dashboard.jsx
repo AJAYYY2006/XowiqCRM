@@ -7,7 +7,8 @@ import {
   LayoutDashboard, Users, LogOut, UserPlus, BarChart3,
   TrendingUp, CheckCircle, Ticket, Target, Activity,
   Shield, ChevronRight, Search, RefreshCw, Eye, EyeOff,
-  Package, UserSquare2, Building2, Briefcase, Quote, Settings, Trash2, ClipboardList
+  Package, UserSquare2, Building2, Briefcase, Quote, Settings, Trash2, ClipboardList,
+  Sun, Moon
 } from 'lucide-react'
 
 // Import all existing CRM modules so admin can use them too
@@ -26,8 +27,9 @@ import Services from '../components/modules/Services'
 import ExecutiveSuperAdminDashboard from '../components/dashboard/ExecutiveSuperAdminDashboard'
 import AppSidebar from '../components/layout/AppSidebar'
 import { useRole } from '../contexts/RoleContext'
+import { useTheme } from '../contexts/ThemeContext'
 import RoleGuard from '../components/auth/RoleGuard'
-import { ROLE_DEFINITIONS } from '../config/roles'
+import { ROLE_DEFINITIONS, ASSIGNABLE_ROLES } from '../config/roles'
 
 // ─── KPI Panel ───────────────────────────────────────────────────────────────
 function KPIPanel({ session, profile }) {
@@ -37,8 +39,90 @@ function KPIPanel({ session, profile }) {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
+  // New aggregate states for dashboard sections
+  const [monthlyRevenue, setMonthlyRevenue] = useState([])
+  const [activityHeatmap, setActivityHeatmap] = useState([])
+  const [invoiceStats, setInvoiceStats] = useState({ totalRevenue: 0, paidCount: 0, unpaidCount: 0, overdueCount: 0 })
+  const [contactsCount, setContactsCount] = useState(0)
+  const [accountsCount, setAccountsCount] = useState(0)
+  const [quotesAccepted, setQuotesAccepted] = useState(0)
+
   const companyName = profile?.company_name || session.user.user_metadata?.companyName || ''
   const companyType = profile?.company_type || session.user.user_metadata?.companyType || 'B2B'
+
+  // Helper: build monthly revenue array from deals with closed_date
+  const buildMonthlyRevenue = (deals) => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const monthMap = {}
+    months.forEach((m, i) => { monthMap[i] = { month: m, revenue: 0, deals: 0 } })
+
+    deals.forEach(d => {
+      const date = new Date(d.closed_date || d.created_at)
+      if (date.getFullYear() === currentYear) {
+        const mi = date.getMonth()
+        monthMap[mi].revenue += Number(d.amount || 0)
+        monthMap[mi].deals += 1
+      }
+    })
+
+    const arr = Object.values(monthMap)
+    const maxRev = Math.max(...arr.map(m => m.revenue), 1)
+    return arr.map(m => ({
+      ...m,
+      convRate: m.deals > 0 ? `${((m.deals / Math.max(m.deals, 1)) * 100).toFixed(1)}%` : '0.0%',
+      height: Math.round((m.revenue / maxRev) * 100)
+    }))
+  }
+
+  // Helper: build heatmap from activity timestamps
+  const buildActivityHeatmap = (timestamps) => {
+    // Buckets: 3 time slots × 7 days
+    const slots = [
+      { timeSlot: '12 AM - 8 AM', range: [0, 8] },
+      { timeSlot: '8 AM - 4 PM', range: [8, 16] },
+      { timeSlot: '4 PM - 12 AM', range: [16, 24] }
+    ]
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+    // Initialize counts
+    const counts = {}
+    slots.forEach(s => {
+      counts[s.timeSlot] = {}
+      dayNames.forEach(d => { counts[s.timeSlot][d] = 0 })
+    })
+
+    // Bucket each timestamp
+    timestamps.forEach(ts => {
+      const date = new Date(ts)
+      const hour = date.getHours()
+      const dayName = dayNames[date.getDay()]
+      for (const s of slots) {
+        if (hour >= s.range[0] && hour < s.range[1]) {
+          counts[s.timeSlot][dayName] += 1
+          break
+        }
+      }
+    })
+
+    // Find max for level scaling
+    const allCounts = Object.values(counts).flatMap(slot => Object.values(slot))
+    const maxCount = Math.max(...allCounts, 1)
+
+    // Build heatmap data structure
+    return slots.map(s => ({
+      timeSlot: s.timeSlot,
+      days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => {
+        const c = counts[s.timeSlot][d]
+        let level = 0
+        if (c > 0) level = 1
+        if (c >= maxCount * 0.33) level = 2
+        if (c >= maxCount * 0.66) level = 3
+        return { day: d, level, count: `${c} activities` }
+      })
+    }))
+  }
 
   // Separate initial load (shows spinner) from silent background refresh (no flicker)
   const refreshKPIs = async (showSpinner = false) => {
@@ -74,9 +158,14 @@ function KPIPanel({ session, profile }) {
       )
       setUsers(teamUsers)
 
+      // Collect all team user IDs (including admin) for aggregate queries
+      const allUserIds = [session.user.id, ...teamUsers.map(u => u.id)]
+
+      // ── Per-user KPIs ──
       const kpiMap = {}
       await Promise.all(teamUsers.map(async (u) => {
-        const [leadsRes, customersRes, dealsRes, tasksRes, ticketsRes, activitiesRes, activityCountRes] = await Promise.all([
+        const [leadsRes, customersRes, dealsRes, tasksRes, ticketsRes, activitiesRes, activityCountRes,
+               contactsRes, accountsRes, invoicesPaidRes, quotesAccRes] = await Promise.all([
           supabase.from('leads').select('id', { count: 'exact', head: true }).eq('user_id', u.id),
           supabase.from('leads').select('id', { count: 'exact', head: true }).eq('user_id', u.id).eq('status', 'converted'),
           supabase.from('opportunities').select('amount').eq('user_id', u.id).eq('stage', 'closed'),
@@ -84,24 +173,99 @@ function KPIPanel({ session, profile }) {
           supabase.from('tickets').select('id', { count: 'exact', head: true }).eq('user_id', u.id).eq('status', 'resolved'),
           supabase.from('activities').select('created_at').eq('user_id', u.id).order('created_at', { ascending: false }).limit(1),
           supabase.from('activities').select('id', { count: 'exact', head: true }).eq('user_id', u.id),
+          // New: contacts & accounts count per user
+          supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('user_id', u.id),
+          supabase.from('accounts').select('id', { count: 'exact', head: true }).eq('user_id', u.id),
+          // New: paid invoices per user (invoices stored in quotes table with status = 'Paid')
+          supabase.from('quotes').select('total_price').eq('user_id', u.id).eq('status', 'Paid'),
+          // New: accepted quotes count per user
+          supabase.from('quotes').select('id', { count: 'exact', head: true }).eq('user_id', u.id).eq('status', 'Accepted'),
         ])
 
         const deals = dealsRes.data || []
         const dealsCount = deals.length
         const dealsValue = deals.reduce((sum, d) => sum + Number(d.amount || 0), 0)
+        const paidInvoices = invoicesPaidRes.data || []
+        const invoiceRevenue = paidInvoices.reduce((sum, inv) => sum + Number(inv.total_price || 0), 0)
 
         kpiMap[u.id] = {
           leads: leadsRes.count || 0,
           customers: customersRes.count || 0,
-          dealsCount: dealsCount,
-          dealsValue: dealsValue,
+          dealsCount,
+          dealsValue,
           tasks: tasksRes.count || 0,
           tickets: ticketsRes.count || 0,
           lastActive: activitiesRes.data?.[0]?.created_at || null,
           activityFrequency: activityCountRes.count || 0,
+          // New per-user metrics
+          contacts: contactsRes.count || 0,
+          accounts: accountsRes.count || 0,
+          invoiceRevenue,
+          invoicesPaid: paidInvoices.length,
+          quotesAccepted: quotesAccRes.count || 0,
         }
       }))
       setKpiData(kpiMap)
+
+      // ── Aggregate queries for dashboard charts ──
+
+      // 1. Monthly revenue: all closed opportunities across team
+      const { data: allDeals } = await supabase
+        .from('opportunities')
+        .select('amount, closed_date, created_at')
+        .in('user_id', allUserIds)
+        .eq('stage', 'closed')
+      setMonthlyRevenue(buildMonthlyRevenue(allDeals || []))
+
+      // 2. Activity heatmap: all activity timestamps across team
+      const { data: allActivities } = await supabase
+        .from('activities')
+        .select('created_at')
+        .in('user_id', allUserIds)
+      setActivityHeatmap(buildActivityHeatmap((allActivities || []).map(a => a.created_at)))
+
+      // 3. Invoice stats: all invoices (quotes table) across team
+      const { data: allInvoices } = await supabase
+        .from('quotes')
+        .select('total_price, status, expires_at')
+        .in('user_id', allUserIds)
+      const invs = allInvoices || []
+      const paid = invs.filter(i => i.status === 'Paid')
+      const unpaid = invs.filter(i => i.status === 'Unpaid')
+      const overdue = invs.filter(i => {
+        if (i.status === 'Paid') return false
+        if (!i.expires_at) return false
+        return new Date(i.expires_at) < new Date()
+      })
+      setInvoiceStats({
+        totalRevenue: paid.reduce((s, i) => s + Number(i.total_price || 0), 0),
+        paidCount: paid.length,
+        unpaidCount: unpaid.length,
+        overdueCount: overdue.length
+      })
+
+      // 4. Total contacts across team
+      const { count: totalContacts } = await supabase
+        .from('contacts')
+        .select('id', { count: 'exact', head: true })
+        .in('user_id', allUserIds)
+      setContactsCount(totalContacts || 0)
+
+      // 5. Total accounts across team
+      const { count: totalAccounts } = await supabase
+        .from('accounts')
+        .select('id', { count: 'exact', head: true })
+        .in('user_id', allUserIds)
+      setAccountsCount(totalAccounts || 0)
+
+      // 6. Total accepted quotes across team
+      const { count: totalQuotesAccepted } = await supabase
+        .from('quotes')
+        .select('id', { count: 'exact', head: true })
+        .in('user_id', allUserIds)
+        .eq('status', 'Accepted')
+      setQuotesAccepted(totalQuotesAccepted || 0)
+
     } catch (err) {
       // Silent on background refresh failures
       if (showSpinner) toast.error(t('kpi.failedLoad'))
@@ -117,7 +281,7 @@ function KPIPanel({ session, profile }) {
     refreshKPIs(true)
 
     // Real-time subscriptions — fire silent refresh when user data changes
-    const tables = ['leads', 'opportunities', 'tasks', 'tickets', 'activities']
+    const tables = ['leads', 'opportunities', 'tasks', 'tickets', 'activities', 'contacts', 'accounts', 'quotes']
     const channels = tables.map(table =>
       supabase
         .channel(`kpi-${table}-watch`)
@@ -166,6 +330,12 @@ function KPIPanel({ session, profile }) {
         users={users}
         kpiData={kpiData}
         currency={profile?.currency || '$'}
+        monthlyRevenue={monthlyRevenue}
+        activityHeatmap={activityHeatmap}
+        invoiceStats={invoiceStats}
+        contactsCount={contactsCount}
+        accountsCount={accountsCount}
+        quotesAccepted={quotesAccepted}
       />
     </div>
   )
@@ -488,8 +658,7 @@ function UserManagementPanel({ session, profile, onUserCreated }) {
             <div className="form-group">
               <label className="form-label">{t('userMgmt.role')}</label>
               <select className="form-input" value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))} style={selectStyle}>
-                <option value="user">{t('userMgmt.roleUser')}</option>
-                <option value="admin">{t('userMgmt.roleAdmin')}</option>
+                {ASSIGNABLE_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
             </div>
             <button
@@ -802,7 +971,7 @@ export default function Dashboard({ session }) {
   const [profile, setProfile] = useState(null)
   
   // RBAC hook
-  const { role, roleInfo, isAdmin, isManager, isSupport, isB2C, hasAccess, switchRole } = useRole()
+  const { role, roleInfo, isAdmin, isManager, isSupport, isB2C, hasAccess, switchRole, canSwitchRole } = useRole()
   
   // default active section depends on role
   const [activeSection, setActiveSection] = useState(isAdmin ? 'kpi' : 'crm')
@@ -816,12 +985,25 @@ export default function Dashboard({ session }) {
     localStorage.setItem('xowiq_sidebar_collapsed', String(val))
   }
 
+  const { theme, toggleTheme, isDark } = useTheme()
   const companyType = session.user.user_metadata?.companyType || profile?.company_type || 'B2B'
 
   const fetchProfile = async () => {
     const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
     if (data) {
       let ids = [session.user.id]
+
+      // Strategy 0: a user created under an admin shares that admin's company.
+      // Their team is the admin plus everyone else the admin created.
+      const adminId = data.created_by_admin_id || data.created_by || session.user.user_metadata?.created_by_admin_id || null
+      if (adminId && adminId !== session.user.id) {
+        ids.push(adminId)
+        const { data: teamOfAdmin } = await supabase
+          .from('profiles')
+          .select('id')
+          .or(`created_by_admin_id.eq.${adminId},created_by.eq.${adminId}`)
+        ;(teamOfAdmin || []).forEach(t => { if (!ids.includes(t.id)) ids.push(t.id) })
+      }
 
       // Strategy 1: Query by created_by_admin_id
       const { data: teamByAdminId } = await supabase
@@ -898,6 +1080,7 @@ export default function Dashboard({ session }) {
         switchRole={switchRole}
         hasAccess={hasAccess}
         isAdmin={isAdmin}
+        canSwitchRole={canSwitchRole}
         isCollapsed={isCollapsed}
         setIsCollapsed={handleSetIsCollapsed}
         activeSection={activeSection}
@@ -912,16 +1095,17 @@ export default function Dashboard({ session }) {
           marginLeft: isCollapsed ? '76px' : '260px',
           transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           minHeight: '100vh',
-          backgroundColor: '#f8fafc'
+          backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+          color: isDark ? '#f8fafc' : '#0f172a'
         }}
       >
         {/* Top bar */}
         <header className="dashboard-top-nav" style={{
           height: '70px',
-          borderBottom: '1px solid #e2e8f0',
+          borderBottom: isDark ? '1px solid #1e293b' : '1px solid #e2e8f0',
           display: 'flex',
           alignItems: 'center',
-          background: '#ffffff',
+          background: isDark ? '#111827' : '#ffffff',
           position: 'sticky',
           top: 0,
           zIndex: 40,
@@ -929,19 +1113,41 @@ export default function Dashboard({ session }) {
           justifyContent: 'space-between'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: '#0f172a' }}>
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: isDark ? '#f8fafc' : '#0f172a' }}>
               {profile?.company_name || session.user.user_metadata?.companyName || 'XOWIQ CRM'}
             </h2>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* Theme Toggle Button */}
+            <button
+              onClick={toggleTheme}
+              style={{
+                padding: '6px 12px',
+                background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#f1f5f9',
+                border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid #e2e8f0',
+                borderRadius: 20,
+                fontSize: 12,
+                fontWeight: 500,
+                color: isDark ? '#f8fafc' : '#334155',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                cursor: 'pointer'
+              }}
+              title={isDark ? "Switch to Light Theme" : "Switch to Dark Theme"}
+            >
+              {isDark ? <Sun size={14} style={{ color: '#fbbf24' }} /> : <Moon size={14} style={{ color: '#6366f1' }} />}
+              <span style={{ textTransform: 'capitalize' }}>{theme}</span>
+            </button>
+
             {/* Active Role Selector / Indicator */}
             <div style={{ position: 'relative' }}>
               <button
-                onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}
+                onClick={() => canSwitchRole && setIsRoleMenuOpen(!isRoleMenuOpen)}
                 style={{
                   padding: '6px 14px',
-                  background: 'rgba(255, 255, 255, 0.85)',
+                  background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.85)',
                   border: '1.5px solid #fed7aa',
                   borderRadius: 20,
                   fontSize: 12,
@@ -950,14 +1156,14 @@ export default function Dashboard({ session }) {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
-                  cursor: 'pointer'
+                  cursor: canSwitchRole ? 'pointer' : 'default'
                 }}
               >
                 <span>{roleInfo.badge}</span>
-                <span style={{ fontSize: 10, color: '#64748b' }}>▼</span>
+                {canSwitchRole && <span style={{ fontSize: 10, color: '#64748b' }}>▼</span>}
               </button>
 
-              {isRoleMenuOpen && (
+              {canSwitchRole && isRoleMenuOpen && (
                 <div
                   style={{
                     position: 'absolute',
@@ -1036,6 +1242,9 @@ export default function Dashboard({ session }) {
                 <TeamRecordsPanel session={session} profile={profile} />
               </RoleGuard>
             } />
+
+            {/* KPI Dashboard — explicit path for sidebar link */}
+            <Route path="kpi" element={<KPIPanel session={session} profile={profile} />} />
 
             {/* Common & Protected CRM modules */}
             <Route path="crm" element={<DashboardHome session={session} profile={profile} />} />

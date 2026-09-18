@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
-import { Trash2, Edit2, Package, Plus, Calendar, CreditCard, Clock, FileText, CheckCircle, Download, Check, X, Phone, Save, Link2, Settings, AlertCircle, ArrowUp, ArrowDown, LayoutGrid } from 'lucide-react'
+import { Trash2, Edit2, Package, Plus, Calendar, CreditCard, Clock, FileText, CheckCircle, Download, Check, X, Phone, Save, Link2, Settings, AlertCircle, ArrowUp, ArrowDown, LayoutGrid, UploadCloud } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
+import BulkUploadModal from '../ui/BulkUploadModal'
 import WhatsAppButton from '../ui/WhatsAppButton'
 import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../lib/whatsapp'
 import { useTranslation } from 'react-i18next'
@@ -148,6 +149,7 @@ export default function Accounts({ session, profile }) {
   const [customFieldConfigs, setCustomFieldConfigs] = useState([])
   const [serviceHistoryConfigs, setServiceHistoryConfigs] = useState([])
   const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
   const [isServiceFieldBuilderOpen, setIsServiceFieldBuilderOpen] = useState(false)
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false)
   const [editingInvoice, setEditingInvoice] = useState(null)
@@ -192,17 +194,22 @@ export default function Accounts({ session, profile }) {
   const [viewContactsModal, setViewContactsModal] = useState(null) // { account, contacts }
   const [viewContactsLoading, setViewContactsLoading] = useState(false)
 
+  // Open the account's contact directly on the Contacts page (no intermediate popup)
   const handleViewContacts = async (e, acc) => {
     e.stopPropagation()
-    setViewContactsLoading(true)
-    setViewContactsModal({ account: acc, contacts: [] })
     const { data } = await supabase
       .from('contacts')
-      .select('*')
+      .select('id')
       .eq('account_id', acc.id)
       .order('created_at', { ascending: true })
-    setViewContactsModal({ account: acc, contacts: data || [] })
-    setViewContactsLoading(false)
+      .limit(1)
+    const contact = data?.[0]
+    if (!contact) {
+      toast.error(`No contact found for ${acc.account_name}`)
+      navigate('/dashboard/contacts')
+      return
+    }
+    navigate('/dashboard/contacts', { state: { openId: contact.id } })
   }
   
   // Form State
@@ -1244,6 +1251,9 @@ export default function Accounts({ session, profile }) {
           <button className="btn btn-secondary" onClick={() => setIsFieldBuilderOpen(true)}>
             <Settings size={16} /> {t('modules.accounts.editFields')}
           </button>
+          <button className="btn btn-secondary" onClick={() => setIsImportOpen(true)}>
+            <UploadCloud size={16} style={{ marginRight: 6 }} /> {t('bulkImport.button', 'Import Excel/CSV')}
+          </button>
           <button className="btn btn-primary" onClick={() => handleOpenModal()}>
             <Plus size={16} /> {isB2C ? t('modules.accounts.addNewCustomer') : t('modules.accounts.addNewAccount')}
           </button>
@@ -1503,6 +1513,16 @@ export default function Accounts({ session, profile }) {
         @keyframes fadeIn { to { opacity: 1; } }
         @keyframes slideIn { to { transform: translateX(0); } }
       `}} />
+
+      <BulkUploadModal
+        module="accounts"
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        session={session}
+        profile={profile}
+        onImported={fetchAccounts}
+        extraDefaults={{ account_type: isB2C ? 'B2C' : 'B2B', ...(isB2C && b2cStages.length > 0 ? { b2c_stage_id: b2cStages[0].id } : {}) }}
+      />
 
       <FieldBuilderModal 
         module="customer_profile"

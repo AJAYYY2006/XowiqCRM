@@ -455,6 +455,9 @@
     "taskUpdateFailed": "कार्य अपडेट करने में विफल",
     "revenue": "राजस्व"
   },
+  "bulkImport": {
+    "button": "Excel/CSV आयात करें"
+  },
   "modules": {
     "accounts": {
       "customerProfiles": "ग्राहक प्रोफाइल",

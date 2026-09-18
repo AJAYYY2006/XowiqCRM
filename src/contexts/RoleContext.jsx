@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useMemo, useState, useEffect } from 'react'
 import { ROLE_DEFINITIONS, hasModuleAccess, canPerformAction } from '../config/roles'
-import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
 
 const RoleContext = createContext(null)
@@ -9,6 +8,10 @@ export function RoleProvider({ children, session, profile }) {
   // Current active role (defaults to profile.role or user_metadata.role or 'user')
   const baseRole = profile?.role || session?.user?.user_metadata?.role || 'user'
   const [activeRole, setActiveRole] = useState(baseRole)
+
+  // Only a Super Admin (as stored in the profile / auth metadata) may change roles.
+  // Everyone else keeps the role assigned to them at creation.
+  const canSwitchRole = ['admin', 'administrator'].includes(String(baseRole).toLowerCase())
 
   // Sync activeRole whenever session/profile changes
   useEffect(() => {
@@ -30,21 +33,16 @@ export function RoleProvider({ children, session, profile }) {
     return canPerformAction(activeRole, action)
   }
 
-  // Allow switching roles dynamically (especially useful for testing various workflows)
+  // Super Admin only: preview the CRM as another role for this session.
+  // The stored role is never changed, so the Super Admin can always switch back.
   const switchRole = async (newRole) => {
+    if (!canSwitchRole) {
+      toast.error('Only a Super Admin can change roles')
+      return
+    }
     const normRole = String(newRole).toLowerCase()
     setActiveRole(normRole)
-    
-    // Update Supabase user metadata and profiles if authenticated
-    if (session?.user?.id) {
-      try {
-        await supabase.auth.updateUser({ data: { role: normRole } })
-        await supabase.from('profiles').update({ role: normRole }).eq('id', session.user.id)
-        toast.success(`Role switched to: ${ROLE_DEFINITIONS[normRole]?.label || normRole}`)
-      } catch (err) {
-        console.warn('Role switch persistence notice:', err)
-      }
-    }
+    toast.success(`Role switched to: ${ROLE_DEFINITIONS[normRole]?.label || normRole}`)
   }
 
   const value = {
@@ -56,6 +54,7 @@ export function RoleProvider({ children, session, profile }) {
     isB2C: session?.user?.user_metadata?.companyType === 'B2C' || String(activeRole).toLowerCase() === 'b2c',
     hasAccess: checkModuleAccess,
     can: checkActionPermission,
+    canSwitchRole,
     switchRole
   }
 

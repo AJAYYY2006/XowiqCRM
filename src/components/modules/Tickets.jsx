@@ -3,9 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
-import { Trash2, Edit2, Settings, Save } from 'lucide-react'
+import { Trash2, Edit2, Settings, Save, UploadCloud } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
+import BulkUploadModal from '../ui/BulkUploadModal'
 
 function renderCustomFieldInput(config, value, onChange) {
   const commonProps = {
@@ -56,6 +57,7 @@ export default function Tickets({ session, profile }) {
   const [editingTicket, setEditingTicket] = useState(null)
   const [ticketConfigs, setTicketConfigs] = useState([])
   const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
 
   const fetchTicketConfigs = async () => {
     try {
@@ -704,6 +706,9 @@ export default function Tickets({ session, profile }) {
           <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setIsFieldBuilderOpen(true)}>
             <Settings size={14} /> {t('modules.tickets.editFields')}
           </button>
+          <button className="btn btn-secondary" onClick={() => setIsImportOpen(true)}>
+            <UploadCloud size={14} style={{ marginRight: 6 }} /> {t('bulkImport.button', 'Import Excel/CSV')}
+          </button>
           <button className="btn btn-primary" onClick={() => handleOpenModal()}>
             <span style={{ fontSize: 18 }}>+</span> {t('modules.tickets.createTicket')}
           </button>
@@ -861,6 +866,15 @@ export default function Tickets({ session, profile }) {
       </div>
 
       {isModalOpen && renderModal()}
+
+      <BulkUploadModal
+        module="tickets"
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        session={session}
+        profile={profile}
+        onImported={fetchData}
+      />
 
       <FieldBuilderModal 
         module="ticket"

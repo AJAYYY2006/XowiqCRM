@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
+import { ASSIGNABLE_ROLES } from '../../config/roles'
 import toast from 'react-hot-toast'
 import {
   Settings as SettingsIcon,
@@ -1014,10 +1015,7 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
   const [editPhoto, setEditPhoto] = useState(null)
   const editPhotoRef = useRef(null)
 
-  const ROLE_OPTIONS = [
-    { value: 'user', label: 'User' },
-    { value: 'admin', label: 'Admin' }
-  ]
+  const ROLE_OPTIONS = ASSIGNABLE_ROLES
   const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say']
 
   const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)

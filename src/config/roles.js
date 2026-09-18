@@ -15,6 +15,18 @@ export const ROLES = {
   STAFF: 'viewer'
 }
 
+/**
+ * Roles a Super Admin can assign when creating or editing a user.
+ * Mirrors the five roles shown in the "Switch Active Role" menu.
+ */
+export const ASSIGNABLE_ROLES = [
+  { value: 'admin', label: '👑 Super Admin' },
+  { value: 'manager', label: '💼 Sales Manager' },
+  { value: 'agent', label: '🎧 Support Agent' },
+  { value: 'b2c', label: '🛍️ B2C Store Owner' },
+  { value: 'user', label: '👁️ Staff / Viewer' }
+]
+
 export const ROLE_DEFINITIONS = {
   admin: {
     label: 'Super Admin',
