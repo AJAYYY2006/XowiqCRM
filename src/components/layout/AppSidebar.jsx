@@ -37,8 +37,8 @@ export default function AppSidebar({
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const profileMenuRef = useRef(null)
 
-  const isB2C = role === 'b2c'
-  const companyType = session?.user?.user_metadata?.companyType || profile?.company_type || (isB2C ? 'B2C' : 'B2B')
+  const companyType = session?.user?.user_metadata?.companyType || profile?.company_type || (role === 'b2c' ? 'B2C' : 'B2B')
+  const isB2C = companyType === 'B2C' || role === 'b2c'
   const currentPath = location.pathname.replace('/dashboard', '').replace(/^\//, '')
 
   // Close profile menu when clicking outside
@@ -65,16 +65,15 @@ export default function AppSidebar({
         {
           title: 'OPERATIONS',
           items: [
-            { id: 'accounts', path: 'accounts', label: t('sidebar.customers', 'Accounts'), icon: <Building2 size={18} strokeWidth={1.75} />, badge: null },
             { id: 'leads', path: 'leads', label: t('sidebar.marketing', 'Leads'), icon: <UserSquare2 size={18} strokeWidth={1.75} />, badge: null },
-            { id: 'tasks', path: 'tasks', label: t('sidebar.tasks', 'Tasks'), icon: <CheckSquare size={18} strokeWidth={1.75} />, badge: null },
-            { id: 'services', path: 'services', label: t('sidebar.services', 'Services'), icon: <Package size={18} strokeWidth={1.75} />, badge: null },
-            { id: 'quotes', path: 'quotes', label: t('sidebar.quotes', 'Quotes'), icon: <FileText size={18} strokeWidth={1.75} />, badge: null },
-            { id: 'invoices', path: 'invoices', label: t('sidebar.invoices', 'Invoices'), icon: <Receipt size={18} strokeWidth={1.75} />, badge: null },
+            { id: 'accounts', path: 'accounts', label: t('sidebar.customers', 'Accounts'), icon: <Building2 size={18} strokeWidth={1.75} />, badge: null },
             { id: 'contacts', path: 'contacts', label: t('sidebar.contacts', 'Contacts'), icon: <Users size={18} strokeWidth={1.75} />, badge: null },
-            { id: 'users', path: 'users', label: t('dashboard.userManagement', 'Team Users'), icon: <Users size={18} strokeWidth={1.75} />, section: 'users', badge: null },
-            { id: 'team_records', path: 'team_records', label: t('dashboard.teamRecords', 'Team Stream'), icon: <ClipboardList size={18} strokeWidth={1.75} />, section: 'team_records', badge: null },
+            { id: 'tasks', path: 'tasks', label: t('sidebar.tasks', 'Tasks'), icon: <CheckSquare size={18} strokeWidth={1.75} />, badge: null },
+            ...(isB2C ? [{ id: 'services', path: 'services', label: t('sidebar.services', 'Services'), icon: <Package size={18} strokeWidth={1.75} />, badge: null }] : []),
             { id: 'tickets', path: 'tickets', label: t('sidebar.inbox', 'Tickets'), icon: <Ticket size={18} strokeWidth={1.75} />, badge: null },
+            { id: 'quotes', path: 'quotes', label: t('sidebar.quotes', 'Quotes'), icon: <FileText size={18} strokeWidth={1.75} />, badge: null },
+            { id: 'team_records', path: 'team_records', label: t('dashboard.teamRecords', 'Team Stream'), icon: <ClipboardList size={18} strokeWidth={1.75} />, section: 'team_records', badge: null },
+            { id: 'users', path: 'users', label: t('dashboard.userManagement', 'Team Users'), icon: <Users size={18} strokeWidth={1.75} />, section: 'users', badge: null },
           ]
         }
       ]
@@ -97,7 +96,6 @@ export default function AppSidebar({
             { id: 'contacts', path: 'contacts', label: t('sidebar.contacts', 'Contacts'), icon: <Users size={18} strokeWidth={1.75} />, badge: null },
             { id: 'quotes', path: 'quotes', label: t('sidebar.quotes', 'Quotes'), icon: <FileText size={18} strokeWidth={1.75} />, badge: null },
             { id: 'invoices', path: 'invoices', label: t('sidebar.invoices', 'Invoices'), icon: <Receipt size={18} strokeWidth={1.75} />, badge: null },
-            { id: 'services', path: 'services', label: t('sidebar.services', 'Services'), icon: <Package size={18} strokeWidth={1.75} />, badge: null },
           ].filter(item => hasAccess(item.id))
         }
       ]
@@ -140,7 +138,7 @@ export default function AppSidebar({
             { id: 'leads', path: 'leads', label: t('sidebar.marketing', 'Leads'), icon: <UserSquare2 size={18} strokeWidth={1.75} />, badge: null },
             { id: 'tickets', path: 'tickets', label: t('sidebar.inbox', 'Tickets'), icon: <Ticket size={18} strokeWidth={1.75} />, badge: null },
             { id: 'tasks', path: 'tasks', label: t('sidebar.tasks', 'Tasks'), icon: <CheckSquare size={18} strokeWidth={1.75} />, badge: null },
-            { id: 'services', path: 'services', label: t('sidebar.services', 'Services'), icon: <Package size={18} strokeWidth={1.75} />, badge: null },
+            ...(isB2C ? [{ id: 'services', path: 'services', label: t('sidebar.services', 'Services'), icon: <Package size={18} strokeWidth={1.75} />, badge: null }] : []),
           ].filter(item => hasAccess(item.id))
         }
       ]
@@ -159,7 +157,6 @@ export default function AppSidebar({
         items: [
           { id: 'contacts', path: 'contacts', label: t('sidebar.contacts', 'Contacts'), icon: <Users size={18} strokeWidth={1.75} />, badge: null },
           { id: 'tasks', path: 'tasks', label: t('sidebar.tasks', 'Tasks'), icon: <CheckSquare size={18} strokeWidth={1.75} />, badge: null },
-          { id: 'services', path: 'services', label: t('sidebar.services', 'Services'), icon: <Package size={18} strokeWidth={1.75} />, badge: null },
         ].filter(item => hasAccess(item.id))
       }
     ]

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
@@ -976,6 +976,7 @@ export default function Dashboard({ session }) {
   // default active section depends on role
   const [activeSection, setActiveSection] = useState(isAdmin ? 'kpi' : 'crm')
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false)
+  const roleMenuRef = useRef(null)
   const [isCollapsed, setIsCollapsed] = useState(() => {
     return localStorage.getItem('xowiq_sidebar_collapsed') === 'true'
   })
@@ -984,6 +985,16 @@ export default function Dashboard({ session }) {
     setIsCollapsed(val)
     localStorage.setItem('xowiq_sidebar_collapsed', String(val))
   }
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (roleMenuRef.current && !roleMenuRef.current.contains(e.target)) {
+        setIsRoleMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const { theme, toggleTheme, isDark } = useTheme()
   const companyType = session.user.user_metadata?.companyType || profile?.company_type || 'B2B'
@@ -1119,67 +1130,45 @@ export default function Dashboard({ session }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {/* Theme Toggle Button */}
-            <button
-              onClick={toggleTheme}
-              style={{
-                padding: '6px 12px',
-                background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#f1f5f9',
-                border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid #e2e8f0',
-                borderRadius: 20,
-                fontSize: 12,
-                fontWeight: 500,
-                color: isDark ? '#f8fafc' : '#334155',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                cursor: 'pointer'
-              }}
-              title={isDark ? "Switch to Light Theme" : "Switch to Dark Theme"}
-            >
-              {isDark ? <Sun size={14} style={{ color: '#fbbf24' }} /> : <Moon size={14} style={{ color: '#6366f1' }} />}
-              <span style={{ textTransform: 'capitalize' }}>{theme}</span>
-            </button>
-
             {/* Active Role Selector / Indicator */}
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative' }} ref={roleMenuRef}>
               <button
                 onClick={() => canSwitchRole && setIsRoleMenuOpen(!isRoleMenuOpen)}
                 style={{
                   padding: '6px 14px',
-                  background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.85)',
-                  border: '1.5px solid #fed7aa',
+                  background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#fff7ed',
+                  border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1.5px solid #fed7aa',
                   borderRadius: 20,
                   fontSize: 12,
                   fontWeight: 700,
-                  color: '#f37a23',
+                  color: isDark ? '#f8fafc' : '#f37a23',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
                   cursor: canSwitchRole ? 'pointer' : 'default'
                 }}
               >
-                <span>{roleInfo.badge}</span>
-                {canSwitchRole && <span style={{ fontSize: 10, color: '#64748b' }}>▼</span>}
+                <span>{roleInfo?.badge || '👑 Super Admin'}</span>
+                {canSwitchRole && <span style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b' }}>▼</span>}
               </button>
 
-              {canSwitchRole && isRoleMenuOpen && (
+              {isRoleMenuOpen && canSwitchRole && (
                 <div
                   style={{
                     position: 'absolute',
                     top: '100%',
                     right: 0,
                     marginTop: 8,
-                    background: '#0f172a',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    background: isDark ? '#1e293b' : '#ffffff',
+                    border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid #e2e8f0',
                     borderRadius: 12,
                     padding: 8,
                     width: 220,
-                    boxShadow: '0 20px 40px -10px rgba(0,0,0,0.7)',
+                    boxShadow: '0 20px 40px -10px rgba(0,0,0,0.3)',
                     zIndex: 100
                   }}
                 >
-                  <div style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', padding: '6px 10px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: isDark ? '#94a3b8' : '#64748b', textTransform: 'uppercase', padding: '6px 10px' }}>
                     Switch Active Role:
                   </div>
                   {[
@@ -1199,8 +1188,8 @@ export default function Dashboard({ session }) {
                         width: '100%',
                         padding: '8px 10px',
                         textAlign: 'left',
-                        background: role === r.key ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
-                        color: role === r.key ? '#818cf8' : '#cbd5e1',
+                        background: role === r.key ? (isDark ? 'rgba(99, 102, 241, 0.25)' : 'rgba(99, 102, 241, 0.1)') : 'transparent',
+                        color: role === r.key ? '#818cf8' : (isDark ? '#cbd5e1' : '#334155'),
                         border: 'none',
                         borderRadius: 8,
                         fontSize: 12,
@@ -1213,10 +1202,6 @@ export default function Dashboard({ session }) {
                   ))}
                 </div>
               )}
-            </div>
-
-            <div style={{ padding: '4px 12px', background: '#fff7ed', border: '1.5px solid #fed7aa', borderRadius: 20, fontSize: 12, fontWeight: 700, color: '#f37a23' }}>
-              {companyType} Mode
             </div>
           </div>
         </header>

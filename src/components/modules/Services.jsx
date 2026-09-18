@@ -2,9 +2,13 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
-import { Plus, Edit2, Trash2, Package, DollarSign, Clock, Save, GripVertical, Settings2, Palette, Zap, Layers, UploadCloud } from 'lucide-react'
+import {
+  Plus, Edit2, Trash2, Package, DollarSign, Clock, Save,
+  Settings2, Zap, Layers, UploadCloud, Search, X,
+  LayoutGrid, List, Activity, Users, ArrowRight
+} from 'lucide-react'
 import BulkUploadModal from '../ui/BulkUploadModal'
-import LocalSearch from '../ui/LocalSearch'
+import { useTheme } from '../../contexts/ThemeContext'
 
 // ── Currency conversion ────────────────────────────────────────────────────
 // All prices are stored in the DB in INR (the app's default base currency).
@@ -24,7 +28,6 @@ const INR_RATES = {
 function convertPrice(amountInINR, currencySymbol) {
   const rate = INR_RATES[currencySymbol] ?? 1
   const converted = Number(amountInINR) * rate
-  // Use appropriate decimal places: currencies like JPY/CNY don't use decimals
   const decimals = ['¥'].includes(currencySymbol) ? 0 : 2
   return converted.toLocaleString('en-IN', {
     minimumFractionDigits: decimals,
@@ -34,13 +37,23 @@ function convertPrice(amountInINR, currencySymbol) {
 
 export default function Services({ session, profile }) {
   const { t } = useTranslation()
+  const { isDark } = useTheme()
   const userIds = profile?.teamUserIds || [session.user.id]
+
+  // Data state
   const [services, setServices] = useState([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingService, setEditingService] = useState(null)
-  
   const [isImportOpen, setIsImportOpen] = useState(false)
+
+  // Navigation & View Mode
+  const [activeTab, setActiveTab] = useState('catalog') // 'catalog' | 'pipelines'
+  const [viewMode, setViewMode] = useState('grid')       // 'grid' | 'table'
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterType, setFilterType] = useState('all')   // 'all' | 'Instant' | 'Multi-Stage'
+
+  // Service form data
   const [formData, setFormData] = useState({
     service_name: '',
     price: 0,
@@ -51,97 +64,91 @@ export default function Services({ session, profile }) {
   })
 
   // Stage Builder State
-  // Stage tracking is now per-service (service_type field), no global toggle needed
   const [stages, setStages] = useState([])
   const [isStageModalOpen, setIsStageModalOpen] = useState(false)
   const [editingStage, setEditingStage] = useState(null)
-  
-  const [stageFormData, setStageFormData] = useState({ name: '', color: '#f97316' });
-  const [accounts, setAccounts] = useState([]);
-  const [animatingCards, setAnimatingCards] = useState({});
-  const [stageHistory, setStageHistory] = useState([]);
+  const [stageFormData, setStageFormData] = useState({ name: '', color: '#ff5900' })
+  const [accounts, setAccounts] = useState([])
+  const [animatingCards, setAnimatingCards] = useState({})
+  const [stageHistory, setStageHistory] = useState([])
+
   const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
 
   useEffect(() => {
     fetchServices()
-    fetchStages();
-    fetchAccounts();
-    fetchStageHistory();
+    fetchStages()
+    fetchAccounts()
+    fetchStageHistory()
   }, [session, profile])
 
   const fetchStages = async () => {
     try {
-      const { data, error } = await supabase.from('b2c_stages').select('*').order('order_index', { ascending: true });
-      if (error) throw error;
-      setStages(data || []);
+      const { data, error } = await supabase.from('b2c_stages').select('*').order('order_index', { ascending: true })
+      if (error) throw error
+      setStages(data || [])
     } catch (e) {
-      console.error('Failed to load stages:', e);
+      console.error('Failed to load stages:', e)
     }
-  };
+  }
 
   const fetchAccounts = async () => {
     try {
       const { data: accsData, error: accErr } = await supabase
         .from('accounts')
         .select('*')
-        .in('user_id', userIds);
+        .in('user_id', userIds)
 
-      if (accErr) throw accErr;
+      if (accErr) throw accErr
 
-      const accountIds = (accsData || []).map(a => a.id);
+      const accountIds = (accsData || []).map(a => a.id)
       if (accountIds.length === 0) {
-        setAccounts([]);
-        return;
+        setAccounts([])
+        return
       }
 
       const { data: csData } = await supabase
         .from('customer_services')
         .select('*, services(service_name)')
-        .in('account_id', accountIds);
+        .in('account_id', accountIds)
 
-      // Coerce both sides to String to avoid bigint vs UUID mismatch
       const mappedAccounts = (accsData || []).map(acc => {
         const myServices = (csData || []).filter(
           cs => String(cs.account_id) === String(acc.id)
-        );
-        return { ...acc, customer_services: myServices };
-      });
+        )
+        return { ...acc, customer_services: myServices }
+      })
 
-      console.log('[StageBuilder] accounts mapped:', mappedAccounts.map(a => ({
-        name: a.account_name,
-        id: a.id,
-        services: (a.customer_services || []).map(cs => cs.services?.service_name)
-      })));
-      setAccounts(mappedAccounts);
-    } catch(e) {
-      console.error('Failed to load accounts for stage builder', e);
+      setAccounts(mappedAccounts)
+    } catch (e) {
+      console.error('Failed to load accounts for stage builder', e)
     }
-  };
+  }
 
   const fetchStageHistory = async () => {
     try {
       const { data } = await supabase
         .from('b2c_customer_stages')
         .select('id, moved_at, customer_id, b2c_stages:stage_id(name, color), services:service_id(service_name)')
-        .order('moved_at', { ascending: false }).limit(20);
+        .order('moved_at', { ascending: false })
+        .limit(20)
       
-      // Resolve account names (customer_id is text, accounts.id is bigint — can't FK join)
       if (data && data.length > 0) {
-        const customerIds = [...new Set(data.map(d => d.customer_id).filter(Boolean))];
-        const { data: accs } = await supabase.from('accounts').select('id, account_name').in('id', customerIds);
-        const accMap = {};
-        (accs || []).forEach(a => { accMap[String(a.id)] = a.account_name; });
-        const enriched = data.map(d => ({ ...d, customer_name: accMap[String(d.customer_id)] || `Customer #${d.customer_id}` }));
-        setStageHistory(enriched);
+        const customerIds = [...new Set(data.map(d => d.customer_id).filter(Boolean))]
+        const { data: accs } = await supabase.from('accounts').select('id, account_name').in('id', customerIds)
+        const accMap = {}
+        ;(accs || []).forEach(a => { accMap[String(a.id)] = a.account_name })
+        const enriched = data.map(d => ({
+          ...d,
+          customer_name: accMap[String(d.customer_id)] || `Customer #${d.customer_id}`
+        }))
+        setStageHistory(enriched)
       } else {
-        setStageHistory([]);
+        setStageHistory([])
       }
-    } catch(e) {
-      console.error('Failed to fetch stage history', e);
+    } catch (e) {
+      console.error('Failed to fetch stage history', e)
     }
-  };
-
-  // Global toggle removed — stage tracking is now per-service via service_type field
+  }
 
   const fetchServices = async () => {
     try {
@@ -206,11 +213,14 @@ export default function Services({ session, profile }) {
         if (error) throw error
         toast.success('Service updated', { id: toastId })
         
-        // SYNC REMINDERS: If Name or Reminder Days changed
+        // Sync reminders if name or reminder days changed
         if (editingService.service_name !== payload.service_name || editingService.reminder_days !== payload.reminder_days) {
           try {
-            // Find all active service entries
-            const { data: linkedServices } = await supabase.from('customer_services').select('*, accounts(account_name)').eq('service_id', editingService.id).not('task_id', 'is', null)
+            const { data: linkedServices } = await supabase
+              .from('customer_services')
+              .select('*, accounts(account_name)')
+              .eq('service_id', editingService.id)
+              .not('task_id', 'is', null)
             
             if (linkedServices && linkedServices.length > 0) {
               for (const entry of linkedServices) {
@@ -223,9 +233,9 @@ export default function Services({ session, profile }) {
                   due_date: newReminderDate.toISOString()
                 }).eq('id', entry.task_id)
               }
-              toast.success(`Synched ${linkedServices.length} linked reminder(s)`)
+              toast.success(`Synced ${linkedServices.length} linked reminder(s)`)
             }
-          } catch(e) {
+          } catch (e) {
             console.error('Failed to sync linked reminders', e)
           }
         }
@@ -263,13 +273,13 @@ export default function Services({ session, profile }) {
       setEditingStage(stage)
       setStageFormData({
         name: stage.name,
-        color: stage.color || '#f97316'
+        color: stage.color || '#ff5900'
       })
     } else {
       setEditingStage(null)
       setStageFormData({
         name: '',
-        color: '#f97316'
+        color: '#ff5900'
       })
     }
     setIsStageModalOpen(true)
@@ -289,8 +299,8 @@ export default function Services({ session, profile }) {
         if (error) throw error
         toast.success('Stage updated', { id: toastId })
       } else {
-        payload.order_index = stages.length;
-        payload.user_id = session.user.id;
+        payload.order_index = stages.length
+        payload.user_id = session.user.id
         const { error } = await supabase.from('b2c_stages').insert([payload])
         if (error) throw error
         toast.success('Stage added', { id: toastId })
@@ -317,307 +327,1522 @@ export default function Services({ session, profile }) {
   }
 
   const handleDragStartCustomer = (e, accountId, sourceStageId) => {
-    e.dataTransfer.setData('accountId', accountId);
-    e.dataTransfer.setData('sourceStageId', sourceStageId);
-  };
+    e.dataTransfer.setData('accountId', accountId)
+    e.dataTransfer.setData('sourceStageId', sourceStageId)
+  }
 
   const handleDragOver = (e) => {
-    e.preventDefault();
-  };
+    e.preventDefault()
+  }
 
   const handleDropCustomer = async (e, destStageId) => {
-    e.preventDefault();
-    const accountId = e.dataTransfer.getData('accountId');
-    const sourceStageId = e.dataTransfer.getData('sourceStageId');
-    if (!accountId || sourceStageId === destStageId) return;
+    e.preventDefault()
+    const accountId = e.dataTransfer.getData('accountId')
+    const sourceStageId = e.dataTransfer.getData('sourceStageId')
+    if (!accountId || sourceStageId === destStageId) return
 
-    const destStage = stages.find(s => s.id === destStageId);
-    const sourceStage = stages.find(s => s.id === sourceStageId);
+    const destStage = stages.find(s => s.id === destStageId)
+    const sourceStage = stages.find(s => s.id === sourceStageId)
     
-    const isForward = (destStage?.order_index || 0) > (sourceStage?.order_index || 0);
-    const animationClass = isForward ? 'flyUp' : 'flyBack';
+    const isForward = (destStage?.order_index || 0) > (sourceStage?.order_index || 0)
+    const animationClass = isForward ? 'flyUp' : 'flyBack'
 
-    setAnimatingCards(prev => ({ ...prev, [accountId]: animationClass }));
+    setAnimatingCards(prev => ({ ...prev, [accountId]: animationClass }))
 
     setTimeout(async () => {
       const updatedAccounts = accounts.map(a => 
         a.id === accountId ? { ...a, b2c_stage_id: destStageId } : a
-      );
-      setAccounts(updatedAccounts);
+      )
+      setAccounts(updatedAccounts)
       
-      setAnimatingCards(prev => ({ ...prev, [accountId]: 'flyIn' }));
+      setAnimatingCards(prev => ({ ...prev, [accountId]: 'flyIn' }))
       
       setTimeout(() => {
         setAnimatingCards(prev => {
-          const newState = { ...prev };
-          delete newState[accountId];
-          return newState;
-        });
-      }, 500);
+          const newState = { ...prev }
+          delete newState[accountId]
+          return newState
+        })
+      }, 500)
 
       try {
-        await supabase.from('accounts').update({ b2c_stage_id: destStageId }).eq('id', accountId);
+        await supabase.from('accounts').update({ b2c_stage_id: destStageId }).eq('id', accountId)
 
-        const customer = accounts.find(a => a.id === accountId);
-        const serviceId = customer?.customer_services?.[0]?.service_id || null;
+        const customer = accounts.find(a => a.id === accountId)
+        const serviceId = customer?.customer_services?.[0]?.service_id || null
 
         await supabase.from('b2c_customer_stages').insert({
           customer_id: String(accountId),
           stage_id: destStageId,
           service_id: serviceId,
           moved_at: new Date().toISOString()
-        });
+        })
         
-        fetchStageHistory();
+        fetchStageHistory()
       } catch (err) {
-        toast.error('Failed to update stage');
-        fetchAccounts();
+        toast.error('Failed to update stage')
+        fetchAccounts()
       }
-    }, 480);
-  };
+    }, 480)
+  }
 
   if (loading) return <div className="loading-container"><div className="spinner" /></div>
 
+  const instantCount = services.filter(s => (s.service_type || 'Multi-Stage') === 'Instant').length
+  const multiCount = services.filter(s => (s.service_type || 'Multi-Stage') === 'Multi-Stage').length
+  const totalEnrolled = accounts.filter(a => (a.customer_services || []).length > 0).length
+
+  const filteredServices = services.filter(svc => {
+    const query = searchQuery.trim().toLowerCase()
+    const matchesSearch = !query ||
+      (svc.service_name || '').toLowerCase().includes(query) ||
+      (svc.description || '').toLowerCase().includes(query)
+    const type = svc.service_type || 'Multi-Stage'
+    const matchesType = filterType === 'all' || type === filterType
+    return matchesSearch && matchesType
+  })
+
+  const getEnrolledCount = (serviceId) => {
+    return accounts.filter(a =>
+      (a.customer_services || []).some(cs => String(cs.service_id) === String(serviceId))
+    ).length
+  }
+
   return (
     <div className="services-page" style={{ maxWidth: '100%', overflowX: 'hidden' }}>
-      <div className="page-header">
+      {/* ── Page Header ── */}
+      <div className="page-header" style={{ marginBottom: 20 }}>
         <div>
-          <h1 className="page-title"><Package size={28} style={{ color: '#f37a23', marginRight: 12, verticalAlign: 'bottom' }} />{t('modules.services.title')}</h1>
-          <p className="page-subtitle">{t('modules.services.subtitle')}</p>
+          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: 0 }}>
+            <Package size={26} style={{ color: '#ff5900' }} />
+            <span>{t('modules.services.title', 'Services & Pipelines')}</span>
+          </h1>
+          <p className="page-subtitle" style={{ margin: '4px 0 0', color: isDark ? '#94a3b8' : '#64748b' }}>
+            {t('modules.services.subtitle', 'Manage service catalog, pricing, reminder cycles, and customer stage pipelines')}
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <button className="btn btn-secondary" onClick={() => setIsImportOpen(true)}>
-            <UploadCloud size={18} style={{ marginRight: 6 }} /> {t('bulkImport.button', 'Import Excel/CSV')}
+        
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-secondary"
+            onClick={() => setIsImportOpen(true)}
+            style={{
+              background: isDark ? '#1e293b' : '#ffffff',
+              border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+              color: isDark ? '#f8fafc' : '#334155',
+              padding: '8px 16px',
+              borderRadius: 10,
+              fontSize: 13,
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <UploadCloud size={16} style={{ color: '#ff5900' }} />
+            <span>{t('bulkImport.button', 'Import CSV')}</span>
           </button>
-          <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-            <Plus size={18} /> {t('modules.services.addNewService')}
-          </button>
+
+          {activeTab === 'pipelines' ? (
+            <button
+              className="btn btn-primary"
+              onClick={() => handleOpenStageModal()}
+              style={{
+                padding: '8px 18px',
+                borderRadius: 10,
+                fontSize: 13,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background: 'linear-gradient(135deg, #ff5900 0%, #ff7324 100%)',
+                color: '#ffffff',
+                border: 'none',
+                boxShadow: '0 4px 14px rgba(255, 89, 0, 0.3)'
+              }}
+            >
+              <Plus size={16} />
+              <span>Add New Stage</span>
+            </button>
+          ) : (
+            <button
+              className="btn btn-primary"
+              onClick={() => handleOpenModal()}
+              style={{
+                padding: '8px 18px',
+                borderRadius: 10,
+                fontSize: 13,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background: 'linear-gradient(135deg, #ff5900 0%, #ff7324 100%)',
+                color: '#ffffff',
+                border: 'none',
+                boxShadow: '0 4px 14px rgba(255, 89, 0, 0.3)'
+              }}
+            >
+              <Plus size={16} />
+              <span>{t('modules.services.addNewService', 'Add Service')}</span>
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 24, padding: '0 20px' }}>
-          <LocalSearch 
-            data={services} 
-            setResults={(res) => {}} // LocalSearch usually handles internal state but let's assume it works
-            placeholder={t('modules.services.searchPlaceholder')} 
-          />
-      </div>
-
-      <div className="services-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 24 }}>
-        {services.length === 0 ? (
-          <div className="empty-state card" style={{ gridColumn: '1/-1', padding: 60 }}>
-            <Package size={48} color="#e2e8f0" style={{ marginBottom: 16 }} />
-            <h3>No services in catalog</h3>
-            <p>Your master services list is empty. Add your first service to start assigning it to customers.</p>
-            <button className="btn btn-primary btn-sm" style={{ marginTop: 16 }} onClick={() => handleOpenModal()}>Create Service</button>
+      {/* ── Summary Stats Cards (Clickable Quick Filters) ── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+        gap: 14,
+        marginBottom: 20
+      }}>
+        {/* Total Services */}
+        <div
+          onClick={() => { setActiveTab('catalog'); setFilterType('all') }}
+          style={{
+            background: isDark ? '#1e293b' : '#ffffff',
+            border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+            borderRadius: 14,
+            padding: '16px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            cursor: 'pointer',
+            boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.2)' : '0 2px 6px rgba(0,0,0,0.03)',
+            transition: 'transform 0.15s ease, border-color 0.15s ease'
+          }}
+          className="metric-stat-card"
+        >
+          <div style={{
+            width: 42,
+            height: 42,
+            borderRadius: 10,
+            background: 'linear-gradient(135deg, #ff5900, #ff8237)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#fff',
+            flexShrink: 0
+          }}>
+            <Package size={20} />
           </div>
-        ) : (
-          services.map(svc => (
-            <div key={svc.id} className="card service-card" style={{ padding: 24, position: 'relative', borderTop: '4px solid #f37a23' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#1e293b' }}>{svc.service_name}</h3>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn-icon" onClick={() => handleOpenModal(svc)} title="Edit"><Edit2 size={16} /></button>
-                  {isAdmin && (
-                    <button className="btn-icon text-danger" onClick={() => handleDelete(svc)} title="Delete"><Trash2 size={16} /></button>
-                  )}
-                </div>
-              </div>
-              
-              <div className="service-details" style={{ fontSize: 14, color: '#64748b' }}>
-                <p style={{ marginBottom: 12, minHeight: 40 }}>{svc.description || 'No description provided.'}</p>
-                
-                <div style={{ marginBottom: 12 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 800, background: (svc.service_type || 'Multi-Stage') === 'Instant' ? '#dbeafe' : '#fef3c7', color: (svc.service_type || 'Multi-Stage') === 'Instant' ? '#1d4ed8' : '#92400e' }}>
-                    {(svc.service_type || 'Multi-Stage') === 'Instant' ? <Zap size={13} /> : <Layers size={13} />}
-                    {svc.service_type || 'Multi-Stage'}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', marginBottom: 4 }}>Standard Price</div>
-                    <div style={{ fontSize: 20, fontWeight: 900, color: '#0f172a' }}>{profile?.currency || '₹'}{convertPrice(svc.price, profile?.currency || '₹')}</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', marginBottom: 4 }}>Reminder Cycle</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#f37a23', display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-                      <Clock size={16} /> {svc.reminder_days} Days
-                    </div>
-                  </div>
-                </div>
-              </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Total Services
             </div>
-          ))
+            <div style={{ fontSize: 22, fontWeight: 800, color: isDark ? '#f8fafc' : '#0f172a' }}>
+              {services.length}
+            </div>
+          </div>
+        </div>
+
+        {/* Multi-Stage (Pipeline) */}
+        <div
+          onClick={() => { setActiveTab('catalog'); setFilterType('Multi-Stage') }}
+          style={{
+            background: isDark ? '#1e293b' : '#ffffff',
+            border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+            borderRadius: 14,
+            padding: '16px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            cursor: 'pointer',
+            boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.2)' : '0 2px 6px rgba(0,0,0,0.03)',
+            transition: 'transform 0.15s ease, border-color 0.15s ease'
+          }}
+          className="metric-stat-card"
+        >
+          <div style={{
+            width: 42,
+            height: 42,
+            borderRadius: 10,
+            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#fff',
+            flexShrink: 0
+          }}>
+            <Layers size={20} />
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Multi-Stage
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: isDark ? '#f8fafc' : '#0f172a' }}>
+              {multiCount}
+            </div>
+          </div>
+        </div>
+
+        {/* Instant Delivery */}
+        <div
+          onClick={() => { setActiveTab('catalog'); setFilterType('Instant') }}
+          style={{
+            background: isDark ? '#1e293b' : '#ffffff',
+            border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+            borderRadius: 14,
+            padding: '16px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            cursor: 'pointer',
+            boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.2)' : '0 2px 6px rgba(0,0,0,0.03)',
+            transition: 'transform 0.15s ease, border-color 0.15s ease'
+          }}
+          className="metric-stat-card"
+        >
+          <div style={{
+            width: 42,
+            height: 42,
+            borderRadius: 10,
+            background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#fff',
+            flexShrink: 0
+          }}>
+            <Zap size={20} />
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Instant Delivery
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: isDark ? '#f8fafc' : '#0f172a' }}>
+              {instantCount}
+            </div>
+          </div>
+        </div>
+
+        {/* Customer Stages (Kanban Switcher) */}
+        <div
+          onClick={() => setActiveTab('pipelines')}
+          style={{
+            background: isDark ? '#1e293b' : '#ffffff',
+            border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+            borderRadius: 14,
+            padding: '16px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            cursor: 'pointer',
+            boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.2)' : '0 2px 6px rgba(0,0,0,0.03)',
+            transition: 'transform 0.15s ease, border-color 0.15s ease'
+          }}
+          className="metric-stat-card"
+        >
+          <div style={{
+            width: 42,
+            height: 42,
+            borderRadius: 10,
+            background: 'linear-gradient(135deg, #10b981, #059669)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#fff',
+            flexShrink: 0
+          }}>
+            <Settings2 size={20} />
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Workflow Stages
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: isDark ? '#f8fafc' : '#0f172a' }}>
+              {stages.length}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Tab Switcher Bar (Separates Services Catalog & Kanban Pipelines) ── */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottom: isDark ? '2px solid #334155' : '2px solid #e2e8f0',
+        marginBottom: 20,
+        gap: 16,
+        flexWrap: 'wrap'
+      }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => setActiveTab('catalog')}
+            style={{
+              padding: '12px 18px',
+              fontSize: 14,
+              fontWeight: 700,
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === 'catalog' ? '3px solid #ff5900' : '3px solid transparent',
+              color: activeTab === 'catalog' ? '#ff5900' : (isDark ? '#94a3b8' : '#64748b'),
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              transition: 'all 0.15s ease',
+              marginBottom: -2
+            }}
+          >
+            <Package size={17} />
+            <span>Services Catalog</span>
+            <span style={{
+              fontSize: 11,
+              fontWeight: 800,
+              padding: '2px 8px',
+              borderRadius: 12,
+              background: activeTab === 'catalog'
+                ? (isDark ? 'rgba(255, 89, 0, 0.2)' : '#ffedd5')
+                : (isDark ? '#334155' : '#f1f5f9'),
+              color: activeTab === 'catalog' ? '#ff5900' : (isDark ? '#cbd5e1' : '#64748b')
+            }}>
+              {services.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('pipelines')}
+            style={{
+              padding: '12px 18px',
+              fontSize: 14,
+              fontWeight: 700,
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === 'pipelines' ? '3px solid #ff5900' : '3px solid transparent',
+              color: activeTab === 'pipelines' ? '#ff5900' : (isDark ? '#94a3b8' : '#64748b'),
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              transition: 'all 0.15s ease',
+              marginBottom: -2
+            }}
+          >
+            <Settings2 size={17} />
+            <span>Customer Stage Pipelines</span>
+            <span style={{
+              fontSize: 11,
+              fontWeight: 800,
+              padding: '2px 8px',
+              borderRadius: 12,
+              background: activeTab === 'pipelines'
+                ? (isDark ? 'rgba(255, 89, 0, 0.2)' : '#ffedd5')
+                : (isDark ? '#334155' : '#f1f5f9'),
+              color: activeTab === 'pipelines' ? '#ff5900' : (isDark ? '#cbd5e1' : '#64748b')
+            }}>
+              {stages.length} Stages
+            </span>
+          </button>
+        </div>
+
+        {/* Dynamic Context Helpers on the right of Tab bar */}
+        {activeTab === 'catalog' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 6 }}>
+            {/* View Mode Toggle: Grid vs Table */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: isDark ? '#1e293b' : '#ffffff',
+              border: isDark ? '1px solid #334155' : '1px solid #cbd5e1',
+              borderRadius: 8,
+              padding: 2
+            }}>
+              <button
+                onClick={() => setViewMode('grid')}
+                title="Grid Cards View"
+                style={{
+                  background: viewMode === 'grid' ? (isDark ? '#334155' : '#f1f5f9') : 'transparent',
+                  border: 'none',
+                  borderRadius: 6,
+                  padding: '5px 8px',
+                  color: viewMode === 'grid' ? '#ff5900' : (isDark ? '#94a3b8' : '#64748b'),
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: 12,
+                  fontWeight: 600
+                }}
+              >
+                <LayoutGrid size={14} />
+                <span>Grid</span>
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                title="Table List View"
+                style={{
+                  background: viewMode === 'table' ? (isDark ? '#334155' : '#f1f5f9') : 'transparent',
+                  border: 'none',
+                  borderRadius: 6,
+                  padding: '5px 8px',
+                  color: viewMode === 'table' ? '#ff5900' : (isDark ? '#94a3b8' : '#64748b'),
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: 12,
+                  fontWeight: 600
+                }}
+              >
+                <List size={14} />
+                <span>Table</span>
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* --- CUSTOMER STAGE BUILDER SECTION --- */}
-      <div className="card" style={{ marginTop: 40, padding: 32, borderTop: '4px solid #f97316' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Settings2 size={24} color="#f97316" />
-              Customer Stage Builder
-            </h2>
-            <p style={{ color: '#64748b', fontSize: 14 }}>Visual Kanban pipelines for Multi-Stage services. Instant services skip stages automatically.</p>
-          </div>
-        </div>
-
-          <div style={{ marginTop: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#475569' }}>Your Custom Stages</h3>
-              <button className="btn btn-secondary btn-sm" onClick={() => handleOpenStageModal()}>
-                <Plus size={16} /> Add New Stage
-              </button>
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* ── TAB 1: SERVICES CATALOG                                     ── */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'catalog' && (
+        <div>
+          {/* Filter & Search Toolbar */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+            marginBottom: 20,
+            padding: '12px 16px',
+            background: isDark ? '#1e293b' : '#ffffff',
+            border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+            borderRadius: 12,
+            boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.15)' : '0 1px 3px rgba(0,0,0,0.03)'
+          }}>
+            {/* Search Input */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              background: isDark ? '#0f172a' : '#f8fafc',
+              border: isDark ? '1px solid #334155' : '1px solid #cbd5e1',
+              borderRadius: 8,
+              padding: '7px 12px',
+              width: '100%',
+              maxWidth: 360
+            }}>
+              <Search size={16} style={{ color: isDark ? '#64748b' : '#94a3b8', flexShrink: 0 }} />
+              <input
+                type="text"
+                placeholder={t('modules.services.searchPlaceholder', 'Search services by name or description...')}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  fontSize: 13,
+                  color: isDark ? '#f8fafc' : '#0f172a',
+                  width: '100%'
+                }}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: isDark ? '#94a3b8' : '#64748b',
+                    cursor: 'pointer',
+                    padding: 0,
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
 
-            {stages.length === 0 ? (
-              <div style={{ padding: 30, textAlign: 'center', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 12 }}>
-                <p style={{ color: '#64748b', marginBottom: 12 }}>You have not defined any stages yet.</p>
-                <button className="btn btn-primary btn-sm" onClick={() => handleOpenStageModal()}>Create First Stage</button>
-              </div>
-            ) : (
-              <>
-              <div className="kanban-scroll-container" style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 16, width: '100%', minWidth: 0 }}>
-                  {stages.map((stg) => {
-                    const stageAccounts = accounts.filter(a => a.b2c_stage_id === stg.id);
+            {/* Filter Pills */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {[
+                { key: 'all', label: `All (${services.length})` },
+                { key: 'Multi-Stage', label: `Multi-Stage (${multiCount})`, icon: <Layers size={13} /> },
+                { key: 'Instant', label: `Instant (${instantCount})`, icon: <Zap size={13} /> }
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setFilterType(tab.key)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 14px',
+                    borderRadius: 20,
+                    fontSize: 12,
+                    fontWeight: filterType === tab.key ? 700 : 500,
+                    cursor: 'pointer',
+                    border: filterType === tab.key
+                      ? '1px solid #ff5900'
+                      : (isDark ? '1px solid #334155' : '1px solid #e2e8f0'),
+                    background: filterType === tab.key
+                      ? (isDark ? 'rgba(255, 89, 0, 0.15)' : '#fff7ed')
+                      : (isDark ? 'transparent' : '#f8fafc'),
+                    color: filterType === tab.key
+                      ? '#ff5900'
+                      : (isDark ? '#94a3b8' : '#64748b'),
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {tab.icon}
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Empty Search / Catalog State */}
+          {filteredServices.length === 0 ? (
+            <div style={{
+              padding: '60px 20px',
+              textAlign: 'center',
+              background: isDark ? '#1e293b' : '#ffffff',
+              border: isDark ? '1px dashed #334155' : '1px dashed #cbd5e1',
+              borderRadius: 16,
+              marginBottom: 30
+            }}>
+              <Package size={48} style={{ color: isDark ? '#475569' : '#cbd5e1', marginBottom: 14 }} />
+              <h3 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 700, color: isDark ? '#f8fafc' : '#0f172a' }}>
+                {searchQuery ? 'No matching services found' : 'No services in catalog'}
+              </h3>
+              <p style={{ margin: '0 0 18px', fontSize: 13, color: isDark ? '#94a3b8' : '#64748b', maxWidth: 450, marginLeft: 'auto', marginRight: 'auto' }}>
+                {searchQuery
+                  ? 'Try clearing your search query or switching to another filter.'
+                  : 'Add your first service offering to set up standardized pricing, reminder notifications, and workflow tracking.'}
+              </p>
+              {!searchQuery && (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => handleOpenModal()}
+                  style={{
+                    background: 'linear-gradient(135deg, #ff5900 0%, #ff7324 100%)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '8px 18px',
+                    fontWeight: 600,
+                    fontSize: 13
+                  }}
+                >
+                  Create First Service
+                </button>
+              )}
+            </div>
+          ) : viewMode === 'table' ? (
+            /* ── Table View ── */
+            <div className="table-container" style={{
+              background: isDark ? '#1e293b' : '#ffffff',
+              border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+              borderRadius: 14,
+              overflow: 'hidden',
+              marginBottom: 30
+            }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ background: isDark ? '#0f172a' : '#f8fafc', borderBottom: isDark ? '1px solid #334155' : '1px solid #e2e8f0' }}>
+                    <th style={{ padding: '14px 18px', fontSize: 11, fontWeight: 700, color: isDark ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Service Name & Description
+                    </th>
+                    <th style={{ padding: '14px 18px', fontSize: 11, fontWeight: 700, color: isDark ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Type
+                    </th>
+                    <th style={{ padding: '14px 18px', fontSize: 11, fontWeight: 700, color: isDark ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Standard Price
+                    </th>
+                    <th style={{ padding: '14px 18px', fontSize: 11, fontWeight: 700, color: isDark ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Reminder Cycle
+                    </th>
+                    <th style={{ padding: '14px 18px', fontSize: 11, fontWeight: 700, color: isDark ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Enrolled Customers
+                    </th>
+                    <th style={{ padding: '14px 18px', fontSize: 11, fontWeight: 700, color: isDark ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredServices.map((svc, idx) => {
+                    const isInstant = (svc.service_type || 'Multi-Stage') === 'Instant'
+                    const enrolled = getEnrolledCount(svc.id)
+
                     return (
-                      <div 
-                        key={stg.id} 
-                        style={{ flex: '0 0 320px', background: '#f8fafc', borderRadius: 12, padding: 16, border: '1px solid #e2e8f0' }}
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDropCustomer(e, stg.id)}
+                      <tr
+                        key={svc.id}
+                        style={{
+                          borderBottom: idx === filteredServices.length - 1 ? 'none' : (isDark ? '1px solid #334155' : '1px solid #f1f5f9'),
+                          transition: 'background 0.15s ease'
+                        }}
+                        className="service-table-row"
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 12, height: 12, borderRadius: '50%', background: stg.color }}></div>
-                            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>{stg.name}</h3>
+                        {/* Name & Description */}
+                        <td style={{ padding: '16px 18px', verticalAlign: 'middle' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 10,
+                              background: isInstant ? (isDark ? 'rgba(59, 130, 246, 0.15)' : '#eff6ff') : (isDark ? 'rgba(255, 89, 0, 0.15)' : '#fff7ed'),
+                              color: isInstant ? '#3b82f6' : '#ff5900',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0
+                            }}>
+                              <Package size={18} />
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: 14, color: isDark ? '#f8fafc' : '#0f172a' }}>
+                                {svc.service_name}
+                              </div>
+                              <div style={{
+                                fontSize: 12,
+                                color: isDark ? '#94a3b8' : '#64748b',
+                                maxWidth: 360,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                marginTop: 2
+                              }}>
+                                {svc.description || 'Standard service catalog offering.'}
+                              </div>
+                            </div>
                           </div>
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', background: '#e2e8f0', padding: '2px 8px', borderRadius: 12 }}>{stageAccounts.length}</span>
-                            <button className="btn-icon" onClick={() => handleOpenStageModal(stg)}><Edit2 size={16} /></button>
+                        </td>
+
+                        {/* Type Badge */}
+                        <td style={{ padding: '16px 18px', verticalAlign: 'middle' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            padding: '4px 10px',
+                            borderRadius: 20,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background: isInstant ? (isDark ? 'rgba(59, 130, 246, 0.15)' : '#eff6ff') : (isDark ? 'rgba(255, 89, 0, 0.15)' : '#fff7ed'),
+                            color: isInstant ? (isDark ? '#93c5fd' : '#2563eb') : (isDark ? '#fb923c' : '#ea580c'),
+                            border: isInstant ? (isDark ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid #bfdbfe') : (isDark ? '1px solid rgba(255, 89, 0, 0.3)' : '1px solid #fed7aa')
+                          }}>
+                            {isInstant ? <Zap size={12} /> : <Layers size={12} />}
+                            <span>{svc.service_type || 'Multi-Stage'}</span>
+                          </span>
+                        </td>
+
+                        {/* Standard Price */}
+                        <td style={{ padding: '16px 18px', verticalAlign: 'middle' }}>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: isDark ? '#f8fafc' : '#0f172a' }}>
+                            {profile?.currency || '₹'}{convertPrice(svc.price, profile?.currency || '₹')}
+                          </div>
+                        </td>
+
+                        {/* Reminder Cycle */}
+                        <td style={{ padding: '16px 18px', verticalAlign: 'middle' }}>
+                          <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: '#ff5900',
+                            background: isDark ? 'rgba(255, 89, 0, 0.1)' : '#fff7ed',
+                            padding: '4px 10px',
+                            borderRadius: 8
+                          }}>
+                            <Clock size={13} />
+                            <span>{svc.reminder_days} Days</span>
+                          </div>
+                        </td>
+
+                        {/* Enrolled Customers */}
+                        <td style={{ padding: '16px 18px', verticalAlign: 'middle' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{
+                              fontWeight: 700,
+                              fontSize: 13,
+                              color: enrolled > 0 ? (isDark ? '#f8fafc' : '#0f172a') : (isDark ? '#64748b' : '#94a3b8')
+                            }}>
+                              {enrolled} {enrolled === 1 ? 'customer' : 'customers'}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Action Buttons */}
+                        <td style={{ padding: '16px 18px', verticalAlign: 'middle', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                            <button
+                              onClick={() => handleOpenModal(svc)}
+                              title="Edit Service"
+                              style={{
+                                background: isDark ? '#0f172a' : '#f1f5f9',
+                                border: isDark ? '1px solid #334155' : '1px solid #cbd5e1',
+                                borderRadius: 8,
+                                padding: '6px 8px',
+                                color: isDark ? '#cbd5e1' : '#475569',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                fontSize: 12,
+                                fontWeight: 500
+                              }}
+                            >
+                              <Edit2 size={13} />
+                              <span>Edit</span>
+                            </button>
                             {isAdmin && (
-                              <button className="btn-icon text-danger" onClick={() => handleDeleteStage(stg)}><Trash2 size={16} /></button>
+                              <button
+                                onClick={() => handleDelete(svc)}
+                                title="Delete Service"
+                                style={{
+                                  background: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fef2f2',
+                                  border: isDark ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid #fecaca',
+                                  borderRadius: 8,
+                                  padding: '6px 8px',
+                                  color: '#ef4444',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  fontSize: 12,
+                                  fontWeight: 500
+                                }}
+                              >
+                                <Trash2 size={13} />
+                                <span>Delete</span>
+                              </button>
                             )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            /* ── Grid View ── */
+            <div className="services-grid" style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gap: 18,
+              marginBottom: 30
+            }}>
+              {filteredServices.map(svc => {
+                const isInstant = (svc.service_type || 'Multi-Stage') === 'Instant'
+                const enrolled = getEnrolledCount(svc.id)
+
+                return (
+                  <div
+                    key={svc.id}
+                    className="service-card"
+                    style={{
+                      background: isDark ? '#1e293b' : '#ffffff',
+                      border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+                      borderTop: isInstant ? '4px solid #3b82f6' : '4px solid #ff5900',
+                      borderRadius: 14,
+                      padding: 20,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      boxShadow: isDark ? '0 4px 16px rgba(0,0,0,0.2)' : '0 2px 8px rgba(0,0,0,0.04)',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div>
+                      {/* Card Header: Title + Type Badge + Actions */}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <h3 style={{
+                            margin: '0 0 6px',
+                            fontSize: 16,
+                            fontWeight: 700,
+                            color: isDark ? '#f8fafc' : '#0f172a',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }} title={svc.service_name}>
+                            {svc.service_name}
+                          </h3>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            padding: '3px 10px',
+                            borderRadius: 20,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background: isInstant ? (isDark ? 'rgba(59, 130, 246, 0.15)' : '#eff6ff') : (isDark ? 'rgba(255, 89, 0, 0.15)' : '#fff7ed'),
+                            color: isInstant ? (isDark ? '#93c5fd' : '#2563eb') : (isDark ? '#fb923c' : '#ea580c'),
+                            border: isInstant ? (isDark ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid #bfdbfe') : (isDark ? '1px solid rgba(255, 89, 0, 0.3)' : '1px solid #fed7aa')
+                          }}>
+                            {isInstant ? <Zap size={11} /> : <Layers size={11} />}
+                            <span>{svc.service_type || 'Multi-Stage'}</span>
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <button
+                            onClick={() => handleOpenModal(svc)}
+                            title="Edit Service"
+                            style={{
+                              background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                              border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+                              borderRadius: 8,
+                              padding: 6,
+                              color: isDark ? '#cbd5e1' : '#475569',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleDelete(svc)}
+                              title="Delete Service"
+                              style={{
+                                background: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fef2f2',
+                                border: isDark ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid #fecaca',
+                                borderRadius: 8,
+                                padding: 6,
+                                color: '#ef4444',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Description */}
+                      <p style={{
+                        fontSize: 13,
+                        color: isDark ? '#94a3b8' : '#64748b',
+                        margin: '0 0 16px',
+                        lineHeight: 1.5,
+                        minHeight: 38,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden'
+                      }}>
+                        {svc.description || 'Standard service offering catalog item.'}
+                      </p>
+                    </div>
+
+                    {/* Card Bottom Meta */}
+                    <div>
+                      <div style={{
+                        borderTop: isDark ? '1px solid #334155' : '1px solid #f1f5f9',
+                        paddingTop: 14,
+                        display: 'flex',
+                        alignItems: 'flex-end',
+                        justifyContent: 'space-between'
+                      }}>
+                        <div>
+                          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: isDark ? '#64748b' : '#94a3b8', marginBottom: 2, fontWeight: 700 }}>
+                            Standard Price
+                          </div>
+                          <div style={{ fontSize: 18, fontWeight: 800, color: isDark ? '#f8fafc' : '#0f172a' }}>
+                            {profile?.currency || '₹'}{convertPrice(svc.price, profile?.currency || '₹')}
                           </div>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 100 }}>
-                          {stageAccounts.map(acc => {
-                            const serviceNames = (acc.customer_services || [])
-                              .map(cs => cs.services?.service_name)
-                              .filter(Boolean);
-                            const serviceName = serviceNames.length > 0 ? serviceNames.join(', ') : 'No Service';
-                            const animation = animatingCards[acc.id] || '';
-                            return (
-                            <div 
-                              key={acc.id} 
-                              draggable 
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: isDark ? '#64748b' : '#94a3b8', marginBottom: 2, fontWeight: 700 }}>
+                            Reminder Cycle
+                          </div>
+                          <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: '#ff5900'
+                          }}>
+                            <Clock size={13} />
+                            <span>{svc.reminder_days} Days</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Enrolled customers badge */}
+                      {enrolled > 0 && (
+                        <div style={{
+                          marginTop: 10,
+                          paddingTop: 8,
+                          borderTop: isDark ? '1px dashed #334155' : '1px dashed #e2e8f0',
+                          fontSize: 11,
+                          color: isDark ? '#94a3b8' : '#64748b',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between'
+                        }}>
+                          <span>Enrolled Customers:</span>
+                          <span style={{ fontWeight: 700, color: isDark ? '#f8fafc' : '#0f172a' }}>{enrolled}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* ── TAB 2: CUSTOMER STAGE PIPELINES (KANBAN)                     ── */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'pipelines' && (
+        <div style={{
+          background: isDark ? '#1e293b' : '#ffffff',
+          border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+          borderRadius: 16,
+          padding: '22px 24px',
+          boxShadow: isDark ? '0 4px 16px rgba(0,0,0,0.2)' : '0 2px 10px rgba(0,0,0,0.04)',
+          borderTop: '4px solid #ff5900'
+        }}>
+          {/* Stage Builder Header */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 12,
+            marginBottom: 20
+          }}>
+            <div>
+              <h2 style={{
+                margin: 0,
+                fontSize: 17,
+                fontWeight: 800,
+                color: isDark ? '#f8fafc' : '#0f172a',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}>
+                <Settings2 size={20} style={{ color: '#ff5900' }} />
+                <span>Customer Stage Pipelines</span>
+              </h2>
+              <p style={{ margin: '4px 0 0', color: isDark ? '#94a3b8' : '#64748b', fontSize: 13 }}>
+                Visual Kanban workflow board for Multi-Stage services. Drag and drop customers between columns to track stage progress.
+              </p>
+            </div>
+
+            <button
+              className="btn btn-secondary"
+              onClick={() => handleOpenStageModal()}
+              style={{
+                background: isDark ? '#0f172a' : '#f8fafc',
+                border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+                color: isDark ? '#f8fafc' : '#0f172a',
+                padding: '7px 14px',
+                borderRadius: 10,
+                fontSize: 12,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              <Plus size={14} style={{ color: '#ff5900' }} />
+              <span>Add New Stage</span>
+            </button>
+          </div>
+
+          {/* Kanban Board Columns */}
+          {stages.length === 0 ? (
+            <div style={{
+              padding: 40,
+              textAlign: 'center',
+              background: isDark ? '#0f172a' : '#f8fafc',
+              border: isDark ? '1px dashed #334155' : '1px dashed #cbd5e1',
+              borderRadius: 14
+            }}>
+              <Settings2 size={36} style={{ color: isDark ? '#475569' : '#cbd5e1', marginBottom: 10 }} />
+              <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700, color: isDark ? '#f8fafc' : '#0f172a' }}>
+                No custom workflow stages defined yet
+              </h3>
+              <p style={{ color: isDark ? '#94a3b8' : '#64748b', margin: '0 0 16px', fontSize: 13 }}>
+                Create your first pipeline stage (e.g. Intake, Processing, Quality Check, Delivered) to organize multi-stage service workflows.
+              </p>
+              <button
+                className="btn btn-primary"
+                onClick={() => handleOpenStageModal()}
+                style={{
+                  background: 'linear-gradient(135deg, #ff5900 0%, #ff7324 100%)',
+                  color: '#fff',
+                  borderRadius: 8,
+                  border: 'none',
+                  padding: '8px 18px',
+                  fontWeight: 600,
+                  fontSize: 13
+                }}
+              >
+                Create First Stage
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="kanban-scroll-container" style={{
+                display: 'flex',
+                gap: 16,
+                overflowX: 'auto',
+                paddingBottom: 16,
+                width: '100%',
+                minWidth: 0,
+                alignItems: 'flex-start'
+              }}>
+                {stages.map((stg) => {
+                  const stageAccounts = accounts.filter(a => a.b2c_stage_id === stg.id)
+
+                  return (
+                    <div
+                      key={stg.id}
+                      style={{
+                        flex: '0 0 300px',
+                        background: isDark ? '#0f172a' : '#f8fafc',
+                        borderRadius: 14,
+                        padding: 14,
+                        border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        minHeight: 380
+                      }}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDropCustomer(e, stg.id)}
+                    >
+                      {/* Stage Column Header */}
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: 14,
+                        paddingBottom: 10,
+                        borderBottom: isDark ? '1px solid #1e293b' : '1px solid #e2e8f0'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <div style={{ width: 10, height: 10, borderRadius: '50%', background: stg.color || '#ff5900', flexShrink: 0 }} />
+                          <h4 style={{
+                            margin: 0,
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: isDark ? '#f8fafc' : '#0f172a',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }} title={stg.name}>
+                            {stg.name}
+                          </h4>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                          <span style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: isDark ? '#94a3b8' : '#64748b',
+                            background: isDark ? '#1e293b' : '#e2e8f0',
+                            padding: '2px 8px',
+                            borderRadius: 12
+                          }}>
+                            {stageAccounts.length}
+                          </span>
+                          <button
+                            onClick={() => handleOpenStageModal(stg)}
+                            title="Edit Stage"
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: isDark ? '#94a3b8' : '#64748b',
+                              cursor: 'pointer',
+                              padding: 2,
+                              display: 'flex'
+                            }}
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleDeleteStage(stg)}
+                              title="Delete Stage"
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#ef4444',
+                                cursor: 'pointer',
+                                padding: 2,
+                                display: 'flex'
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Draggable Customer Cards */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 120, flex: 1 }}>
+                        {stageAccounts.map(acc => {
+                          const serviceNames = (acc.customer_services || [])
+                            .map(cs => cs.services?.service_name)
+                            .filter(Boolean)
+                          const serviceName = serviceNames.length > 0 ? serviceNames.join(', ') : 'Multi-Stage Service'
+                          const animation = animatingCards[acc.id] || ''
+
+                          return (
+                            <div
+                              key={acc.id}
+                              draggable
                               onDragStart={(e) => handleDragStartCustomer(e, acc.id, stg.id)}
-                              style={{ 
-                                background: '#fff', 
-                                borderLeft: `4px solid ${stg.color}`, 
-                                borderRadius: 8, 
-                                padding: 12, 
-                                cursor: 'grab', 
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                                animation: animation ? `${animation} 0.5s forwards` : 'none'
+                              style={{
+                                background: isDark ? '#1e293b' : '#ffffff',
+                                border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+                                borderLeft: `4px solid ${stg.color || '#ff5900'}`,
+                                borderRadius: 10,
+                                padding: '12px 14px',
+                                cursor: 'grab',
+                                boxShadow: isDark ? '0 2px 6px rgba(0,0,0,0.25)' : '0 1px 3px rgba(0,0,0,0.04)',
+                                animation: animation ? `${animation} 0.5s forwards` : 'none',
+                                transition: 'transform 0.15s ease, box-shadow 0.15s ease'
                               }}
                               className="customer-kanban-card"
                             >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                                <div style={{ width: 24, height: 24, borderRadius: '50%', background: `linear-gradient(135deg, ${stg.color}, #cbd5e1)`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900 }}>
-                                  {acc.account_name[0]?.toUpperCase()}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                <div style={{
+                                  width: 24,
+                                  height: 24,
+                                  borderRadius: '50%',
+                                  background: `linear-gradient(135deg, ${stg.color || '#ff5900'}, #94a3b8)`,
+                                  color: '#fff',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: 10,
+                                  fontWeight: 800,
+                                  flexShrink: 0
+                                }}>
+                                  {acc.account_name?.[0]?.toUpperCase() || 'C'}
                                 </div>
-                                <span style={{ fontWeight: 700, fontSize: 14 }}>{acc.account_name}</span>
+                                <span style={{
+                                  fontWeight: 700,
+                                  fontSize: 13,
+                                  color: isDark ? '#f8fafc' : '#0f172a',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  {acc.account_name}
+                                </span>
                               </div>
-                              <div style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <Package size={12} /> {serviceName}
+                              <div style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b', display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <Package size={11} style={{ flexShrink: 0 }} />
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{serviceName}</span>
                               </div>
                             </div>
-                          )})}
-                          {stageAccounts.length === 0 && <div style={{ textAlign: 'center', padding: '20px 0', color: '#94a3b8', fontSize: 13, fontStyle: 'italic' }}>Drop customers here</div>}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-                
-                {/* Timeline UI */}
-                <div style={{ marginTop: 32, padding: '24px 0', borderTop: '1px solid #e2e8f0' }}>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1e293b', marginBottom: 16 }}>Live Stage Timeline</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {stageHistory.length === 0 ? <p style={{ color: '#94a3b8', fontSize: 13, fontStyle: 'italic' }}>No movement history yet.</p> : null}
-                    {stageHistory.map(hist => (
-                      <div key={hist.id} style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: hist.b2c_stages?.color || '#cbd5e1' }} />
-                        <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>{new Date(hist.moved_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{hist.customer_name}</span>
-                        <span style={{ color: '#64748b' }}>moved to</span>
-                        <span style={{ padding: '2px 8px', borderRadius: 12, background: (hist.b2c_stages?.color || '#cbd5e1') + '20', color: hist.b2c_stages?.color || '#cbd5e1', fontWeight: 700 }}>{hist.b2c_stages?.name}</span>
-                        {hist.services?.service_name && <span style={{ color: '#94a3b8' }}>({hist.services.service_name})</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-      </div>
+                          )
+                        })}
 
+                        {stageAccounts.length === 0 && (
+                          <div style={{
+                            textAlign: 'center',
+                            padding: '30px 10px',
+                            color: isDark ? '#475569' : '#94a3b8',
+                            fontSize: 12,
+                            fontStyle: 'italic',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            border: isDark ? '1px dashed #334155' : '1px dashed #e2e8f0',
+                            borderRadius: 8,
+                            height: '100%'
+                          }}>
+                            Drag & drop customer here
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Live Stage Movement Timeline Feed */}
+              <div style={{
+                marginTop: 24,
+                paddingTop: 20,
+                borderTop: isDark ? '1px solid #334155' : '1px solid #e2e8f0'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <Activity size={17} style={{ color: '#ff5900' }} />
+                  <h3 style={{ fontSize: 15, fontWeight: 700, color: isDark ? '#f8fafc' : '#0f172a', margin: 0 }}>
+                    Live Stage Movement Timeline
+                  </h3>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {stageHistory.length === 0 ? (
+                    <p style={{ color: isDark ? '#64748b' : '#94a3b8', fontSize: 12, fontStyle: 'italic', margin: 0 }}>
+                      No stage movements recorded yet. Drag customer cards between stage columns to log real-time transitions.
+                    </p>
+                  ) : (
+                    stageHistory.slice(0, 10).map(hist => (
+                      <div key={hist.id} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        fontSize: 12,
+                        padding: '8px 12px',
+                        borderRadius: 8,
+                        background: isDark ? '#0f172a' : '#f8fafc',
+                        border: isDark ? '1px solid #1e293b' : '1px solid #f1f5f9'
+                      }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: hist.b2c_stages?.color || '#ff5900', flexShrink: 0 }} />
+                        <span style={{ color: isDark ? '#64748b' : '#94a3b8', whiteSpace: 'nowrap', fontSize: 11, fontWeight: 600 }}>
+                          {new Date(hist.moved_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <span style={{ fontWeight: 700, color: isDark ? '#f8fafc' : '#0f172a' }}>
+                          {hist.customer_name}
+                        </span>
+                        <span style={{ color: isDark ? '#64748b' : '#94a3b8', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span>advanced to</span>
+                          <ArrowRight size={12} />
+                        </span>
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: 12,
+                          background: (hist.b2c_stages?.color || '#ff5900') + '22',
+                          color: hist.b2c_stages?.color || '#ff5900',
+                          fontWeight: 700,
+                          fontSize: 11
+                        }}>
+                          {hist.b2c_stages?.name}
+                        </span>
+                        {hist.services?.service_name && (
+                          <span style={{ color: isDark ? '#64748b' : '#94a3b8', fontSize: 11 }}>
+                            ({hist.services.service_name})
+                          </span>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Modal: Create / Edit Service ── */}
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth: 500 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">{editingService ? 'Edit Service' : 'Define New Service'}</h2>
-              <button className="modal-close" onClick={() => setIsModalOpen(false)}>✕</button>
+          <div className="modal" style={{
+            maxWidth: 520,
+            background: isDark ? '#1e293b' : '#ffffff',
+            border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+            color: isDark ? '#f8fafc' : '#0f172a',
+            borderRadius: 16,
+            padding: 24
+          }}>
+            <div className="modal-header" style={{ marginBottom: 20 }}>
+              <h2 className="modal-title" style={{ fontSize: 18, fontWeight: 700, color: isDark ? '#f8fafc' : '#0f172a', margin: 0 }}>
+                {editingService ? 'Edit Service Offering' : 'Define New Service Offering'}
+              </h2>
+              <button
+                className="modal-close"
+                onClick={() => setIsModalOpen(false)}
+                style={{
+                  background: isDark ? '#0f172a' : '#f1f5f9',
+                  border: 'none',
+                  color: isDark ? '#94a3b8' : '#64748b',
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ✕
+              </button>
             </div>
             <form onSubmit={handleSubmit}>
               <div className="form-group" style={{ marginBottom: 16 }}>
-                <label className="form-label">Service Name *</label>
-                <input required className="form-input" value={formData.service_name} onChange={e => setFormData({...formData, service_name: e.target.value})} placeholder="e.g. Monthly Maintenance, Full Cleanup" />
+                <label className="form-label" style={{ display: 'block', fontSize: 12, fontWeight: 600, color: isDark ? '#cbd5e1' : '#334155', marginBottom: 6 }}>
+                  Service Name *
+                </label>
+                <input
+                  required
+                  className="form-input"
+                  value={formData.service_name}
+                  onChange={e => setFormData({ ...formData, service_name: e.target.value })}
+                  placeholder="e.g. Full Detailing, Annual Maintenance, Premium Consultation"
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: 8,
+                    border: isDark ? '1px solid #334155' : '1px solid #cbd5e1',
+                    background: isDark ? '#0f172a' : '#ffffff',
+                    color: isDark ? '#f8fafc' : '#0f172a',
+                    fontSize: 13,
+                    boxSizing: 'border-box'
+                  }}
+                />
               </div>
-              
-              <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+
+              <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
                 <div className="form-group">
-                  <label className="form-label">Standard Price ({profile?.currency || '$'}) *</label>
+                  <label className="form-label" style={{ display: 'block', fontSize: 12, fontWeight: 600, color: isDark ? '#cbd5e1' : '#334155', marginBottom: 6 }}>
+                    Standard Price ({profile?.currency || '₹'}) *
+                  </label>
                   <div style={{ position: 'relative' }}>
-                    <DollarSign size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                    <input type="number" required className="form-input" style={{ paddingLeft: 32 }} value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
+                    <DollarSign size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: isDark ? '#64748b' : '#94a3b8' }} />
+                    <input
+                      type="number"
+                      required
+                      className="form-input"
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px 9px 30px',
+                        borderRadius: 8,
+                        border: isDark ? '1px solid #334155' : '1px solid #cbd5e1',
+                        background: isDark ? '#0f172a' : '#ffffff',
+                        color: isDark ? '#f8fafc' : '#0f172a',
+                        fontSize: 13,
+                        boxSizing: 'border-box'
+                      }}
+                      value={formData.price}
+                      onChange={e => setFormData({ ...formData, price: e.target.value })}
+                    />
                   </div>
                 </div>
+
                 <div className="form-group">
-                  <label className="form-label">Reminder Cycle (Days) *</label>
+                  <label className="form-label" style={{ display: 'block', fontSize: 12, fontWeight: 600, color: isDark ? '#cbd5e1' : '#334155', marginBottom: 6 }}>
+                    Reminder Cycle (Days) *
+                  </label>
                   <div style={{ position: 'relative' }}>
-                    <Clock size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                    <input type="number" required className="form-input" style={{ paddingLeft: 32 }} value={formData.reminder_days} onChange={e => setFormData({...formData, reminder_days: e.target.value})} />
+                    <Clock size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: isDark ? '#64748b' : '#94a3b8' }} />
+                    <input
+                      type="number"
+                      required
+                      className="form-input"
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px 9px 30px',
+                        borderRadius: 8,
+                        border: isDark ? '1px solid #334155' : '1px solid #cbd5e1',
+                        background: isDark ? '#0f172a' : '#ffffff',
+                        color: isDark ? '#f8fafc' : '#0f172a',
+                        fontSize: 13,
+                        boxSizing: 'border-box'
+                      }}
+                      value={formData.reminder_days}
+                      onChange={e => setFormData({ ...formData, reminder_days: e.target.value })}
+                    />
                   </div>
                 </div>
               </div>
 
               <div className="form-group" style={{ marginBottom: 16 }}>
-                <label className="form-label">Service Type *</label>
-                <select required className="form-input" value={formData.service_type} onChange={e => setFormData({...formData, service_type: e.target.value})}>
+                <label className="form-label" style={{ display: 'block', fontSize: 12, fontWeight: 600, color: isDark ? '#cbd5e1' : '#334155', marginBottom: 6 }}>
+                  Service Type *
+                </label>
+                <select
+                  required
+                  className="form-input"
+                  value={formData.service_type}
+                  onChange={e => setFormData({ ...formData, service_type: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: 8,
+                    border: isDark ? '1px solid #334155' : '1px solid #cbd5e1',
+                    background: isDark ? '#0f172a' : '#ffffff',
+                    color: isDark ? '#f8fafc' : '#0f172a',
+                    fontSize: 13,
+                    boxSizing: 'border-box'
+                  }}
+                >
                   <option value="Instant">⚡ Instant — Completed immediately, no Kanban card</option>
                   <option value="Multi-Stage">🔄 Multi-Stage — Tracked through custom stages</option>
                 </select>
-                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-                  {formData.service_type === 'Instant' 
-                    ? 'This service will be marked as completed immediately when assigned to a customer.'
-                    : 'This service will create a Kanban card and move through your custom stages.'}
+                <div style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b', marginTop: 4 }}>
+                  {formData.service_type === 'Instant'
+                    ? 'Delivered immediately without advancing through intermediate stages.'
+                    : 'Creates interactive customer Kanban cards that move through your pipeline stages.'}
                 </div>
               </div>
 
-              <div className="form-group" style={{ marginBottom: 24 }}>
-                <label className="form-label">Service Description</label>
-                <textarea className="form-input" style={{ minHeight: 100, padding: 12 }} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Briefly describe what this service includes..." />
+              <div className="form-group" style={{ marginBottom: 20 }}>
+                <label className="form-label" style={{ display: 'block', fontSize: 12, fontWeight: 600, color: isDark ? '#cbd5e1' : '#334155', marginBottom: 6 }}>
+                  Service Description
+                </label>
+                <textarea
+                  className="form-input"
+                  style={{
+                    width: '100%',
+                    minHeight: 80,
+                    padding: 10,
+                    borderRadius: 8,
+                    border: isDark ? '1px solid #334155' : '1px solid #cbd5e1',
+                    background: isDark ? '#0f172a' : '#ffffff',
+                    color: isDark ? '#f8fafc' : '#0f172a',
+                    fontSize: 13,
+                    boxSizing: 'border-box'
+                  }}
+                  value={formData.description}
+                  onChange={e => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Briefly describe what is included in this service..."
+                />
               </div>
 
-              <div className="form-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Save size={18} /> {editingService ? 'Save Changes' : 'Create Service'}
+              <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsModalOpen(false)}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    background: isDark ? '#0f172a' : '#f1f5f9',
+                    border: isDark ? '1px solid #334155' : '1px solid #cbd5e1',
+                    color: isDark ? '#f8fafc' : '#334155'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 18px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    background: 'linear-gradient(135deg, #ff5900 0%, #ff7324 100%)',
+                    color: '#ffffff',
+                    border: 'none'
+                  }}
+                >
+                  <Save size={15} />
+                  <span>{editingService ? 'Save Changes' : 'Create Service'}</span>
                 </button>
               </div>
             </form>
@@ -625,32 +1850,135 @@ export default function Services({ session, profile }) {
         </div>
       )}
 
-      {/* Stage Modal */}
+      {/* ── Modal: Create / Edit Stage ── */}
       {isStageModalOpen && (
         <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth: 400 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">{editingStage ? 'Edit Stage' : 'Define New Stage'}</h2>
-              <button className="modal-close" onClick={() => setIsStageModalOpen(false)}>✕</button>
+          <div className="modal" style={{
+            maxWidth: 420,
+            background: isDark ? '#1e293b' : '#ffffff',
+            border: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
+            color: isDark ? '#f8fafc' : '#0f172a',
+            borderRadius: 16,
+            padding: 24
+          }}>
+            <div className="modal-header" style={{ marginBottom: 18 }}>
+              <h2 className="modal-title" style={{ fontSize: 17, fontWeight: 700, color: isDark ? '#f8fafc' : '#0f172a', margin: 0 }}>
+                {editingStage ? 'Edit Workflow Stage' : 'Define New Workflow Stage'}
+              </h2>
+              <button
+                className="modal-close"
+                onClick={() => setIsStageModalOpen(false)}
+                style={{
+                  background: isDark ? '#0f172a' : '#f1f5f9',
+                  border: 'none',
+                  color: isDark ? '#94a3b8' : '#64748b',
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ✕
+              </button>
             </div>
             <form onSubmit={handleStageSubmit}>
               <div className="form-group" style={{ marginBottom: 16 }}>
-                <label className="form-label">Stage Name *</label>
-                <input required className="form-input" value={stageFormData.name} onChange={e => setStageFormData({...stageFormData, name: e.target.value})} placeholder="e.g. In Progress, Completed" />
+                <label className="form-label" style={{ display: 'block', fontSize: 12, fontWeight: 600, color: isDark ? '#cbd5e1' : '#334155', marginBottom: 6 }}>
+                  Stage Name *
+                </label>
+                <input
+                  required
+                  className="form-input"
+                  value={stageFormData.name}
+                  onChange={e => setStageFormData({ ...stageFormData, name: e.target.value })}
+                  placeholder="e.g. Intake, Processing, Quality Check, Delivered"
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: 8,
+                    border: isDark ? '1px solid #334155' : '1px solid #cbd5e1',
+                    background: isDark ? '#0f172a' : '#ffffff',
+                    color: isDark ? '#f8fafc' : '#0f172a',
+                    fontSize: 13,
+                    boxSizing: 'border-box'
+                  }}
+                />
               </div>
-              
-              <div className="form-group" style={{ marginBottom: 24 }}>
-                <label className="form-label">Stage Color Badge *</label>
+
+              <div className="form-group" style={{ marginBottom: 20 }}>
+                <label className="form-label" style={{ display: 'block', fontSize: 12, fontWeight: 600, color: isDark ? '#cbd5e1' : '#334155', marginBottom: 6 }}>
+                  Stage Color Badge *
+                </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <input type="color" required style={{ width: 50, height: 40, padding: 0, cursor: 'pointer', border: '1px solid #e2e8f0', borderRadius: 8 }} value={stageFormData.color} onChange={e => setStageFormData({...stageFormData, color: e.target.value})} />
-                  <span style={{ fontSize: 13, color: '#64748b' }}>Select badge color</span>
+                  <input
+                    type="color"
+                    required
+                    style={{
+                      width: 44,
+                      height: 38,
+                      padding: 2,
+                      cursor: 'pointer',
+                      border: isDark ? '1px solid #334155' : '1px solid #cbd5e1',
+                      borderRadius: 8,
+                      background: 'transparent'
+                    }}
+                    value={stageFormData.color}
+                    onChange={e => setStageFormData({ ...stageFormData, color: e.target.value })}
+                  />
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 12px',
+                    borderRadius: 16,
+                    background: stageFormData.color + '22',
+                    color: stageFormData.color,
+                    fontSize: 12,
+                    fontWeight: 700
+                  }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: stageFormData.color }} />
+                    <span>{stageFormData.name || 'Preview'}</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="form-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsStageModalOpen(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Save size={18} /> {editingStage ? 'Save Stage' : 'Create Stage'}
+              <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsStageModalOpen(false)}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    background: isDark ? '#0f172a' : '#f1f5f9',
+                    border: isDark ? '1px solid #334155' : '1px solid #cbd5e1',
+                    color: isDark ? '#f8fafc' : '#334155'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 18px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    background: 'linear-gradient(135deg, #ff5900 0%, #ff7324 100%)',
+                    color: '#ffffff',
+                    border: 'none'
+                  }}
+                >
+                  <Save size={15} />
+                  <span>{editingStage ? 'Save Stage' : 'Create Stage'}</span>
                 </button>
               </div>
             </form>
@@ -658,6 +1986,7 @@ export default function Services({ session, profile }) {
         </div>
       )}
 
+      {/* Animation & scrollbar styles */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes flyUp {
           0%   { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
@@ -676,14 +2005,31 @@ export default function Services({ session, profile }) {
           100% { transform: translateY(80px) scale(0.8); opacity: 0; }
         }
 
-        .service-card {
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        .metric-stat-card:hover {
+          transform: translateY(-2px);
+          border-color: #ff5900 !important;
         }
+
         .service-card:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 20px 25px -5px rgba(243, 122, 35, 0.1), 0 10px 10px -5px rgba(243, 122, 35, 0.04);
+          transform: translateY(-3px);
+          box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.15) !important;
         }
+
+        .service-table-row:hover {
+          background: ${isDark ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'} !important;
+        }
+
+        .customer-kanban-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12) !important;
+        }
+
+        .kanban-scroll-container::-webkit-scrollbar { height: 7px; }
+        .kanban-scroll-container::-webkit-scrollbar-track { background: ${isDark ? '#0f172a' : '#f1f5f9'}; border-radius: 10px; }
+        .kanban-scroll-container::-webkit-scrollbar-thumb { background: ${isDark ? '#334155' : '#cbd5e1'}; border-radius: 10px; }
+        .kanban-scroll-container::-webkit-scrollbar-thumb:hover { background: ${isDark ? '#475569' : '#94a3b8'}; }
       `}} />
+
       <BulkUploadModal
         module="services"
         isOpen={isImportOpen}
@@ -692,13 +2038,6 @@ export default function Services({ session, profile }) {
         profile={profile}
         onImported={fetchServices}
       />
-
-      <style>{`
-        .kanban-scroll-container::-webkit-scrollbar { height: 8px; }
-        .kanban-scroll-container::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
-        .kanban-scroll-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .kanban-scroll-container::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-      `}</style>
     </div>
   )
 }
