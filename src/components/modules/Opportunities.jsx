@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Plus, Pencil, CheckCircle, Trash2, ArrowLeft, Package, LayoutGrid, 
-  ChevronRight, FileText, Receipt, CheckSquare, Activity, ClipboardList, TrendingUp, Settings, Check
+  ChevronRight, FileText, Receipt, CheckSquare, Activity, ClipboardList, TrendingUp, Settings, Check, UploadCloud
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LocalSearch from '../ui/LocalSearch'
@@ -11,6 +11,7 @@ import toast from 'react-hot-toast'
 import WhatsAppButton from '../ui/WhatsAppButton'
 import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../lib/whatsapp'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
+import BulkUploadModal from '../ui/BulkUploadModal'
 
 // --- Constants ---
 const DEFAULT_STAGES = ['Prospecting', 'Scoping', 'Negotiation', 'Legal', 'Contract', 'Closed']
@@ -41,6 +42,7 @@ export default function Opportunities({ session, profile }) {
   const [linkedAccountPhone, setLinkedAccountPhone] = useState(null)
   const [linkedAccountName, setLinkedAccountName] = useState('')
   const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
 
   // --- Effects ---
   useEffect(() => {
@@ -423,6 +425,9 @@ export default function Opportunities({ session, profile }) {
               <button className="btn btn-secondary" onClick={() => setIsFieldBuilderOpen(true)}>
                 <Settings size={18} style={{ marginRight: 6 }} /> {t('modules.opportunities.editFields')}
               </button>
+              <button className="btn btn-secondary" onClick={() => setIsImportOpen(true)}>
+                <UploadCloud size={18} style={{ marginRight: 6 }} /> {t('bulkImport.button', 'Import Excel/CSV')}
+              </button>
               <button className="btn btn-primary" onClick={() => handleOpenModal()}>
                 <Plus size={18} style={{ marginRight: 6 }} /> {t('modules.opportunities.newDeal')}
               </button>
@@ -563,6 +568,15 @@ export default function Opportunities({ session, profile }) {
         businessId={session.user.id}
         isOpen={isFieldBuilderOpen}
         onClose={() => setIsFieldBuilderOpen(false)}
+      />
+
+      <BulkUploadModal
+        module="opportunities"
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        session={session}
+        profile={profile}
+        onImported={fetchData}
       />
     </div>
   )

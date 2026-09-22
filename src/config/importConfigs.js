@@ -96,6 +96,110 @@ export const IMPORT_CONFIGS = {
     ]
   },
 
+  opportunities: {
+    table: 'opportunities',
+    label: 'Opportunities',
+    singular: 'opportunity',
+    plural: 'opportunities',
+    fields: [
+      {
+        key: 'name',
+        label: 'Deal Name',
+        required: true,
+        type: 'text',
+        aliases: ['deal', 'deal name', 'opportunity', 'opportunity name', 'name', 'title', 'deal title', 'subject']
+      },
+      {
+        key: 'amount',
+        label: 'Deal Amount',
+        type: 'number',
+        aliases: ['amount', 'deal amount', 'value', 'deal value', 'revenue', 'price', 'total', 'deal size'],
+        default: 0
+      },
+      {
+        key: 'stage',
+        label: 'Pipeline Stage',
+        type: 'enum',
+        aliases: ['stage', 'pipeline stage', 'status', 'deal stage', 'phase'],
+        options: ['Prospecting', 'Scoping', 'Negotiation', 'Legal', 'Contract', 'Closed'],
+        synonyms: {
+          prospecting: 'Prospecting',
+          scoping: 'Scoping',
+          scope: 'Scoping',
+          qualification: 'Scoping',
+          qualifying: 'Scoping',
+          proposal: 'Scoping',
+          negotiation: 'Negotiation',
+          negotiating: 'Negotiation',
+          legal: 'Legal',
+          contract: 'Contract',
+          contracting: 'Contract',
+          closed: 'Closed',
+          'closed won': 'Closed',
+          'closed_won': 'Closed',
+          'closed lost': 'Closed',
+          'closed_lost': 'Closed',
+          won: 'Closed',
+          lost: 'Closed'
+        },
+        default: 'Prospecting'
+      },
+      {
+        key: 'closed_date',
+        label: 'Expected Close Date',
+        type: 'date',
+        aliases: ['expected close', 'expected close date', 'close date', 'closed date', 'closing date', 'due date', 'target date', 'expected date']
+      },
+      {
+        key: 'account_name',
+        label: 'Account Name',
+        type: 'lookup',
+        aliases: ['account', 'account name', 'company', 'company name', 'organization', 'organisation', 'customer', 'customer name', 'client', 'client name'],
+        lookup: {
+          table: 'accounts',
+          matchColumn: 'account_name',
+          targetKey: 'account_id',
+          createIfMissing: { status: 'prospect' },
+          ownerKey: 'account_owner'
+        }
+      },
+      {
+        key: 'owner',
+        label: 'Deal Owner',
+        type: 'text',
+        aliases: ['deal owner', 'opportunity owner', ...OWNER_ALIASES],
+        ownerDefault: true
+      },
+      {
+        key: 'probability',
+        label: 'Probability (%)',
+        type: 'integer',
+        aliases: ['probability', 'prob', 'chance', 'likelihood', 'win rate', 'win probability'],
+        default: 50
+      }
+    ],
+    sampleRows: [
+      {
+        'Deal Name': 'Enterprise Cloud Migration',
+        'Account Name': 'Acme Corp',
+        'Deal Amount': 250000,
+        'Pipeline Stage': 'Negotiation',
+        'Expected Close Date': '2026-11-15',
+        'Deal Owner': '',
+        'Probability (%)': 60
+      },
+      {
+        'Deal Name': 'Annual CRM License',
+        'Account Name': 'Globex',
+        'Deal Amount': 48000,
+        'Pipeline Stage': 'Prospecting',
+        'Expected Close Date': '2026-12-01',
+        'Deal Owner': '',
+        'Probability (%)': 40
+      }
+    ]
+  },
+
   tasks: {
     table: 'tasks',
     label: 'Tasks',
