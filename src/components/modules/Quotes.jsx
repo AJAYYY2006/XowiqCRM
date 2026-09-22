@@ -1,31 +1,34 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
-import { Trash2, Edit2, Download, Plus, Minus, Send, CheckCircle, XCircle } from 'lucide-react'
+import { 
+  Trash2, Edit2, Download, Plus, Minus, Send, CheckCircle, XCircle, 
+  Eye, Receipt, ExternalLink, TrendingUp, Building2, X, ArrowRight
+} from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 
 export default function Quotes({ session, profile }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const location = useLocation()
   const userIds = profile?.teamUserIds || [session.user.id]
+
   const [quotes, setQuotes] = useState([])
+  const [invoices, setInvoices] = useState([])
   const [opportunities, setOpportunities] = useState([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const navigate = useNavigate()
+  const [viewingQuote, setViewingQuote] = useState(null)
   
   const [formData, setFormData] = useState({
     quote_name: '', opportunity_id: '', expires_at: '', total_price: 0,
     status: 'Draft', terms: '', items: [{ desc: '', qty: 1, price: 0 }]
   })
   const [editingQuote, setEditingQuote] = useState(null)
-
-  useEffect(() => {
-    fetchData()
-  }, [session, profile])
 
   const parseQuoteData = (str) => {
     try {
@@ -36,23 +39,49 @@ export default function Quotes({ session, profile }) {
     }
   }
 
+  useEffect(() => {
+    fetchData()
+  }, [session, profile])
+
   const fetchData = async () => {
     try {
       setLoading(true)
       const [quotesRes, oppsRes] = await Promise.all([
         supabase
           .from('quotes')
-          .select('*, opportunities(id, name, account_id, accounts(account_name))')
+          .select('*, opportunities(id, name, account_id, accounts(id, account_name))')
           .in('user_id', userIds)
           .order('created_at', { ascending: false }),
         supabase
           .from('opportunities')
-          .select('id, name')
+          .select('id, name, account_id, accounts(id, account_name)')
           .in('user_id', userIds)
           .order('name')
       ])
       
-      setQuotes(quotesRes.data || [])
+      const allRows = quotesRes.data || []
+      // Quotes: rows without invoice_number and where quote_name is not marked as invoice
+      const qRows = allRows.filter(row => {
+        if (row.invoice_number) return false
+        try {
+          const p = JSON.parse(row.quote_name)
+          return !p.is_invoice
+        } catch {
+          return false
+        }
+      })
+      const invRows = allRows.filter(row => {
+        if (row.invoice_number) return true
+        try {
+          const p = JSON.parse(row.quote_name)
+          return !!p.is_invoice
+        } catch {
+          return true
+        }
+      })
+
+      setQuotes(qRows)
+      setInvoices(invRows)
       setOpportunities(oppsRes.data || [])
     } catch (error) {
       toast.error('Failed to load quotes')
@@ -61,14 +90,28 @@ export default function Quotes({ session, profile }) {
     }
   }
 
-  const handleOpenModal = (quote = null) => {
+  // Handle deep-link openId from navigation
+  useEffect(() => {
+    if (quotes.length > 0 && location.state?.openId) {
+      const target = quotes.find(q => q.id === location.state.openId)
+      if (target) {
+        setViewingQuote(target)
+        window.history.replaceState({}, document.title)
+      }
+    } else if (location.state?.createForOpp) {
+      handleOpenModal(null, location.state.createForOpp)
+      window.history.replaceState({}, document.title)
+    }
+  }, [quotes, location.state])
+
+  const handleOpenModal = (quote = null, defaultOppId = '') => {
     if (quote) {
       setEditingQuote(quote)
       const meta = parseQuoteData(quote.quote_name)
       setFormData({
         quote_name: meta.name,
         opportunity_id: quote.opportunity_id || '',
-        expires_at: quote.expires_at || '',
+        expires_at: quote.expires_at ? quote.expires_at.slice(0, 10) : '',
         total_price: quote.total_price || 0,
         status: meta.status || 'Draft',
         terms: meta.terms || '',
@@ -77,8 +120,13 @@ export default function Quotes({ session, profile }) {
     } else {
       setEditingQuote(null)
       setFormData({
-        quote_name: '', opportunity_id: '', expires_at: '', total_price: 0,
-        status: 'Draft', terms: '', items: [{ desc: '', qty: 1, price: 0 }]
+        quote_name: '', 
+        opportunity_id: defaultOppId || '', 
+        expires_at: '', 
+        total_price: 0,
+        status: 'Draft', 
+        terms: 'Net 30. Validity is subject to final scoping.', 
+        items: [{ desc: '', qty: 1, price: 0 }]
       })
     }
     setIsModalOpen(true)
@@ -94,13 +142,7 @@ export default function Quotes({ session, profile }) {
   }
 
   const handleSelectQuote = (quote) => {
-    const el = document.getElementById(`quote-row-${quote.id}`)
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      el.style.transition = 'background-color 0.5s'
-      el.style.backgroundColor = 'var(--bg-card-hover)'
-      setTimeout(() => { el.style.backgroundColor = '' }, 2000)
-    }
+    setViewingQuote(quote)
   }
 
   const handleSubmit = async (e) => {
@@ -112,8 +154,12 @@ export default function Quotes({ session, profile }) {
         name: formData.quote_name,
         status: formData.status,
         terms: formData.terms,
-        items: formData.items
+        items: formData.items,
+        is_invoice: false
       })
+
+      const opp = opportunities.find(o => o.id === formData.opportunity_id)
+      const accId = opp?.account_id || null
 
       if (editingQuote) {
         const { error } = await supabase
@@ -121,6 +167,7 @@ export default function Quotes({ session, profile }) {
           .update({ 
             quote_name: payloadString,
             opportunity_id: formData.opportunity_id || null,
+            account_id: accId,
             expires_at: formData.expires_at || null,
             total_price: formData.total_price
           })
@@ -141,6 +188,7 @@ export default function Quotes({ session, profile }) {
           .insert([{ 
             quote_name: payloadString, 
             opportunity_id: formData.opportunity_id || null,
+            account_id: accId,
             expires_at: formData.expires_at || null,
             total_price: formData.total_price,
             user_id: session.user.id 
@@ -148,7 +196,6 @@ export default function Quotes({ session, profile }) {
           
         if (error) throw error
 
-        const opp = formData.opportunity_id ? (opportunities?.find(o => o.id === formData.opportunity_id) || null) : null
         const oppStr = opp ? ` for opportunity ${opp.name}` : ''
         await supabase.from('activities').insert([{
           user_id: session.user.id,
@@ -166,8 +213,65 @@ export default function Quotes({ session, profile }) {
       toast.error(error.message, { id: toastId })
     }
   }
+
+  // Convert Quote directly to Invoice
+  const handleConvertToInvoice = async (quote) => {
+    const meta = parseQuoteData(quote.quote_name)
+    const invNo = `INV-${Date.now().toString().slice(-6)}`
+    const toastId = toast.loading('Generating invoice from quote...')
+
+    try {
+      const opp = quote.opportunities || opportunities.find(o => o.id === quote.opportunity_id)
+      const accId = opp?.account_id || quote.account_id
+
+      const payloadString = JSON.stringify({
+        name: meta.name || 'Invoice from Proposal',
+        quote_id: quote.id,
+        quote_name: meta.name,
+        is_invoice: true,
+        items: meta.items || []
+      })
+
+      const { data: newInv, error } = await supabase
+        .from('quotes')
+        .insert([{
+          quote_name: payloadString,
+          total_price: quote.total_price || 0,
+          expires_at: quote.expires_at || null,
+          status: 'Unpaid',
+          opportunity_id: quote.opportunity_id || null,
+          account_id: accId || null,
+          invoice_number: invNo,
+          user_id: session.user.id
+        }])
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // Also mark quote as Approved if in Draft
+      if (meta.status === 'Draft' || meta.status === 'Sent') {
+        meta.status = 'Approved'
+        await supabase.from('quotes').update({ quote_name: JSON.stringify(meta) }).eq('id', quote.id)
+      }
+
+      await supabase.from('activities').insert([{
+        user_id: session.user.id,
+        type: 'Invoice Generated',
+        description: `Generated Invoice #${invNo} from quote "${meta.name}"`
+      }])
+
+      toast.success(`Invoice #${invNo} created! Opening invoice...`, { id: toastId })
+      navigate('/dashboard/invoices', { state: { openId: newInv.id } })
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to convert quote: ' + err.message, { id: toastId })
+    }
+  }
+
   const handleDeleteQuote = async (quote) => {
-    if (!confirm(`Are you sure you want to delete the quote "${parseQuoteData(quote.quote_name).name}"?`)) return
+    const meta = parseQuoteData(quote.quote_name)
+    if (!confirm(`Are you sure you want to delete the quote "${meta.name}"?`)) return
     
     const toastId = toast.loading('Deleting quote...')
     try {
@@ -178,14 +282,14 @@ export default function Quotes({ session, profile }) {
 
       if (error) throw error
 
-      const m = parseQuoteData(quote.quote_name)
       await supabase.from('activities').insert([{
         user_id: session.user.id,
         type: 'Proposal Deleted',
-        description: `${session.user.email} deleted proposal: ${m.name}`
+        description: `${session.user.email} deleted proposal: ${meta.name}`
       }])
 
       toast.success('Proposal deleted', { id: toastId })
+      if (viewingQuote?.id === quote.id) setViewingQuote(null)
       fetchData()
     } catch (error) {
       toast.error('Failed to delete proposal: ' + error.message, { id: toastId })
@@ -205,7 +309,10 @@ export default function Quotes({ session, profile }) {
         type: 'Proposal Workflow',
         description: `Proposal "${m.name}" marked as ${newStatus}`
       }])
-      toast.success(`Proposal ${newStatus}`, { id: toastId })
+      toast.success(`Proposal marked as ${newStatus}`, { id: toastId })
+      if (viewingQuote && viewingQuote.id === quote.id) {
+        setViewingQuote({ ...viewingQuote, quote_name: payloadString })
+      }
       fetchData()
     } catch (error) {
       toast.error('Failed to update workflow', { id: toastId })
@@ -221,7 +328,7 @@ export default function Quotes({ session, profile }) {
     const accName = quote.opportunities?.accounts?.account_name || 'Client'
     
     // Header Letterhead
-    doc.setFontSize(26)
+    doc.setFontSize(24)
     doc.setTextColor(243, 122, 35) // XOWIQ Orange
     doc.text(companyName.toUpperCase(), 14, 25)
     doc.setFontSize(10)
@@ -231,11 +338,11 @@ export default function Quotes({ session, profile }) {
     // Details
     doc.setTextColor(0)
     doc.setFontSize(12)
-    doc.text(`Proposal Name: ${m.name}`, 14, 50)
-    doc.text(`Client: ${accName}`, 14, 57)
-    if (oppName) doc.text(`Opportunity: ${oppName}`, 14, 64)
-    doc.text(`Date Prepared: ${new Date(quote.created_at).toLocaleDateString()}`, 14, 71)
-    if (quote.expires_at) doc.text(`Valid Until: ${new Date(quote.expires_at).toLocaleDateString()}`, 14, 78)
+    doc.text(`Proposal: ${m.name}`, 14, 48)
+    doc.text(`Client: ${accName}`, 14, 55)
+    if (oppName) doc.text(`Opportunity: ${oppName}`, 14, 62)
+    doc.text(`Date Prepared: ${new Date(quote.created_at).toLocaleDateString()}`, 14, 69)
+    if (quote.expires_at) doc.text(`Valid Until: ${new Date(quote.expires_at).toLocaleDateString()}`, 14, 76)
     
     // Line Items
     const tableData = (m.items || []).map(item => [
@@ -246,7 +353,7 @@ export default function Quotes({ session, profile }) {
     ])
 
     doc.autoTable({
-      startY: 90,
+      startY: 85,
       head: [['Description', 'Quantity', `Unit Price (${curr})`, 'Line Total']],
       body: tableData,
       foot: [['', '', 'Total Due', `${curr}${Number(quote.total_price).toLocaleString()}`]],
@@ -257,7 +364,7 @@ export default function Quotes({ session, profile }) {
     
     // Terms
     if (m.terms) {
-      const finalY = doc.lastAutoTable.finalY + 20
+      const finalY = doc.lastAutoTable.finalY + 16
       doc.setFontSize(11)
       doc.setFont('helvetica', 'bold')
       doc.text('Terms & Conditions:', 14, finalY)
@@ -279,26 +386,30 @@ export default function Quotes({ session, profile }) {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">{t('modules.quotes.title')}</h1>
-          <p className="page-subtitle">{t('modules.quotes.subtitle')}</p>
+          <h1 className="page-title">{t('modules.quotes.title', 'Proposals & Quotes')}</h1>
+          <p className="page-subtitle">{t('modules.quotes.subtitle', 'Build and send enterprise pricing proposals to clients')}</p>
         </div>
         <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-          <span style={{ fontSize: 18 }}>+</span> {t('modules.quotes.createQuote')}
+          <span style={{ fontSize: 18 }}>+</span> {t('modules.quotes.createQuote', 'Create Proposal')}
         </button>
       </div>
 
       <div className="table-container">
         <div className="table-header">
-          <h2 className="table-title">{t('modules.quotes.allQuotes')} ({quotes.length})</h2>
+          <h2 className="table-title">{t('modules.quotes.allQuotes', 'All Proposals')} ({quotes.length})</h2>
           <LocalSearch 
              data={quotes} 
              searchKeys={['quote_name']} 
              onSelect={(item) => handleSelectQuote(item)} 
-             placeholder={t('modules.quotes.searchPlaceholder')} 
+             placeholder={t('modules.quotes.searchPlaceholder', 'Search proposals...')} 
              renderItem={(item) => (
                <>
-                 <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{parseQuoteData(item.quote_name).name || item.quote_name}</div>
-                 <div className="text-muted" style={{ fontSize: '11px' }}>{currency}{Number(item.total_price).toLocaleString()}</div>
+                 <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
+                   {parseQuoteData(item.quote_name).name || item.quote_name}
+                 </div>
+                 <div className="text-muted" style={{ fontSize: '11px' }}>
+                   {currency}{Number(item.total_price).toLocaleString()}
+                 </div>
                </>
              )}
           />
@@ -308,94 +419,382 @@ export default function Quotes({ session, profile }) {
           <table>
             <thead>
               <tr>
-                <th>Quote Name</th>
+                <th>Quote Name & Status</th>
                 <th>Opportunity</th>
                 <th>Account</th>
-                <th>Expires Date</th>
+                <th>Linked Invoice</th>
+                <th>Valid Until</th>
                 <th style={{ textAlign: 'right' }}>Total Price ({currency})</th>
-                <th>Created</th>
-                <th style={{ width: 70 }}>Actions</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {quotes.length === 0 ? (
                 <tr>
-                  <td colSpan="6">
+                  <td colSpan="7">
                     <div className="empty-state">
                       <div className="empty-state-icon"></div>
-                      <h3>No quotes yet</h3>
+                      <h3>No proposals yet</h3>
                       <p>Create a quote to send pricing details to your prospects.</p>
+                      <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => handleOpenModal()}>
+                        + Create First Proposal
+                      </button>
                     </div>
                   </td>
                 </tr>
               ) : (
-                quotes.map(quote => (
-                  <tr key={quote.id} id={`quote-row-${quote.id}`}>
-                    <td className="fw-bold">{parseQuoteData(quote.quote_name).name || quote.quote_name}</td>
-                    <td>
-                      {quote.opportunities?.id ? (
-                        <span 
-                          style={{ color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            navigate('/dashboard/opportunities', { state: { openId: quote.opportunities.id } })
-                          }}
-                          title="Click to view opportunity"
-                        >
-                          {quote.opportunities.name}
-                        </span>
-                      ) : (
-                        <span className="text-muted">-</span>
-                      )}
-                    </td>
-                    <td>
-                      {quote.opportunities?.account_id && quote.opportunities?.accounts?.account_name ? (
-                        <span 
-                          style={{ color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            navigate('/dashboard/accounts', { state: { openId: quote.opportunities.account_id } })
-                          }}
-                          title="Click to view account"
-                        >
-                          {quote.opportunities.accounts.account_name}
-                        </span>
-                      ) : (
-                        <span className="text-muted">-</span>
-                      )}
-                    </td>
-                    <td>{quote.expires_at ? new Date(quote.expires_at).toLocaleDateString() : 'No expiration'}</td>
-                    <td className="fw-bold" style={{ textAlign: 'right' }}>{currency}{Number(quote.total_price).toLocaleString()}</td>
-                    <td className="text-muted">{new Date(quote.created_at).toLocaleDateString()}</td>
-                    <td style={{ textAlign: 'right' }}>
-                      <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
-                        <button 
-                          className="btn-icon text-primary" 
-                          onClick={() => handleOpenModal(quote)}
-                          title="Edit Quote"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        {isAdmin && (
-                          <button 
-                            className="btn-icon text-danger" 
-                            onClick={() => handleDeleteQuote(quote)}
-                            title="Delete Quote"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
+                quotes.map(quote => {
+                  const meta = parseQuoteData(quote.quote_name)
+                  const statusColors = {
+                    Draft: { bg: '#f1f5f9', color: '#475569' },
+                    Sent: { bg: '#eff6ff', color: '#1d4ed8' },
+                    Approved: { bg: '#f0fdf4', color: '#15803d' },
+                    Rejected: { bg: '#fef2f2', color: '#b91c1c' }
+                  }
+                  const sCol = statusColors[meta.status] || statusColors.Draft
 
+                  // Check if an invoice has been generated for this quote
+                  const linkedInv = invoices.find(inv => {
+                    try {
+                      const p = JSON.parse(inv.quote_name)
+                      if (p.quote_id === quote.id) return true
+                    } catch {}
+                    return (quote.opportunity_id && inv.opportunity_id === quote.opportunity_id)
+                  })
+
+                  return (
+                    <tr 
+                      key={quote.id} 
+                      id={`quote-row-${quote.id}`}
+                      style={{ cursor: 'pointer', transition: 'background 0.15s' }}
+                      onClick={() => setViewingQuote(quote)}
+                      className="hover:bg-slate-50"
+                    >
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span className="fw-bold" style={{ color: '#1e293b' }}>
+                            {meta.name || quote.quote_name}
+                          </span>
+                          <span style={{ 
+                            fontSize: 10, padding: '2px 8px', borderRadius: 10, 
+                            background: sCol.bg, color: sCol.color, fontWeight: 800 
+                          }}>
+                            {meta.status || 'Draft'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
+                          Created: {new Date(quote.created_at).toLocaleDateString()}
+                        </div>
+                      </td>
+
+                      <td onClick={e => e.stopPropagation()}>
+                        {quote.opportunities?.id ? (
+                          <span 
+                            style={{ color: '#ff5900', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}
+                            onClick={() => navigate('/dashboard/opportunities', { state: { openId: quote.opportunities.id } })}
+                            title="Click to view deal"
+                            onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+                            onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+                          >
+                            <TrendingUp size={13} /> {quote.opportunities.name}
+                          </span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+
+                      <td onClick={e => e.stopPropagation()}>
+                        {quote.opportunities?.account_id && quote.opportunities?.accounts?.account_name ? (
+                          <span 
+                            style={{ color: '#1e293b', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}
+                            onClick={() => navigate('/dashboard/accounts', { state: { openId: quote.opportunities.account_id } })}
+                            title="Click to view account"
+                            onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+                            onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+                          >
+                            <Building2 size={13} style={{ color: '#64748b' }} />
+                            {quote.opportunities.accounts.account_name}
+                          </span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+
+                      <td onClick={e => e.stopPropagation()}>
+                        {linkedInv ? (
+                          <span 
+                            onClick={() => navigate('/dashboard/invoices', { state: { openId: linkedInv.id } })}
+                            style={{ 
+                              display: 'inline-flex', alignItems: 'center', gap: 4, 
+                              fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 8, 
+                              background: '#f0fdf4', color: '#15803d', cursor: 'pointer', border: '1px solid #bbf7d0'
+                            }}
+                            title="Click to open linked invoice"
+                          >
+                            <Receipt size={12} /> {linkedInv.invoice_number || 'View Invoice'}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 11, color: '#94a3b8' }}>Not Invoiced</span>
+                        )}
+                      </td>
+
+                      <td>{quote.expires_at ? new Date(quote.expires_at).toLocaleDateString() : 'No expiration'}</td>
+
+                      <td className="fw-bold" style={{ textAlign: 'right', color: '#1e293b' }}>
+                        {currency}{Number(quote.total_price).toLocaleString()}
+                      </td>
+
+                      <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                        <div className="flex gap-1" style={{ justifyContent: 'flex-end' }}>
+                          <button 
+                            className="btn-icon" 
+                            style={{ color: '#2563eb' }} 
+                            onClick={() => setViewingQuote(quote)} 
+                            title="Open Proposal Details"
+                          >
+                            <Eye size={16} />
+                          </button>
+
+                          <button 
+                            className="btn-icon" 
+                            style={{ color: '#16a34a' }} 
+                            onClick={() => handleConvertToInvoice(quote)} 
+                            title="Convert to Invoice"
+                          >
+                            <Receipt size={16} />
+                          </button>
+
+                          <button 
+                            className="btn-icon text-primary" 
+                            onClick={() => downloadPDF(quote)} 
+                            title="Download PDF"
+                          >
+                            <Download size={16} />
+                          </button>
+
+                          <button 
+                            className="btn-icon text-primary" 
+                            onClick={() => handleOpenModal(quote)} 
+                            title="Edit Quote"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+
+                          {isAdmin && (
+                            <button 
+                              className="btn-icon text-danger" 
+                              onClick={() => handleDeleteQuote(quote)} 
+                              title="Delete Quote"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
+      {/* --- QUOTE DETAIL / PREVIEW MODAL --- */}
+      {viewingQuote && (
+        <div className="modal-overlay" onClick={() => setViewingQuote(null)}>
+          <div 
+            className="modal" 
+            style={{ width: 720, maxWidth: '95vw', padding: 0, overflow: 'hidden' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            {(() => {
+              const meta = parseQuoteData(viewingQuote.quote_name)
+              const statusColors = {
+                Draft: { bg: '#f1f5f9', color: '#475569' },
+                Sent: { bg: '#eff6ff', color: '#1d4ed8' },
+                Approved: { bg: '#f0fdf4', color: '#15803d' },
+                Rejected: { bg: '#fef2f2', color: '#b91c1c' }
+              }
+              const sCol = statusColors[meta.status] || statusColors.Draft
+              const opp = viewingQuote.opportunities || opportunities.find(o => o.id === viewingQuote.opportunity_id)
+              const accName = opp?.accounts?.account_name || 'Client'
+
+              return (
+                <>
+                  <div style={{ 
+                    background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', 
+                    color: '#fff', padding: '24px 28px', display: 'flex', 
+                    justifyContent: 'space-between', alignItems: 'flex-start' 
+                  }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ 
+                          fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 12, 
+                          background: sCol.bg, color: sCol.color, textTransform: 'uppercase' 
+                        }}>
+                          {meta.status || 'Draft'}
+                        </span>
+                        <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                          Issued: {new Date(viewingQuote.created_at).toLocaleDateString()}
+                          {viewingQuote.expires_at ? ` • Valid until ${new Date(viewingQuote.expires_at).toLocaleDateString()}` : ''}
+                        </span>
+                      </div>
+                      <h2 style={{ margin: '10px 0 4px', fontSize: 22, fontWeight: 800, color: '#fff' }}>
+                        {meta.name || viewingQuote.quote_name}
+                      </h2>
+                      <div style={{ fontSize: 13, color: '#cbd5e1' }}>
+                        Client: {accName} {opp ? `• Opportunity: ${opp.name}` : ''}
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setViewingQuote(null)} 
+                      style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', opacity: 0.8 }}
+                    >
+                      <X size={22} />
+                    </button>
+                  </div>
+
+                  {/* Content */}
+                  <div style={{ padding: 24, display: 'grid', gap: 20 }}>
+                    {/* Navigation tags */}
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                      {opp?.id && (
+                        <div 
+                          onClick={() => navigate('/dashboard/opportunities', { state: { openId: opp.id } })}
+                          style={{ 
+                            padding: '8px 14px', borderRadius: 8, background: '#fff7ed', border: '1px solid #fed7aa',
+                            color: '#ea580c', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 
+                          }}
+                        >
+                          <TrendingUp size={14} /> Open Deal: {opp.name} <ExternalLink size={12} />
+                        </div>
+                      )}
+                      {opp?.account_id && (
+                        <div 
+                          onClick={() => navigate('/dashboard/accounts', { state: { openId: opp.account_id } })}
+                          style={{ 
+                            padding: '8px 14px', borderRadius: 8, background: '#f8fafc', border: '1px solid #e2e8f0',
+                            color: '#1e293b', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 
+                          }}
+                        >
+                          <Building2 size={14} /> Open Account: {accName} <ExternalLink size={12} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Line Items */}
+                    <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                            <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12 }}>Description</th>
+                            <th style={{ padding: '10px 14px', textAlign: 'center', fontSize: 12 }}>Qty</th>
+                            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 12 }}>Unit Price ({currency})</th>
+                            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 12 }}>Total ({currency})</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(meta.items && meta.items.length > 0) ? (
+                            meta.items.map((it, idx) => (
+                              <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '12px 14px', fontWeight: 600, color: '#1e293b' }}>{it.desc}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'center', color: '#64748b' }}>{it.qty}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right', color: '#64748b' }}>{currency}{Number(it.price).toLocaleString()}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#1e293b' }}>{currency}{(Number(it.qty) * Number(it.price)).toLocaleString()}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={4} style={{ padding: 16, textAlign: 'center', color: '#94a3b8' }}>
+                                {meta.name || 'Proposal Item'}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
+                            <td colSpan={3} style={{ padding: '12px 14px', fontWeight: 800, textAlign: 'right' }}>Total Proposal Value:</td>
+                            <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 900, fontSize: 17, color: '#ea580c' }}>
+                              {currency}{Number(viewingQuote.total_price || 0).toLocaleString()}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    {/* Terms */}
+                    {meta.terms && (
+                      <div style={{ background: '#f8fafc', padding: 14, borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', marginBottom: 4 }}>Terms & Conditions</div>
+                        <div style={{ fontSize: 13, color: '#334155', whiteSpace: 'pre-wrap' }}>{meta.terms}</div>
+                      </div>
+                    )}
+
+                    {/* Workflow status toggle buttons */}
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Set Status:</span>
+                      {['Draft', 'Sent', 'Approved', 'Rejected'].map(st => (
+                        <button
+                          key={st}
+                          onClick={() => updateQuoteStatus(viewingQuote, st)}
+                          style={{
+                            padding: '4px 10px', borderRadius: 14, fontSize: 11, fontWeight: 700,
+                            border: meta.status === st ? '1.5px solid #ff5900' : '1px solid #e2e8f0',
+                            background: meta.status === st ? '#fff7ed' : '#fff',
+                            color: meta.status === st ? '#ea580c' : '#64748b',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Actions Footer */}
+                  <div style={{ 
+                    padding: '16px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', 
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center' 
+                  }}>
+                    <button 
+                      className="btn btn-primary"
+                      onClick={() => handleConvertToInvoice(viewingQuote)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#16a34a' }}
+                    >
+                      <Receipt size={16} /> Convert to Invoice
+                    </button>
+
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <button 
+                        className="btn btn-secondary"
+                        onClick={() => downloadPDF(viewingQuote)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                      >
+                        <Download size={16} /> Download PDF
+                      </button>
+                      <button 
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          const target = viewingQuote
+                          setViewingQuote(null)
+                          handleOpenModal(target)
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                      >
+                        <Edit2 size={15} /> Edit Proposal
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* --- PROPOSAL EDIT / CREATE MODAL --- */}
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal" style={{ width: 700, maxHeight: '90vh', overflowY: 'auto' }}>

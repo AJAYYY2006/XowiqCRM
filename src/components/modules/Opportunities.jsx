@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Plus, Pencil, CheckCircle, Trash2, ArrowLeft, Package, LayoutGrid, 
-  ChevronRight, FileText, Receipt, CheckSquare, Activity, ClipboardList, TrendingUp, Settings, Check, UploadCloud
+  ChevronRight, FileText, Receipt, CheckSquare, Activity, ClipboardList, TrendingUp, Settings, Check, UploadCloud,
+  Eye, ExternalLink, Download
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LocalSearch from '../ui/LocalSearch'
@@ -26,10 +27,13 @@ export default function Opportunities({ session, profile }) {
     return DEFAULT_STAGES
   })()
   const location = useLocation()
+  const navigate = useNavigate()
   // --- State ---
   const [opportunities, setOpportunities] = useState([])
   const [accounts, setAccounts] = useState([])
   const [viewingOpp, setViewingOpp] = useState(null)
+  const [oppQuotes, setOppQuotes] = useState([])
+  const [oppInvoices, setOppInvoices] = useState([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedOpp, setSelectedOpp] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -84,8 +88,50 @@ export default function Opportunities({ session, profile }) {
     }
   }, [opportunities, location.state])
 
-  // Fetch phone from linked account when viewing an opportunity
+  // Fetch phone and linked quotes/invoices from linked account when viewing an opportunity
   useEffect(() => {
+    if (!viewingOpp) {
+      setOppQuotes([])
+      setOppInvoices([])
+      return
+    }
+
+    const fetchOppDocuments = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('quotes')
+          .select('*, accounts(account_name)')
+          .eq('opportunity_id', viewingOpp.id)
+          .order('created_at', { ascending: false })
+
+        if (!error && data) {
+          const qList = data.filter(row => {
+            if (row.invoice_number) return false
+            try {
+              const p = JSON.parse(row.quote_name)
+              return !p.is_invoice
+            } catch {
+              return false
+            }
+          })
+          const invList = data.filter(row => {
+            if (row.invoice_number) return true
+            try {
+              const p = JSON.parse(row.quote_name)
+              return !!p.is_invoice
+            } catch {
+              return true
+            }
+          })
+          setOppQuotes(qList)
+          setOppInvoices(invList)
+        }
+      } catch (err) {
+        console.error('Error fetching opp quotes/invoices:', err)
+      }
+    }
+    fetchOppDocuments()
+
     const fetchLinkedPhone = async () => {
       if (!viewingOpp?.account_id) {
         setLinkedAccountPhone(null)
@@ -335,7 +381,10 @@ export default function Opportunities({ session, profile }) {
                 Products ({products.length})
               </button>
               <button className={`tab ${activeTab === 'quotes' ? 'active' : ''}`} onClick={() => setActiveTab('quotes')}>
-                Quotes
+                Quotes ({oppQuotes.length})
+              </button>
+              <button className={`tab ${activeTab === 'invoices' ? 'active' : ''}`} onClick={() => setActiveTab('invoices')}>
+                Invoices ({oppInvoices.length})
               </button>
               <button className={`tab ${activeTab === 'tasks' ? 'active' : ''}`} onClick={() => setActiveTab('tasks')}>
                 Tasks
@@ -403,7 +452,181 @@ export default function Opportunities({ session, profile }) {
                  </div>
                )}
 
-               {activeTab !== 'products' && (
+               {activeTab === 'quotes' && (
+                 <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '15px' }}>Linked Proposals & Quotes</h3>
+                        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>Proposals generated specifically for this opportunity</p>
+                      </div>
+                      <button 
+                        className="btn btn-primary btn-sm"
+                        onClick={() => navigate('/dashboard/quotes', { state: { createForOpp: viewingOpp.id } })}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                      >
+                        <Plus size={14} /> Create Proposal
+                      </button>
+                    </div>
+
+                    {oppQuotes.length === 0 ? (
+                      <div className="empty-state">
+                        <div className="empty-state-icon"></div>
+                        <h3>No proposals found</h3>
+                        <p>Draft an enterprise pricing quote for {viewingOpp.name}.</p>
+                        <button 
+                          className="btn btn-primary mt-3"
+                          onClick={() => navigate('/dashboard/quotes', { state: { createForOpp: viewingOpp.id } })}
+                        >
+                          + Draft First Proposal
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Proposal Name</th>
+                              <th>Status</th>
+                              <th>Valid Until</th>
+                              <th style={{ textAlign: 'right' }}>Total Value</th>
+                              <th style={{ textAlign: 'right' }}>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {oppQuotes.map(q => {
+                              let qMeta = {}
+                              try { qMeta = JSON.parse(q.quote_name) } catch { qMeta = { name: q.quote_name } }
+                              const statusColors = {
+                                Draft: { bg: '#f1f5f9', color: '#475569' },
+                                Sent: { bg: '#eff6ff', color: '#1d4ed8' },
+                                Approved: { bg: '#f0fdf4', color: '#15803d' },
+                                Rejected: { bg: '#fef2f2', color: '#b91c1c' }
+                              }
+                              const sCol = statusColors[qMeta.status] || statusColors.Draft
+
+                              return (
+                                <tr key={q.id}>
+                                  <td className="fw-bold">{qMeta.name || q.quote_name}</td>
+                                  <td>
+                                    <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 12, background: sCol.bg, color: sCol.color, fontWeight: 800 }}>
+                                      {qMeta.status || 'Draft'}
+                                    </span>
+                                  </td>
+                                  <td>{q.expires_at ? new Date(q.expires_at).toLocaleDateString() : 'No expiration'}</td>
+                                  <td className="fw-bold" style={{ textAlign: 'right' }}>
+                                    {profile?.currency || '$'}{Number(q.total_price || 0).toLocaleString()}
+                                  </td>
+                                  <td style={{ textAlign: 'right' }}>
+                                    <button 
+                                      className="btn btn-secondary btn-sm"
+                                      onClick={() => navigate('/dashboard/quotes', { state: { openId: q.id } })}
+                                      title="Open Quote Details"
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                    >
+                                      <Eye size={13} /> Open
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                 </div>
+               )}
+
+               {activeTab === 'invoices' && (
+                 <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '15px' }}>Linked Invoices</h3>
+                        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>Billing invoices connected to this opportunity</p>
+                      </div>
+                      <button 
+                        className="btn btn-primary btn-sm"
+                        onClick={() => navigate('/dashboard/invoices')}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                      >
+                        <Plus size={14} /> Generate Invoice
+                      </button>
+                    </div>
+
+                    {oppInvoices.length === 0 ? (
+                      <div className="empty-state">
+                        <div className="empty-state-icon"></div>
+                        <h3>No invoices yet</h3>
+                        <p>No billing invoices have been issued for this deal.</p>
+                        <button 
+                          className="btn btn-primary mt-3"
+                          onClick={() => navigate('/dashboard/invoices')}
+                        >
+                          + Generate First Invoice
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Invoice # & Description</th>
+                              <th>Due Date</th>
+                              <th>Status</th>
+                              <th style={{ textAlign: 'right' }}>Total Amount</th>
+                              <th style={{ textAlign: 'right' }}>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {oppInvoices.map(inv => {
+                              let invName = inv.quote_name
+                              try { const p = JSON.parse(inv.quote_name); if (p.name) invName = p.name } catch {}
+                              const invNo = inv.invoice_number || `INV-${inv.id.slice(0,6).toUpperCase()}`
+                              const isPaid = inv.status === 'Paid'
+
+                              return (
+                                <tr key={inv.id}>
+                                  <td>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 6, background: '#ffedd5', color: '#ea580c', fontFamily: 'monospace' }}>
+                                        {invNo}
+                                      </span>
+                                      <span className="fw-bold">{invName}</span>
+                                    </div>
+                                  </td>
+                                  <td>{inv.expires_at ? new Date(inv.expires_at).toLocaleDateString() : 'Upon receipt'}</td>
+                                  <td>
+                                    <span style={{ 
+                                      fontSize: 11, padding: '3px 10px', borderRadius: 12, fontWeight: 800,
+                                      background: isPaid ? '#dcfce3' : '#fef9c3',
+                                      color: isPaid ? '#166534' : '#854d0e'
+                                    }}>
+                                      {inv.status || 'Unpaid'}
+                                    </span>
+                                  </td>
+                                  <td className="fw-bold" style={{ textAlign: 'right' }}>
+                                    {profile?.currency || '$'}{Number(inv.total_price || 0).toLocaleString()}
+                                  </td>
+                                  <td style={{ textAlign: 'right' }}>
+                                    <button 
+                                      className="btn btn-secondary btn-sm"
+                                      onClick={() => navigate('/dashboard/invoices', { state: { openId: inv.id } })}
+                                      title="Open Invoice Details"
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                    >
+                                      <Eye size={13} /> Open
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                 </div>
+               )}
+
+               {activeTab !== 'products' && activeTab !== 'quotes' && activeTab !== 'invoices' && (
                  <div className="empty-state">
                    <div className="empty-state-icon"></div>
                    <h3>No data found</h3>

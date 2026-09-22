@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
-import { Trash2, Edit2, Package, Plus, Calendar, CreditCard, Clock, FileText, CheckCircle, Download, Check, X, Phone, Save, Link2, Settings, AlertCircle, ArrowUp, ArrowDown, LayoutGrid, UploadCloud } from 'lucide-react'
+import { Trash2, Edit2, Package, Plus, Calendar, CreditCard, Clock, FileText, CheckCircle, Download, Check, X, Phone, Save, Link2, Settings, AlertCircle, ArrowUp, ArrowDown, LayoutGrid, UploadCloud, TrendingUp, ExternalLink, ChevronDown, ChevronRight, Receipt, Eye } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
 import BulkUploadModal from '../ui/BulkUploadModal'
@@ -126,6 +126,25 @@ export default function Accounts({ session, profile }) {
   const [accInvoices, setAccInvoices] = useState([])
   const [availableServices, setAvailableServices] = useState([])
   const [accActs, setAccActs] = useState([])
+  const [accOpportunities, setAccOpportunities] = useState([])
+  const [expandedOppId, setExpandedOppId] = useState(null)
+  
+  const [isOppModalOpen, setIsOppModalOpen] = useState(false)
+  const [editingOpp, setEditingOpp] = useState(null)
+  const [oppFormData, setOppFormData] = useState({
+    name: '',
+    amount: 0,
+    stage: 'Prospecting',
+    closed_date: '',
+    owner: profile?.name || session?.user?.email || ''
+  })
+  const OPP_STAGES = (() => {
+    try {
+      const stored = localStorage.getItem('pipeline_stages')
+      if (stored) return JSON.parse(stored)
+    } catch (e) {}
+    return ['Prospecting', 'Scoping', 'Negotiation', 'Legal', 'Contract', 'Closed']
+  })()
   
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false)
   const [editingServiceEntry, setEditingServiceEntry] = useState(null)
@@ -141,7 +160,7 @@ export default function Accounts({ session, profile }) {
     next_follow_up_date: ''
   })
   
-  const [activeTab, setActiveTab] = useState(isB2C ? 'services' : 'contacts')
+  const [activeTab, setActiveTab] = useState(isB2C ? 'services' : 'opportunities')
   const { t } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
@@ -210,6 +229,102 @@ export default function Accounts({ session, profile }) {
       return
     }
     navigate('/dashboard/contacts', { state: { openId: contact.id } })
+  }
+
+  // Opportunity handlers
+  const handleOpenOppModal = (opp = null) => {
+    if (opp) {
+      setEditingOpp(opp)
+      setOppFormData({
+        name: opp.name || '',
+        amount: opp.amount || 0,
+        stage: opp.stage || 'Prospecting',
+        closed_date: opp.closed_date ? new Date(opp.closed_date).toISOString().split('T')[0] : '',
+        owner: opp.owner || profile?.name || session.user.email
+      })
+    } else {
+      setEditingOpp(null)
+      setOppFormData({
+        name: '',
+        amount: 0,
+        stage: OPP_STAGES[0] || 'Prospecting',
+        closed_date: '',
+        owner: profile?.name || session.user.email
+      })
+    }
+    setIsOppModalOpen(true)
+  }
+
+  const handleSaveOpportunity = async (e) => {
+    e.preventDefault()
+    if (!oppFormData.name.trim()) {
+      toast.error('Opportunity name is required')
+      return
+    }
+    const toastId = toast.loading(editingOpp ? 'Updating opportunity...' : 'Creating opportunity...')
+    try {
+      const payload = {
+        name: oppFormData.name.trim(),
+        account_id: selectedAccount.id,
+        amount: Number(oppFormData.amount) || 0,
+        stage: oppFormData.stage,
+        closed_date: oppFormData.closed_date || null,
+        owner: oppFormData.owner || profile?.name || session.user.email,
+        user_id: session.user.id
+      }
+
+      if (editingOpp) {
+        const { error } = await supabase
+          .from('opportunities')
+          .update(payload)
+          .eq('id', editingOpp.id)
+        if (error) throw error
+
+        await supabase.from('activities').insert([{
+          user_id: session.user.id,
+          type: 'Opportunity Updated',
+          description: `Updated opportunity "${payload.name}" for ${selectedAccount.account_name}`
+        }])
+        toast.success('Opportunity updated successfully', { id: toastId })
+      } else {
+        const { error } = await supabase
+          .from('opportunities')
+          .insert([payload])
+        if (error) throw error
+
+        await supabase.from('activities').insert([{
+          user_id: session.user.id,
+          type: 'Opportunity Created',
+          description: `Created opportunity "${payload.name}" for ${selectedAccount.account_name}`
+        }])
+        toast.success('Opportunity created successfully', { id: toastId })
+      }
+
+      setIsOppModalOpen(false)
+      fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
+    } catch (err) {
+      console.error(err)
+      toast.error(err.message || 'Failed to save opportunity', { id: toastId })
+    }
+  }
+
+  const handleDeleteOpportunity = async (oppId, oppName) => {
+    if (!window.confirm(`Are you sure you want to delete opportunity "${oppName}"?`)) return
+    const toastId = toast.loading('Deleting opportunity...')
+    try {
+      const { error } = await supabase.from('opportunities').delete().eq('id', oppId)
+      if (error) throw error
+
+      await supabase.from('activities').insert([{
+        user_id: session.user.id,
+        type: 'Opportunity Deleted',
+        description: `Deleted opportunity "${oppName}" from ${selectedAccount.account_name}`
+      }])
+      toast.success('Opportunity deleted', { id: toastId })
+      fetchAccountDetails(selectedAccount.id, selectedAccount.account_name)
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete opportunity', { id: toastId })
+    }
   }
   
   // Form State
@@ -372,7 +487,7 @@ export default function Accounts({ session, profile }) {
   }
 
   const fetchAccountDetails = async (id, accName) => {
-    const [accRes, cRes, iRes, tRes, csRes, svcRes, sRes, aRes, stageHistoryRes, allStagesRes] = await Promise.all([
+    const [accRes, cRes, iRes, tRes, csRes, svcRes, sRes, aRes, stageHistoryRes, allStagesRes, oppRes] = await Promise.all([
       supabase.from('accounts').select('*, contacts(phone, email, id)').eq('id', id).single(),
       supabase.from('contacts').select('*').eq('account_id', id),
       supabase.from('quotes').select('*').eq('account_id', id).order('created_at', { ascending: false }),
@@ -382,7 +497,8 @@ export default function Accounts({ session, profile }) {
       supabase.from('services').select('*').in('user_id', userIds).eq('status', 'active'),
       supabase.from('activities').select('*').in('user_id', userIds).order('created_at', { ascending: false }),
       supabase.from('b2c_customer_stages').select('id, stage_id, service_id, moved_at').eq('customer_id', String(id)).order('moved_at', { ascending: false }),
-      supabase.from('b2c_stages').select('id, name, color').order('order_index', { ascending: true })
+      supabase.from('b2c_stages').select('id, name, color').order('order_index', { ascending: true }),
+      supabase.from('opportunities').select('*, quotes:quotes!opportunity_id(id, quote_name, total_price, status, expires_at, created_at, invoice_number)').eq('account_id', id).order('created_at', { ascending: false })
     ])
     
     if (csRes.error) {
@@ -417,6 +533,7 @@ export default function Accounts({ session, profile }) {
     setAccTasks(tRes.data || [])
     setAccServices(mySvcs)
     setAvailableServices(sRes.data || [])
+    setAccOpportunities(oppRes.data || [])
 
     const nameLower = (accName || '').toLowerCase()
     const filteredActs = (aRes.data || []).filter(a => {
@@ -729,6 +846,9 @@ export default function Accounts({ session, profile }) {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
           </button>
           <div style={{ display: 'flex', gap: 12 }}>
+            <button className="btn btn-secondary" onClick={() => { setActiveTab('opportunities'); handleOpenOppModal(); }}>
+              <TrendingUp size={16} /> Add Opportunity
+            </button>
             {!isB2C && (
               <button className="btn btn-secondary" onClick={() => handleOpenServiceModal()}><Plus size={16} /> Add Service Entry</button>
             )}
@@ -809,6 +929,9 @@ export default function Accounts({ session, profile }) {
         </div>
 
         <div className="tabs" style={{ marginBottom: 24 }}>
+          <button className={`tab ${activeTab === 'opportunities' ? 'active' : ''}`} onClick={() => setActiveTab('opportunities')}>
+            <TrendingUp size={16} /> Opportunities {accOpportunities.length > 0 && <span className="tab-badge">{accOpportunities.length}</span>}
+          </button>
           <button className={`tab ${activeTab === 'services' ? 'active' : ''}`} onClick={() => setActiveTab('services')}><Package size={16} /> Service History</button>
           <button className={`tab ${activeTab === 'invoices' ? 'active' : ''}`} onClick={() => setActiveTab('invoices')}><CreditCard size={16} /> Invoices</button>
           <button className={`tab ${activeTab === 'reminders' ? 'active' : ''}`} onClick={() => setActiveTab('reminders')}><Calendar size={16} /> Reminders {activeTasks.length > 0 && <span className="tab-badge">{activeTasks.length}</span>}</button>
@@ -816,6 +939,273 @@ export default function Accounts({ session, profile }) {
         </div>
 
         <div className="tab-content">
+          {activeTab === 'opportunities' && (
+            <div>
+              {/* Summary Metric Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
+                <div className="card" style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #fff 0%, #fff7ed 100%)', border: '1px solid #fed7aa' }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#9a3412', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Opportunities</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: '#c2410c', marginTop: 4 }}>{accOpportunities.length}</div>
+                </div>
+                <div className="card" style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #fff 0%, #f0fdf4 100%)', border: '1px solid #bbf7d0' }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pipeline Value</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: '#15803d', marginTop: 4 }}>
+                    {profile?.currency || '$'}{accOpportunities.reduce((sum, o) => sum + (Number(o.amount) || 0), 0).toLocaleString()}
+                  </div>
+                </div>
+                <div className="card" style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #fff 0%, #eff6ff 100%)', border: '1px solid #bfdbfe' }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Won / Closed Value</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: '#1d4ed8', marginTop: 4 }}>
+                    {profile?.currency || '$'}{accOpportunities.filter(o => (o.stage || '').toLowerCase().includes('closed') || (o.stage || '').toLowerCase().includes('won')).reduce((sum, o) => sum + (Number(o.amount) || 0), 0).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Opportunities List Card */}
+              <div className="card" style={{ padding: 0 }}>
+                <div style={{ padding: 20, borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Account Opportunities</h3>
+                  <button className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => handleOpenOppModal()}>
+                    <Plus size={14} /> Add Opportunity
+                  </button>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc' }}>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, width: 30 }}></th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12 }}>Deal Name</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12 }}>Stage</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12 }}>Amount</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12 }}>Quotes / Invoices</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12 }}>Close Date</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 12 }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {accOpportunities.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'center', padding: '48px 20px', color: '#94a3b8' }}>
+                            <TrendingUp size={36} style={{ margin: '0 auto 12px', opacity: 0.4, display: 'block' }} />
+                            <div style={{ fontSize: 15, fontWeight: 700, color: '#475569', marginBottom: 4 }}>No opportunities found for this account</div>
+                            <div style={{ fontSize: 13, marginBottom: 16 }}>Create a new deal to track pipeline progress and revenue.</div>
+                            <button className="btn btn-primary btn-sm" onClick={() => handleOpenOppModal()}>
+                              <Plus size={14} style={{ marginRight: 6 }} /> Add First Opportunity
+                            </button>
+                          </td>
+                        </tr>
+                      ) : (
+                        accOpportunities.map(opp => {
+                          const stageColors = {
+                            prospecting: { bg: '#eff6ff', color: '#1d4ed8' },
+                            scoping: { bg: '#f5f3ff', color: '#6d28d9' },
+                            negotiation: { bg: '#fffbeb', color: '#b45309' },
+                            legal: { bg: '#fdf2f8', color: '#be185d' },
+                            contract: { bg: '#f0fdfa', color: '#0f766e' },
+                            closed: { bg: '#f0fdf4', color: '#15803d' },
+                            closed_won: { bg: '#f0fdf4', color: '#15803d' },
+                            closed_lost: { bg: '#fef2f2', color: '#b91c1c' }
+                          }
+                          const stageKey = (opp.stage || '').toLowerCase().replace(' ', '_')
+                          const stColor = stageColors[stageKey] || { bg: '#f1f5f9', color: '#475569' }
+
+                          // Parse linked quotes/invoices from the joined data
+                          const linkedQuotes = (opp.quotes || []).filter(q => {
+                            // Quotes module stores JSON in quote_name
+                            try { JSON.parse(q.quote_name); return true } catch { return false }
+                          })
+                          const linkedInvoices = (opp.quotes || []).filter(q => {
+                            // Invoices store plain text in quote_name
+                            try { JSON.parse(q.quote_name); return false } catch { return true }
+                          })
+                          const totalLinked = linkedQuotes.length + linkedInvoices.length
+                          const isExpanded = expandedOppId === opp.id
+
+                          const parseQName = (raw) => {
+                            if (!raw) return ''
+                            try { const p = JSON.parse(raw); return p.name || raw } catch { return raw }
+                          }
+
+                          return (
+                            <React.Fragment key={opp.id}>
+                            <tr style={{ borderTop: '1px solid #f1f5f9', cursor: totalLinked > 0 ? 'pointer' : 'default', background: isExpanded ? '#fffbf5' : 'transparent', transition: 'background 0.2s' }}
+                              onClick={() => totalLinked > 0 && setExpandedOppId(isExpanded ? null : opp.id)}
+                            >
+                              <td style={{ padding: '14px 8px 14px 16px', width: 30 }}>
+                                {totalLinked > 0 ? (
+                                  isExpanded ? <ChevronDown size={16} style={{ color: '#f37a23' }} /> : <ChevronRight size={16} style={{ color: '#94a3b8' }} />
+                                ) : (
+                                  <span style={{ display: 'inline-block', width: 16 }} />
+                                )}
+                              </td>
+                              <td style={{ padding: '14px 16px' }}>
+                                <span
+                                  style={{ fontWeight: 800, color: '#f37a23', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                                  onClick={(e) => { e.stopPropagation(); navigate('/dashboard/opportunities', { state: { openId: opp.id } }) }}
+                                  title="View in Opportunities Module"
+                                >
+                                  {opp.name}
+                                  <ExternalLink size={12} style={{ opacity: 0.6 }} />
+                                </span>
+                              </td>
+                              <td style={{ padding: '14px 16px' }}>
+                                <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 12, background: stColor.bg, color: stColor.color, fontWeight: 800, textTransform: 'capitalize' }}>
+                                  {opp.stage || 'Prospecting'}
+                                </span>
+                              </td>
+                              <td style={{ padding: '14px 16px', fontWeight: 800, color: '#1e293b' }}>
+                                {profile?.currency || '$'}{Number(opp.amount || 0).toLocaleString()}
+                              </td>
+                              <td style={{ padding: '14px 16px' }}>
+                                {totalLinked > 0 ? (
+                                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                    {linkedQuotes.length > 0 && (
+                                      <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 10, background: '#eff6ff', color: '#1d4ed8', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                        <FileText size={11} /> {linkedQuotes.length} Quote{linkedQuotes.length > 1 ? 's' : ''}
+                                      </span>
+                                    )}
+                                    {linkedInvoices.length > 0 && (
+                                      <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 10, background: '#f0fdf4', color: '#15803d', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                        <Receipt size={11} /> {linkedInvoices.length} Invoice{linkedInvoices.length > 1 ? 's' : ''}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span style={{ fontSize: 12, color: '#94a3b8' }}>—</span>
+                                )}
+                              </td>
+                              <td style={{ padding: '14px 16px', fontSize: 13, color: '#64748b' }}>
+                                {opp.closed_date ? new Date(opp.closed_date).toLocaleDateString() : '—'}
+                              </td>
+                              <td style={{ padding: '14px 16px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                                <button
+                                  className="btn-icon"
+                                  style={{ marginRight: 6 }}
+                                  onClick={() => navigate('/dashboard/opportunities', { state: { openId: opp.id } })}
+                                  title="Open in Deals module"
+                                >
+                                  <ExternalLink size={15} />
+                                </button>
+                                <button
+                                  className="btn-icon"
+                                  style={{ marginRight: 6 }}
+                                  onClick={() => handleOpenOppModal(opp)}
+                                  title="Edit Opportunity"
+                                >
+                                  <Edit2 size={15} />
+                                </button>
+                                {isAdmin && (
+                                  <button
+                                    className="btn-icon text-danger"
+                                    onClick={() => handleDeleteOpportunity(opp.id, opp.name)}
+                                    title="Delete Opportunity"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+
+                            {/* Expanded: Linked Quotes & Invoices */}
+                            {isExpanded && totalLinked > 0 && (
+                              <tr>
+                                <td colSpan={7} style={{ padding: 0, background: '#fefcf9' }}>
+                                  <div style={{ padding: '12px 20px 16px 52px', borderBottom: '2px solid #fed7aa' }}>
+                                    {/* Linked Quotes */}
+                                    {linkedQuotes.length > 0 && (
+                                      <div style={{ marginBottom: linkedInvoices.length > 0 ? 16 : 0 }}>
+                                        <div style={{ fontSize: 11, fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                          <FileText size={13} /> Linked Quotes
+                                        </div>
+                                        <div style={{ display: 'grid', gap: 8 }}>
+                                          {linkedQuotes.map(q => {
+                                            const qMeta = (() => { try { const p = JSON.parse(q.quote_name); return p } catch { return { name: q.quote_name, status: 'Draft' } } })()
+                                            const statusColors = { Draft: { bg: '#f1f5f9', color: '#475569' }, Sent: { bg: '#eff6ff', color: '#1d4ed8' }, Approved: { bg: '#f0fdf4', color: '#15803d' }, Accepted: { bg: '#f0fdf4', color: '#15803d' }, Rejected: { bg: '#fef2f2', color: '#b91c1c' } }
+                                            const sCol = statusColors[qMeta.status] || statusColors.Draft
+                                            return (
+                                              <div key={q.id}
+                                                onClick={() => navigate('/dashboard/quotes', { state: { openId: q.id } })}
+                                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.15s' }}
+                                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 0 0 2px #dbeafe' }}
+                                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none' }}
+                                                title="Open in Quotes module"
+                                              >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                  <div style={{ width: 30, height: 30, borderRadius: 8, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <FileText size={14} style={{ color: '#3b82f6' }} />
+                                                  </div>
+                                                  <div>
+                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{qMeta.name || 'Untitled Quote'}</div>
+                                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{q.created_at ? new Date(q.created_at).toLocaleDateString() : ''}</div>
+                                                  </div>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                  <span style={{ fontWeight: 800, fontSize: 13, color: '#1e293b' }}>{profile?.currency || '$'}{Number(q.total_price || 0).toLocaleString()}</span>
+                                                  <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 10, background: sCol.bg, color: sCol.color, fontWeight: 800 }}>{qMeta.status || 'Draft'}</span>
+                                                  <ExternalLink size={13} style={{ color: '#94a3b8' }} />
+                                                </div>
+                                              </div>
+                                            )
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Linked Invoices */}
+                                    {linkedInvoices.length > 0 && (
+                                      <div>
+                                        <div style={{ fontSize: 11, fontWeight: 800, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                          <Receipt size={13} /> Linked Invoices
+                                        </div>
+                                        <div style={{ display: 'grid', gap: 8 }}>
+                                          {linkedInvoices.map(inv => {
+                                            const invName = parseQName(inv.quote_name)
+                                            const invNo = inv.invoice_number || `INV-${inv.id.slice(0,6).toUpperCase()}`
+                                            const invStatusColors = { Paid: { bg: '#dcfce3', color: '#166534' }, Unpaid: { bg: '#fef9c3', color: '#854d0e' }, Overdue: { bg: '#fee2e2', color: '#991b1b' } }
+                                            const isCol = invStatusColors[inv.status] || invStatusColors.Unpaid
+                                            return (
+                                              <div key={inv.id}
+                                                onClick={() => navigate('/dashboard/invoices', { state: { openId: inv.id } })}
+                                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.15s' }}
+                                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#22c55e'; e.currentTarget.style.boxShadow = '0 0 0 2px #dcfce7' }}
+                                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none' }}
+                                                title="Open in Invoices module"
+                                              >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                  <div style={{ width: 30, height: 30, borderRadius: 8, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <Receipt size={14} style={{ color: '#22c55e' }} />
+                                                  </div>
+                                                  <div>
+                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{invName || invNo}</div>
+                                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{invNo} • {inv.expires_at ? `Due: ${new Date(inv.expires_at).toLocaleDateString()}` : (inv.created_at ? new Date(inv.created_at).toLocaleDateString() : '')}</div>
+                                                  </div>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                  <span style={{ fontWeight: 800, fontSize: 13, color: '#1e293b' }}>{profile?.currency || '$'}{Number(inv.total_price || 0).toLocaleString()}</span>
+                                                  <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 10, background: isCol.bg, color: isCol.color, fontWeight: 800 }}>{inv.status || 'Unpaid'}</span>
+                                                  <ExternalLink size={13} style={{ color: '#94a3b8' }} />
+                                                </div>
+                                              </div>
+                                            )
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                            </React.Fragment>
+                          )
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'services' && (
             <div className="card" style={{ padding: 0 }}>
               <div style={{ padding: 20, borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -926,14 +1316,14 @@ export default function Accounts({ session, profile }) {
                   {accInvoices.map(inv => (
                     <tr key={inv.id} style={{ borderTop: '1px solid #f1f5f9' }}>
                       <td style={{ padding: 15, fontWeight: 600 }}>{inv.invoice_number || `INV-${inv.id.slice(0,6).toUpperCase()}`}</td>
-                      <td style={{ padding: 15 }}>{inv.quote_name.replace('Service Invoice: ', '')}</td>
+                      <td style={{ padding: 15 }}>{parseQName(inv.quote_name)}</td>
                       <td style={{ padding: 15, fontWeight: 800 }}>{profile?.currency || '$'}{Number(inv.total_price).toLocaleString()}</td>
                       <td style={{ padding: 15 }}>
                         <button onClick={() => handleStatusToggle(inv)} className={`badge`} style={{ border: 'none', cursor: 'pointer', background: inv.status === 'Paid' ? '#dcfce3' : inv.status === 'Overdue' ? '#fee2e2' : '#fef9c3', color: inv.status === 'Paid' ? '#166534' : inv.status === 'Overdue' ? '#991b1b' : '#854d0e', fontWeight: 800 }}>{inv.status || 'Unpaid'}</button>
                       </td>
                       <td style={{ padding: 15, textAlign: 'right' }}>
-                        <button className="btn-icon" style={{ marginRight: 8 }} onClick={() => handleOpenInvoiceModal(inv)} title="Edit Invoice"><Edit2 size={16} /></button>
-                        <button className="btn-icon" onClick={() => downloadInvoicePDF(inv)}><Download size={18} /></button>
+                        <button className="btn-icon" style={{ marginRight: 8, color: '#2563eb' }} onClick={() => handleOpenInvoiceModal(inv)} title="Open Invoice"><Eye size={16} /></button>
+                        <button className="btn-icon" onClick={() => downloadInvoicePDF(inv)} title="Download PDF"><Download size={18} /></button>
                       </td>
                     </tr>
                   ))}
@@ -1211,6 +1601,100 @@ export default function Accounts({ session, profile }) {
           </div>
         )}
 
+        {isOppModalOpen && (
+          <div className="modal-overlay">
+            <div className="modal" style={{ maxWidth: 540 }}>
+              <div className="modal-header">
+                <h2 className="modal-title">
+                  {editingOpp ? 'Edit Opportunity' : 'Add Opportunity'}
+                </h2>
+                <button className="modal-close" onClick={() => setIsOppModalOpen(false)}>✕</button>
+              </div>
+              <form onSubmit={handleSaveOpportunity}>
+                <div style={{ display: 'grid', gap: 16, padding: '20px 0' }}>
+                  <div>
+                    <label className="form-label" style={labelStyle}>Account / Customer</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={selectedAccount.account_name}
+                      disabled
+                      style={{ background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="form-label" style={labelStyle}>Opportunity Name *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. Enterprise License Expansion"
+                      value={oppFormData.name}
+                      onChange={e => setOppFormData({ ...oppFormData, name: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <label className="form-label" style={labelStyle}>Deal Amount ({profile?.currency || '$'})</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        className="form-input"
+                        placeholder="0"
+                        value={oppFormData.amount}
+                        onChange={e => setOppFormData({ ...oppFormData, amount: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label" style={labelStyle}>Stage</label>
+                      <select
+                        className="form-input"
+                        value={oppFormData.stage}
+                        onChange={e => setOppFormData({ ...oppFormData, stage: e.target.value })}
+                      >
+                        {OPP_STAGES.map(stg => (
+                          <option key={stg} value={stg}>{stg}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <label className="form-label" style={labelStyle}>Expected Close Date</label>
+                      <input
+                        type="date"
+                        className="form-input"
+                        value={oppFormData.closed_date}
+                        onChange={e => setOppFormData({ ...oppFormData, closed_date: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label" style={labelStyle}>Owner</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={oppFormData.owner}
+                        onChange={e => setOppFormData({ ...oppFormData, owner: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-actions">
+                  <button type="button" className="btn btn-secondary" onClick={() => setIsOppModalOpen(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Save size={18} /> {editingOpp ? 'Update Opportunity' : 'Create Opportunity'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
       <FieldBuilderModal
         module="service_history"
         businessId={session.user.id}
@@ -1300,6 +1784,18 @@ export default function Accounts({ session, profile }) {
                     )
                   })}
                   <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                    <button
+                      className="btn btn-sm btn-secondary"
+                      style={{ marginRight: 8, fontSize: 12, padding: '4px 10px' }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedAccount(acc)
+                        setActiveTab('opportunities')
+                      }}
+                      title="View Account Opportunities"
+                    >
+                      📈 Deals
+                    </button>
                     {!isB2C && (
                       <button
                         className="btn btn-sm btn-secondary"
