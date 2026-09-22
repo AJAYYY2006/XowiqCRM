@@ -57,6 +57,7 @@ export const IMPORT_CONFIGS = {
       { key: 'name', label: 'Contact Name', required: true, type: 'text', aliases: ['name', 'contact', 'contact name', 'full name', 'person', 'person name'] },
       { key: 'email', label: 'Email', type: 'email', aliases: EMAIL_ALIASES },
       { key: 'phone', label: 'Phone', type: 'phone', aliases: PHONE_ALIASES },
+      { key: 'gender', label: 'Gender', type: 'text', aliases: ['gender', 'sex'] },
       {
         key: 'account_name', label: 'Account Name', type: 'lookup',
         aliases: ['account', 'account name', 'company', 'company name', 'organization', 'organisation', 'customer', 'customer name'],
@@ -65,8 +66,8 @@ export const IMPORT_CONFIGS = {
       { key: 'contact_owner', label: 'Contact Owner', type: 'text', aliases: ['contact owner', ...OWNER_ALIASES], ownerDefault: true }
     ],
     sampleRows: [
-      { 'Contact Name': 'Anita Desai', Email: 'anita@acme.com', Phone: '+91 98765 11111', 'Account Name': 'Acme Corp', 'Contact Owner': '' },
-      { 'Contact Name': 'Vikram Rao', Email: 'vikram@globex.in', Phone: '+91 98765 22222', 'Account Name': 'Globex', 'Contact Owner': '' }
+      { 'Contact Name': 'Anita Desai', Email: 'anita@acme.com', Phone: '+91 98765 11111', Gender: 'Female', 'Account Name': 'Acme Corp', 'Contact Owner': '' },
+      { 'Contact Name': 'Vikram Rao', Email: 'vikram@globex.in', Phone: '+91 98765 22222', Gender: 'Male', 'Account Name': 'Globex', 'Contact Owner': '' }
     ]
   },
 
@@ -86,14 +87,12 @@ export const IMPORT_CONFIGS = {
         synonyms: { active: 'Active', inactive: 'Inactive', new: 'New', prospecting: 'prospect', client: 'customer' },
         default: 'Active'
       },
-      { key: 'gender', label: 'Gender', type: 'text', aliases: ['gender', 'sex'] },
-      { key: 'date_of_birth', label: 'Date of Birth', type: 'date', aliases: ['date of birth', 'dob', 'birth date', 'birthday', 'born'] },
       { key: 'notes', label: 'Notes', type: 'text', aliases: ['notes', 'note', 'remarks', 'comments', 'description'] },
       { key: 'account_owner', label: 'Account Owner', type: 'text', aliases: ['account owner', ...OWNER_ALIASES], ownerDefault: true }
     ],
     sampleRows: [
-      { 'Account Name': 'Acme Corp', Email: 'hello@acme.com', Phone: '+91 80 4000 1000', Address: 'Bengaluru, KA', Status: 'Active', Gender: '', 'Date of Birth': '', Notes: 'Key account', 'Account Owner': '' },
-      { 'Account Name': 'Meera Nair', Email: 'meera@example.com', Phone: '+91 98765 33333', Address: 'Kochi, KL', Status: 'New', Gender: 'Female', 'Date of Birth': '1990-05-14', Notes: 'Walk-in customer', 'Account Owner': '' }
+      { 'Account Name': 'Acme Corp', Email: 'hello@acme.com', Phone: '+91 80 4000 1000', Address: 'Bengaluru, KA', Status: 'Active', Notes: 'Key account', 'Account Owner': '' },
+      { 'Account Name': 'Meera Nair Enterprises', Email: 'contact@meera.com', Phone: '+91 98765 33333', Address: 'Kochi, KL', Status: 'New', Notes: 'Enterprise client', 'Account Owner': '' }
     ]
   },
 

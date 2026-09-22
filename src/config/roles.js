@@ -10,21 +10,18 @@ export const ROLES = {
   SALES_REP: 'sales_rep',
   SUPPORT_AGENT: 'agent',
   SUPPORT_MANAGER: 'support_agent',
-  B2C_OWNER: 'b2c',
-  VIEWER: 'user',
-  STAFF: 'viewer'
+  B2C_OWNER: 'b2c'
 }
 
 /**
  * Roles a Super Admin can assign when creating or editing a user.
- * Mirrors the five roles shown in the "Switch Active Role" menu.
+ * Mirrors the four roles shown in the "Switch Active Role" menu.
  */
 export const ASSIGNABLE_ROLES = [
   { value: 'admin', label: '👑 Super Admin' },
   { value: 'manager', label: '💼 Sales Manager' },
   { value: 'agent', label: '🎧 Support Agent' },
-  { value: 'b2c', label: '🛍️ B2C Store Owner' },
-  { value: 'user', label: '👁️ Staff / Viewer' }
+  { value: 'b2c', label: '🛍️ B2C Store Owner' }
 ]
 
 export const ROLE_DEFINITIONS = {
@@ -76,20 +73,6 @@ export const ROLE_DEFINITIONS = {
     color: '#ec4899',
     description: 'B2C customer lifecycle, stage tracking pipelines, and instant service billing.',
     level: 60,
-  },
-  user: {
-    label: 'Staff Member',
-    badge: '👁️ Member',
-    color: '#10b981',
-    description: 'Standard collaborator view for viewing records and logging assigned tasks.',
-    level: 20,
-  },
-  viewer: {
-    label: 'Viewer / Auditor',
-    badge: '👁️ Viewer',
-    color: '#10b981',
-    description: 'Read-only access to customer directories, reports, and pipelines.',
-    level: 10,
   }
 }
 
@@ -103,9 +86,14 @@ export const MODULE_PERMISSIONS = {
     allowedRoles: ['*'], // All authenticated roles
     minLevel: 10
   },
+  kpis: {
+    name: 'Analytics Dashboard',
+    allowedRoles: ['*'],
+    minLevel: 10
+  },
   leads: {
     name: 'Leads Management',
-    allowedRoles: ['admin', 'administrator', 'manager', 'sales_rep', 'user', 'viewer'],
+    allowedRoles: ['admin', 'administrator', 'manager', 'sales_rep', 'b2c'],
     minLevel: 20
   },
   contacts: {
@@ -120,7 +108,7 @@ export const MODULE_PERMISSIONS = {
   },
   deals: {
     name: 'Deals & Opportunities',
-    allowedRoles: ['admin', 'administrator', 'manager', 'sales_rep', 'user', 'viewer'],
+    allowedRoles: ['admin', 'administrator', 'manager', 'sales_rep'],
     minLevel: 20
   },
   quotes: {
@@ -135,12 +123,12 @@ export const MODULE_PERMISSIONS = {
   },
   services: {
     name: 'Master Services Catalog',
-    allowedRoles: ['admin', 'administrator', 'manager', 'agent', 'support_agent', 'b2c'],
-    minLevel: 40
+    allowedRoles: ['admin', 'administrator', 'manager', 'sales_rep', 'agent', 'support_agent', 'b2c'],
+    minLevel: 20
   },
   tickets: {
     name: 'Customer Support Tickets',
-    allowedRoles: ['admin', 'administrator', 'agent', 'support_agent', 'manager', 'user'],
+    allowedRoles: ['admin', 'administrator', 'agent', 'support_agent', 'manager', 'b2c'],
     minLevel: 20
   },
   tasks: {
@@ -150,7 +138,7 @@ export const MODULE_PERMISSIONS = {
   },
   reports: {
     name: 'Reports & Business Intelligence',
-    allowedRoles: ['admin', 'administrator', 'manager', 'b2c', 'user', 'viewer'],
+    allowedRoles: ['admin', 'administrator', 'manager', 'b2c'],
     minLevel: 20
   },
   users: {
@@ -195,7 +183,7 @@ export function hasModuleAccess(role, moduleId) {
  * Check if a role can perform specific sensitive actions (create/edit/delete/export)
  */
 export function canPerformAction(role, action) {
-  const normRole = String(role || 'user').toLowerCase().trim()
+  const normRole = String(role || 'manager').toLowerCase().trim()
   
   if (normRole === 'admin' || normRole === 'administrator') return true
 
@@ -211,11 +199,11 @@ export function canPerformAction(role, action) {
       return ['admin', 'administrator', 'manager', 'sales_rep', 'b2c'].includes(normRole)
       
     case 'close_tickets':
-      return ['admin', 'administrator', 'agent', 'support_agent', 'manager'].includes(normRole)
+      return ['admin', 'administrator', 'agent', 'support_agent', 'manager', 'b2c'].includes(normRole)
 
     case 'create_records':
     case 'edit_records':
-      return normRole !== 'viewer'
+      return true
 
     default:
       return true

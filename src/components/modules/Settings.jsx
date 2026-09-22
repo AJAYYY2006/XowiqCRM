@@ -1005,7 +1005,7 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
   const [isAdding, setIsAdding] = useState(false)
   const [creating, setCreating] = useState(false)
 
-  const BLANK_ADD = { name: '', email: '', password: '', role: 'user', phone: '', address: '', age: '', gender: '', date_of_birth: '', date_of_joining: '' }
+  const BLANK_ADD = { name: '', email: '', password: '', role: 'manager', phone: '', address: '', age: '', gender: '', date_of_birth: '', date_of_joining: '' }
   const [addForm, setAddForm] = useState(BLANK_ADD)
   const [addPhoto, setAddPhoto] = useState(null)
   const addPhotoRef = useRef(null)

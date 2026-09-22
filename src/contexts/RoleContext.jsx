@@ -5,8 +5,8 @@ import toast from 'react-hot-toast'
 const RoleContext = createContext(null)
 
 export function RoleProvider({ children, session, profile }) {
-  // Current active role (defaults to profile.role or user_metadata.role or 'user')
-  const baseRole = profile?.role || session?.user?.user_metadata?.role || 'user'
+  // Current active role (defaults to profile.role or user_metadata.role or 'admin')
+  const baseRole = profile?.role || session?.user?.user_metadata?.role || 'admin'
   const [activeRole, setActiveRole] = useState(baseRole)
 
   // Only a Super Admin (as stored in the profile / auth metadata) may change roles.
@@ -22,7 +22,7 @@ export function RoleProvider({ children, session, profile }) {
 
   const roleInfo = useMemo(() => {
     const norm = String(activeRole).toLowerCase()
-    return ROLE_DEFINITIONS[norm] || ROLE_DEFINITIONS.user
+    return ROLE_DEFINITIONS[norm] || ROLE_DEFINITIONS.admin
   }, [activeRole])
 
   const checkModuleAccess = (moduleId) => {

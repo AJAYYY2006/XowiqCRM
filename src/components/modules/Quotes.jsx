@@ -167,7 +167,7 @@ export default function Quotes({ session, profile }) {
     }
   }
   const handleDeleteQuote = async (quote) => {
-    if (!confirm(`Are you sure you want to delete the quote "${quote.quote_name}"?`)) return
+    if (!confirm(`Are you sure you want to delete the quote "${parseQuoteData(quote.quote_name).name}"?`)) return
     
     const toastId = toast.loading('Deleting quote...')
     try {
@@ -216,6 +216,7 @@ export default function Quotes({ session, profile }) {
     const m = parseQuoteData(quote.quote_name)
     const doc = new jsPDF()
     const companyName = session.user.user_metadata?.companyName || 'My Enterprise'
+    const curr = profile?.currency || '₹'
     const oppName = quote.opportunities?.name || ''
     const accName = quote.opportunities?.accounts?.account_name || 'Client'
     
@@ -238,17 +239,17 @@ export default function Quotes({ session, profile }) {
     
     // Line Items
     const tableData = (m.items || []).map(item => [
-      item.desc, 
-      item.qty.toString(), 
-      `$${Number(item.price).toLocaleString()}`, 
-      `$${(item.qty * item.price).toLocaleString()}`
+      item.desc,
+      item.qty.toString(),
+      `${curr}${Number(item.price).toLocaleString()}`,
+      `${curr}${(item.qty * item.price).toLocaleString()}`
     ])
-    
+
     doc.autoTable({
       startY: 90,
-      head: [['Description', 'Qty', 'Unit Price', 'Line Total']],
+      head: [['Description', 'Quantity', `Unit Price (${curr})`, 'Line Total']],
       body: tableData,
-      foot: [['', '', 'Total Due', `$${Number(quote.total_price).toLocaleString()}`]],
+      foot: [['', '', 'Total Due', `${curr}${Number(quote.total_price).toLocaleString()}`]],
       theme: 'grid',
       headStyles: { fillColor: [40, 40, 40] },
       footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' }
@@ -270,8 +271,9 @@ export default function Quotes({ session, profile }) {
   }
 
   if (loading) return <div className="loading-container"><div className="spinner"/></div>
-  
+
   const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
+  const currency = profile?.currency || '₹'
 
   return (
     <div>
@@ -295,8 +297,8 @@ export default function Quotes({ session, profile }) {
              placeholder={t('modules.quotes.searchPlaceholder')} 
              renderItem={(item) => (
                <>
-                 <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{item.quote_name}</div>
-                 <div className="text-muted" style={{ fontSize: '11px' }}>${Number(item.total_price).toLocaleString()}</div>
+                 <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{parseQuoteData(item.quote_name).name || item.quote_name}</div>
+                 <div className="text-muted" style={{ fontSize: '11px' }}>{currency}{Number(item.total_price).toLocaleString()}</div>
                </>
              )}
           />
@@ -310,7 +312,7 @@ export default function Quotes({ session, profile }) {
                 <th>Opportunity</th>
                 <th>Account</th>
                 <th>Expires Date</th>
-                <th style={{ textAlign: 'right' }}>Total Price</th>
+                <th style={{ textAlign: 'right' }}>Total Price ({currency})</th>
                 <th>Created</th>
                 <th style={{ width: 70 }}>Actions</th>
               </tr>
@@ -329,7 +331,7 @@ export default function Quotes({ session, profile }) {
               ) : (
                 quotes.map(quote => (
                   <tr key={quote.id} id={`quote-row-${quote.id}`}>
-                    <td className="fw-bold">{quote.quote_name}</td>
+                    <td className="fw-bold">{parseQuoteData(quote.quote_name).name || quote.quote_name}</td>
                     <td>
                       {quote.opportunities?.id ? (
                         <span 
@@ -363,7 +365,7 @@ export default function Quotes({ session, profile }) {
                       )}
                     </td>
                     <td>{quote.expires_at ? new Date(quote.expires_at).toLocaleDateString() : 'No expiration'}</td>
-                    <td className="fw-bold" style={{ textAlign: 'right' }}>${Number(quote.total_price).toLocaleString()}</td>
+                    <td className="fw-bold" style={{ textAlign: 'right' }}>{currency}{Number(quote.total_price).toLocaleString()}</td>
                     <td className="text-muted">{new Date(quote.created_at).toLocaleDateString()}</td>
                     <td style={{ textAlign: 'right' }}>
                       <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
@@ -441,19 +443,26 @@ export default function Quotes({ session, profile }) {
                   </button>
                 </div>
                 
+                <div style={{ display: 'flex', gap: 12, marginBottom: 6, padding: '0 2px' }}>
+                  <label style={{ flex: 2, fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Description</label>
+                  <label style={{ flex: 1, fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Quantity</label>
+                  <label style={{ flex: 1, fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Price ({currency})</label>
+                  <span style={{ width: 18 }} />
+                </div>
+
                 {formData.items.map((item, idx) => (
                   <div key={idx} style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
                     <input className="form-input" style={{ flex: 2 }} placeholder="Description" value={item.desc} onChange={e => updateItem(idx, 'desc', e.target.value)} required />
-                    <input type="number" min="1" className="form-input" style={{ flex: 1 }} placeholder="Qty" value={item.qty} onChange={e => updateItem(idx, 'qty', e.target.value)} required />
-                    <input type="number" min="0" step="0.01" className="form-input" style={{ flex: 1 }} placeholder="Price" value={item.price} onChange={e => updateItem(idx, 'price', e.target.value)} required />
+                    <input type="number" min="1" className="form-input" style={{ flex: 1 }} placeholder="Quantity" title="Quantity" aria-label="Quantity" value={item.qty} onChange={e => updateItem(idx, 'qty', e.target.value)} required />
+                    <input type="number" min="0" step="0.01" className="form-input" style={{ flex: 1 }} placeholder={`Price (${currency})`} title={`Price (${currency})`} aria-label={`Price in ${currency}`} value={item.price} onChange={e => updateItem(idx, 'price', e.target.value)} required />
                     <button type="button" onClick={() => removeItem(idx)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }} disabled={formData.items.length === 1}>
                       <Minus size={18} />
                     </button>
                   </div>
                 ))}
-                
+
                 <div style={{ textAlign: 'right', fontWeight: 'bold', marginTop: 16, fontSize: 16 }}>
-                  Total Proposal Value: ${formData.total_price.toLocaleString()}
+                  Total Proposal Value: {currency}{formData.total_price.toLocaleString()}
                 </div>
               </div>
 

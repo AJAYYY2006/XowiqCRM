@@ -350,7 +350,7 @@ function UserManagementPanel({ session, profile, onUserCreated }) {
   const [showPassword, setShowPassword] = useState(false)
   const [inlineError, setInlineError] = useState('')
   const [form, setForm] = useState({
-    name: '', email: '', password: '', companyType: profile?.company_type || session.user.user_metadata?.companyType || 'B2B', role: 'user'
+    name: '', email: '', password: '', companyType: profile?.company_type || session.user.user_metadata?.companyType || 'B2B', role: 'manager'
   })
 
   const companyName = profile?.company_name || session.user.user_metadata?.companyName || 'My Company'
@@ -581,7 +581,7 @@ function UserManagementPanel({ session, profile, onUserCreated }) {
         if (onUserCreated) onUserCreated()
       }
 
-      setForm({ name: '', email: '', password: '', companyType: form.companyType, role: 'user' })
+      setForm({ name: '', email: '', password: '', companyType: form.companyType, role: 'manager' })
     } catch (err) {
       toast.error(err.message || t('userMgmt.createFailed'), { id: toastId })
     }
@@ -826,7 +826,7 @@ function TeamRecordsPanel({ session, profile }) {
     else if (activeTab === 'deals') path = 'opportunities'
     else if (activeTab === 'tasks') path = 'tasks'
     else if (activeTab === 'tickets') path = 'tickets'
-    navigate(`/admin/crm/${path}`, { state: { openId: recordId } })
+    navigate(`/dashboard/${path}`, { state: { openId: recordId } })
   }
 
   const filtered = records.filter(r => {
@@ -1175,8 +1175,7 @@ export default function Dashboard({ session }) {
                     { key: 'admin', label: '👑 Super Admin' },
                     { key: 'manager', label: '💼 Sales Manager' },
                     { key: 'agent', label: '🎧 Support Agent' },
-                    { key: 'b2c', label: '🛍️ B2C Store Owner' },
-                    { key: 'user', label: '👁️ Staff / Viewer' }
+                    { key: 'b2c', label: '🛍️ B2C Store Owner' }
                   ].map(r => (
                     <button
                       key={r.key}
@@ -1206,7 +1205,7 @@ export default function Dashboard({ session }) {
           </div>
         </header>
 
-        <div style={{ padding: '32px' }}>
+        <div style={{ padding: '32px', minWidth: 0 }}>
           {/* Protected Sub-routes via RoleGuard */}
           <Routes>
             <Route index element={

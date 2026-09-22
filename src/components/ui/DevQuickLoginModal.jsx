@@ -47,17 +47,6 @@ export const DEV_ACCOUNTS = [
     icon: <ShoppingBag size={20} color="#f472b6" />,
     badgeColor: 'linear-gradient(135deg, #ec4899, #db2777)',
     description: 'B2C customer lifecycle stages, drag-and-drop progress kanban, and instant service billing.'
-  },
-  {
-    id: 'viewer',
-    roleName: 'Team Member / Staff',
-    badge: 'Standard Viewer',
-    name: 'David Chen',
-    email: 'viewer@xowiq.com',
-    password: 'Password@123',
-    icon: <Eye size={20} color="#34d399" />,
-    badgeColor: 'linear-gradient(135deg, #10b981, #059669)',
-    description: 'Standard collaborator view for daily task logging, viewing contacts, deals, and reports.'
   }
 ]
 

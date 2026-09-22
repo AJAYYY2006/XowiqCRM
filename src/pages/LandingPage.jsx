@@ -207,9 +207,9 @@ export default function LandingPage({ session }) {
                 </div>
               </div>
               <div>
-                <h3 className="text-lg font-medium text-slate-900 mb-1">5-Role Access Control</h3>
+                <h3 className="text-lg font-medium text-slate-900 mb-1">Role-Based Access Control</h3>
                 <p className="text-xs font-light text-slate-500 leading-relaxed">
-                  Granular gates for Super Admin, Sales Manager, Support Lead, B2C Owner, and Staff Viewer.
+                  Granular gates for Super Admin, Sales Manager, Support Lead, and B2C Store Owner.
                 </p>
               </div>
             </motion.div>
@@ -529,7 +529,7 @@ export default function LandingPage({ session }) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               {
-                quote: "XOWIQ's 5-role RBAC allowed us to seamlessly onboard our sales reps, support leads, and B2C managers with zero permission conflicts.",
+                quote: "XOWIQ's RBAC allowed us to seamlessly onboard our sales reps, support leads, and B2C managers with zero permission conflicts.",
                 author: "Elena Rostova",
                 role: "VP of Sales, CloudScale",
                 avatar: "E"

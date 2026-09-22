@@ -68,10 +68,12 @@ export default function AppSidebar({
             { id: 'leads', path: 'leads', label: t('sidebar.marketing', 'Leads'), icon: <UserSquare2 size={18} strokeWidth={1.75} />, badge: null },
             { id: 'accounts', path: 'accounts', label: t('sidebar.customers', 'Accounts'), icon: <Building2 size={18} strokeWidth={1.75} />, badge: null },
             { id: 'contacts', path: 'contacts', label: t('sidebar.contacts', 'Contacts'), icon: <Users size={18} strokeWidth={1.75} />, badge: null },
+            { id: 'deals', path: 'opportunities', label: t('sidebar.opportunities', 'Opportunities'), icon: <Briefcase size={18} strokeWidth={1.75} />, badge: null },
             { id: 'tasks', path: 'tasks', label: t('sidebar.tasks', 'Tasks'), icon: <CheckSquare size={18} strokeWidth={1.75} />, badge: null },
-            ...(isB2C ? [{ id: 'services', path: 'services', label: t('sidebar.services', 'Services'), icon: <Package size={18} strokeWidth={1.75} />, badge: null }] : []),
+            { id: 'services', path: 'services', label: t('sidebar.services', 'Services'), icon: <Package size={18} strokeWidth={1.75} />, badge: null },
             { id: 'tickets', path: 'tickets', label: t('sidebar.inbox', 'Tickets'), icon: <Ticket size={18} strokeWidth={1.75} />, badge: null },
             { id: 'quotes', path: 'quotes', label: t('sidebar.quotes', 'Quotes'), icon: <FileText size={18} strokeWidth={1.75} />, badge: null },
+            { id: 'invoices', path: 'invoices', label: t('sidebar.invoices', 'Invoices'), icon: <Receipt size={18} strokeWidth={1.75} />, badge: null },
             { id: 'team_records', path: 'team_records', label: t('dashboard.teamRecords', 'Team Stream'), icon: <ClipboardList size={18} strokeWidth={1.75} />, section: 'team_records', badge: null },
             { id: 'users', path: 'users', label: t('dashboard.userManagement', 'Team Users'), icon: <Users size={18} strokeWidth={1.75} />, section: 'users', badge: null },
           ]
@@ -84,6 +86,7 @@ export default function AppSidebar({
         {
           title: 'DASHBOARD',
           items: [
+            { id: 'kpis', path: '', label: t('dashboard.kpiDashboard', 'KPI Dashboard'), icon: <TrendingUp size={18} strokeWidth={1.75} />, badge: null },
             { id: 'reports', path: 'reports', label: t('sidebar.analytics', 'Analytics'), icon: <BarChart3 size={18} strokeWidth={1.75} />, badge: null },
           ].filter(item => hasAccess(item.id))
         },
@@ -92,7 +95,9 @@ export default function AppSidebar({
           items: [
             { id: 'accounts', path: 'accounts', label: t('sidebar.customers', 'Accounts'), icon: <Building2 size={18} strokeWidth={1.75} />, badge: null },
             { id: 'leads', path: 'leads', label: t('sidebar.marketing', 'Leads'), icon: <UserSquare2 size={18} strokeWidth={1.75} />, badge: null },
+            { id: 'deals', path: 'opportunities', label: t('sidebar.opportunities', 'Opportunities'), icon: <Briefcase size={18} strokeWidth={1.75} />, badge: null },
             { id: 'tasks', path: 'tasks', label: t('sidebar.tasks', 'Tasks'), icon: <CheckSquare size={18} strokeWidth={1.75} />, badge: null },
+            { id: 'services', path: 'services', label: t('sidebar.services', 'Services'), icon: <Package size={18} strokeWidth={1.75} />, badge: null },
             { id: 'contacts', path: 'contacts', label: t('sidebar.contacts', 'Contacts'), icon: <Users size={18} strokeWidth={1.75} />, badge: null },
             { id: 'quotes', path: 'quotes', label: t('sidebar.quotes', 'Quotes'), icon: <FileText size={18} strokeWidth={1.75} />, badge: null },
             { id: 'invoices', path: 'invoices', label: t('sidebar.invoices', 'Invoices'), icon: <Receipt size={18} strokeWidth={1.75} />, badge: null },
@@ -106,13 +111,15 @@ export default function AppSidebar({
         {
           title: 'DASHBOARD',
           items: [
-            { id: 'reports', path: 'reports', label: t('sidebar.analytics', 'Analytics'), icon: <BarChart3 size={18} strokeWidth={1.75} />, badge: null },
+            { id: 'kpis', path: '', label: t('dashboard.analyticsDashboard', 'Analytics Dashboard'), icon: <BarChart3 size={18} strokeWidth={1.75} />, badge: null },
+            { id: 'reports', path: 'reports', label: t('sidebar.reports', 'Reports'), icon: <TrendingUp size={18} strokeWidth={1.75} />, badge: null },
           ].filter(item => hasAccess(item.id))
         },
         {
           title: 'STORE & OPS',
           items: [
-            { id: 'accounts', path: 'accounts', label: t('sidebar.customers', 'Accounts'), icon: <Users size={18} strokeWidth={1.75} />, badge: null },
+            { id: 'accounts', path: 'accounts', label: t('sidebar.customers', 'Accounts'), icon: <Building2 size={18} strokeWidth={1.75} />, badge: null },
+            { id: 'contacts', path: 'contacts', label: t('sidebar.contacts', 'Contacts'), icon: <Users size={18} strokeWidth={1.75} />, badge: null },
             { id: 'leads', path: 'leads', label: t('sidebar.marketing', 'Leads'), icon: <UserSquare2 size={18} strokeWidth={1.75} />, badge: null },
             { id: 'tasks', path: 'tasks', label: t('sidebar.tasks', 'Tasks'), icon: <CheckSquare size={18} strokeWidth={1.75} />, badge: null },
             { id: 'services', path: 'services', label: t('sidebar.services', 'Services'), icon: <Package size={18} strokeWidth={1.75} />, badge: null },
@@ -135,27 +142,28 @@ export default function AppSidebar({
           title: 'SUPPORT DESK',
           items: [
             { id: 'accounts', path: 'accounts', label: t('sidebar.customers', 'Accounts'), icon: <Building2 size={18} strokeWidth={1.75} />, badge: null },
-            { id: 'leads', path: 'leads', label: t('sidebar.marketing', 'Leads'), icon: <UserSquare2 size={18} strokeWidth={1.75} />, badge: null },
             { id: 'tickets', path: 'tickets', label: t('sidebar.inbox', 'Tickets'), icon: <Ticket size={18} strokeWidth={1.75} />, badge: null },
             { id: 'tasks', path: 'tasks', label: t('sidebar.tasks', 'Tasks'), icon: <CheckSquare size={18} strokeWidth={1.75} />, badge: null },
-            ...(isB2C ? [{ id: 'services', path: 'services', label: t('sidebar.services', 'Services'), icon: <Package size={18} strokeWidth={1.75} />, badge: null }] : []),
+            { id: 'services', path: 'services', label: t('sidebar.services', 'Services'), icon: <Package size={18} strokeWidth={1.75} />, badge: null },
           ].filter(item => hasAccess(item.id))
         }
       ]
     }
 
-    // Default / Staff / Viewer
+    // Default Fallback
     return [
       {
         title: 'DASHBOARD',
         items: [
-          { id: 'reports', path: 'reports', label: t('sidebar.analytics', 'Analytics'), icon: <BarChart3 size={18} strokeWidth={1.75} />, badge: null },
+          { id: 'kpis', path: '', label: t('dashboard.analyticsDashboard', 'Analytics Dashboard'), icon: <BarChart3 size={18} strokeWidth={1.75} />, badge: null },
+          { id: 'reports', path: 'reports', label: t('sidebar.reports', 'Reports'), icon: <TrendingUp size={18} strokeWidth={1.75} />, badge: null },
         ].filter(item => hasAccess(item.id))
       },
       {
         title: 'WORKSPACE',
         items: [
           { id: 'contacts', path: 'contacts', label: t('sidebar.contacts', 'Contacts'), icon: <Users size={18} strokeWidth={1.75} />, badge: null },
+          { id: 'deals', path: 'opportunities', label: t('sidebar.opportunities', 'Opportunities'), icon: <Briefcase size={18} strokeWidth={1.75} />, badge: null },
           { id: 'tasks', path: 'tasks', label: t('sidebar.tasks', 'Tasks'), icon: <CheckSquare size={18} strokeWidth={1.75} />, badge: null },
         ].filter(item => hasAccess(item.id))
       }
@@ -192,7 +200,7 @@ export default function AppSidebar({
       if (item.id === 'team_records' && currentPath === 'team_records') return true
       return currentPath === item.path
     }
-    return (!currentPath && item.path === '') || (currentPath === item.path)
+    return (!currentPath && item.path === '') || (currentPath === item.path) || (item.id === 'kpis' && (currentPath === 'kpi' || !currentPath))
   }
 
   const userName = profile?.name || session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'Alex Rivera'
@@ -630,8 +638,7 @@ export default function AppSidebar({
                   { key: 'admin', label: 'Super Admin', icon: '👑' },
                   { key: 'manager', label: 'Sales Manager', icon: '💼' },
                   { key: 'agent', label: 'Support Agent', icon: '🎧' },
-                  { key: 'b2c', label: 'B2C Store Owner', icon: '🛍️' },
-                  { key: 'user', label: 'Staff / Viewer', icon: '👁️' }
+                  { key: 'b2c', label: 'B2C Store Owner', icon: '🛍️' }
                 ].map((r) => (
                   <button
                     key={r.key}

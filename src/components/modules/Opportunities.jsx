@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Plus, Pencil, CheckCircle, Trash2, ArrowLeft, Package, LayoutGrid, 
-  ChevronRight, FileText, Receipt, CheckSquare, Activity, ClipboardList, TrendingUp, Settings
+  ChevronRight, FileText, Receipt, CheckSquare, Activity, ClipboardList, TrendingUp, Settings, Check
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LocalSearch from '../ui/LocalSearch'
@@ -215,7 +215,7 @@ export default function Opportunities({ session, profile }) {
 
           <div className="card" style={{ marginBottom: 24 }}>
             <div className="detail-header">
-              <div className="detail-avatar" style={{ backgroundColor: 'var(--primary)', color: 'white' }}>
+              <div className="detail-avatar" style={{ backgroundColor: 'var(--accent, #ff5900)', color: '#ffffff' }}>
                  <TrendingUp size={24} />
               </div>
               <div className="detail-info">
@@ -237,7 +237,7 @@ export default function Opportunities({ session, profile }) {
               </div>
             </div>
 
-            <div className="detail-grid" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--border-color)' }}>
+            <div className="detail-grid" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--border-subtle, #e2e8f0)' }}>
               <div className="detail-field">
                 <label>Deal ID</label>
                 <span className="font-mono" style={{ fontSize: 11 }}>{viewingOpp.id}</span>
@@ -284,15 +284,42 @@ export default function Opportunities({ session, profile }) {
                       <div key={s} className="flex items-center gap-2 flex-1 min-w-[130px]">
                         <div 
                            onClick={() => updateStage(s)}
-                           className={`flex flex-col items-center justify-center p-3 rounded-lg cursor-pointer transition-all border
-                             ${isActive ? 'bg-primary text-white border-primary fw-bold' : 
-                               isComplete ? 'bg-success-light text-success border-success-light' : 
-                               'bg-secondary-light text-muted border-transparent hover:border-border-color'}`}
-                           style={{ width: '100%', height: 48 }}
+                           className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl cursor-pointer transition-all select-none"
+                           style={{
+                             width: '100%',
+                             minHeight: 46,
+                             background: isActive 
+                               ? 'linear-gradient(135deg, #ff5900 0%, #ea580c 100%)'
+                               : isComplete 
+                                 ? 'rgba(16, 185, 129, 0.12)' 
+                                 : 'var(--bg-primary, #f8fafc)',
+                             color: isActive 
+                               ? '#ffffff' 
+                               : isComplete 
+                                 ? '#059669' 
+                                 : 'var(--text-primary, #1e293b)',
+                             border: isActive 
+                               ? '1.5px solid #ff5900' 
+                               : isComplete 
+                                 ? '1.5px solid rgba(16, 185, 129, 0.35)' 
+                                 : '1.5px solid var(--border-subtle, #e2e8f0)',
+                             boxShadow: isActive ? '0 4px 12px rgba(255, 89, 0, 0.28)' : 'none',
+                           }}
                         >
-                           <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>{s}</span>
+                           {isComplete && <Check size={13} strokeWidth={2.5} style={{ color: '#059669', flexShrink: 0 }} />}
+                           <span style={{ 
+                             fontSize: 11, 
+                             fontWeight: isActive ? 800 : isComplete ? 700 : 600, 
+                             textTransform: 'uppercase',
+                             letterSpacing: '0.04em',
+                             color: 'inherit'
+                           }}>
+                             {s}
+                           </span>
                         </div>
-                        {idx < stages.length - 1 && <ChevronRight size={14} className="text-muted" />}
+                        {idx < stages.length - 1 && (
+                          <ChevronRight size={14} style={{ color: 'var(--text-muted, #94a3b8)', flexShrink: 0 }} />
+                        )}
                       </div>
                     )
                   })}
@@ -363,7 +390,7 @@ export default function Opportunities({ session, profile }) {
                            <tfoot>
                              <tr style={{ background: 'var(--bg-secondary)' }}>
                                 <td colSpan="3" style={{ textAlign: 'right', fontWeight: 700 }}>Grand Total:</td>
-                                <td className="fw-bold" style={{ color: 'var(--primary)', fontSize: 16 }}>
+                                 <td className="fw-bold" style={{ color: 'var(--accent, #ff5900)', fontSize: 16 }}>
                                   {profile?.currency || '$'}{products.reduce((sum, p) => sum + p.total, 0).toLocaleString()}
                                 </td>
                              </tr>

@@ -60,7 +60,8 @@ export default function Leads({ session, profile }) {
         { label: 'Lead Name', field_key: 'lead_name', field_type: 'text', is_core: true, order: 0 },
         { label: 'Contact Number', field_key: 'contact_number', field_type: 'text', is_core: true, order: 1 },
         { label: 'Email Address', field_key: 'email', field_type: 'text', is_core: true, order: 2 },
-        { label: 'Company Name', field_key: 'company', field_type: 'text', is_core: true, order: 3 }
+        { label: 'Company Name', field_key: 'company', field_type: 'text', is_core: true, order: 3 },
+        { label: 'Gender', field_key: 'gender', field_type: 'dropdown', options: ['Male', 'Female', 'Other'], is_core: true, order: 4 }
       ]
 
       let finalData = existing || []
@@ -77,7 +78,7 @@ export default function Leads({ session, profile }) {
           is_core: true,
           display_order: c.order,
           is_required: c.field_key === 'lead_name' || c.field_key === 'contact_number',
-          show_in_list: true
+          show_in_list: c.field_key !== 'gender'
         }))
         const { data: inserted } = await supabase.from('custom_field_configs').insert(toInsert).select()
         if (inserted) {
@@ -290,10 +291,13 @@ export default function Leads({ session, profile }) {
         .insert([{
           user_id: session.user.id,
           name: leadData.name,
-          email: leadData.email || null,
+          email: leadData.email || leadData.custom_data?.email || null,
+          phone: leadData.contact_number || leadData.custom_data?.contact_number || null,
+          gender: leadData.custom_data?.gender || null,
           contact_owner: leadData.lead_owner || null,
           account_id: accountId,
-          lead_id: leadData.id
+          lead_id: leadData.id,
+          custom_data: leadData.custom_data || {}
         }])
         
       if (cErr) throw cErr
@@ -314,26 +318,28 @@ export default function Leads({ session, profile }) {
   }
 
   const handleDeleteLead = async (id, name) => {
-    if (!window.confirm(`Are you sure you want to delete lead "${name}"?`)) return
+    if (!window.confirm(`Are you sure you want to delete lead "${name}"?`)) return false
     const toastId = toast.loading('Deleting lead...')
     try {
       const { error } = await supabase
         .from('leads')
         .delete()
         .eq('id', id)
-      
+
       if (error) throw error
-      
+
       await supabase.from('activities').insert([{
         user_id: session.user.id,
         type: 'Lead Deleted',
         description: `Deleted lead: ${name}`
       }])
-      
+
       toast.success('Lead deleted', { id: toastId })
       fetchLeads()
+      return true
     } catch (error) {
       toast.error(`Error deleting lead: ${error.message}`, { id: toastId })
+      return false
     }
   }
 
@@ -455,6 +461,12 @@ export default function Leads({ session, profile }) {
       toast.success(editingLead ? 'Lead updated' : 'Lead added', { id: toastId })
       setIsModalOpen(false)
       fetchLeads()
+
+      // Keep the open detail view in sync if this lead was edited from there
+      if (editingLead && selectedLead?.id === editingLead.id && formData.status !== 'converted') {
+        const { data: refreshed } = await supabase.from('leads').select('*').eq('id', editingLead.id).single()
+        if (refreshed) setSelectedLead(refreshed)
+      }
     } catch (error) {
       console.error(error)
       if (toastId) toast.error(`Error: ${error.message || 'Failed to save lead'}`, { id: toastId })
@@ -497,6 +509,19 @@ export default function Leads({ session, profile }) {
                   />
                 </div>
                 <div className={`badge badge-${selectedLead.status} mt-2`}>{selectedLead.status}</div>
+              </div>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+                <button className="btn btn-secondary" onClick={() => handleOpenModal(selectedLead)}>
+                  <Edit2 size={14} style={{ marginRight: 6 }} /> Edit
+                </button>
+                {isAdmin && (
+                  <button className="btn btn-secondary text-danger" onClick={async () => {
+                    const deleted = await handleDeleteLead(selectedLead.id, selectedLead.name)
+                    if (deleted) setSelectedLead(null)
+                  }}>
+                    <Trash2 size={14} style={{ marginRight: 6 }} /> Delete
+                  </button>
+                )}
               </div>
             </div>
 
@@ -674,7 +699,7 @@ export default function Leads({ session, profile }) {
                         </td>
                         <td className="font-mono">{lead.unique_id}</td>
                         <td>{lead.lead_owner}</td>
-                        <td>
+                        <td onClick={(e) => e.stopPropagation()}>
                           <select 
                             value={lead.status} 
                             onChange={(e) => handleStatusChange(lead.id, e.target.value, lead)}
@@ -810,7 +835,8 @@ export default function Leads({ session, profile }) {
                           value={formData.custom_data?.[f.field_key] || ''}
                           onChange={e => setFormData({
                             ...formData, 
-                            custom_data: { ...formData.custom_data, [f.field_key]: e.target.value } 
+                            custom_data: { ...formData.custom_data, [f.field_key]: e.target.value },
+                            ...(f.field_key === 'gender' ? { gender: e.target.value } : {})
                           })}
                         >
                           <option value="">Select {f.label}</option>
@@ -902,6 +928,23 @@ export default function Leads({ session, profile }) {
                         })}
                         placeholder="Enter email address..."
                       />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Gender</label>
+                      <select
+                        className="form-input"
+                        value={formData.custom_data?.gender || ''}
+                        onChange={e => setFormData({
+                          ...formData,
+                          gender: e.target.value,
+                          custom_data: { ...formData.custom_data, gender: e.target.value }
+                        })}
+                      >
+                        <option value="">Select Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
                     </div>
                   </>
                 )}

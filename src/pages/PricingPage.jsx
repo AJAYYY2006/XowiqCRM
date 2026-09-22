@@ -16,11 +16,11 @@ export default function PricingPage({ session }) {
     },
     {
       q: "How does the 14-day free trial work?",
-      a: "You get unrestricted access to the Pro tier for 14 days without requiring a credit card. You can test all 5 roles and explore the PDF invoice engine."
+      a: "You get unrestricted access to the Pro tier for 14 days without requiring a credit card. You can test all roles and explore the PDF invoice engine."
     },
     {
-      q: "How does 5-Role RBAC protect my customer data?",
-      a: "Each account tier respects PostgreSQL Row Level Security. Super Admins manage global settings, Sales Leads manage opportunities, Support Leads handle tickets, and Viewers have read-only access."
+      q: "How does Role-Based Access Control (RBAC) protect my customer data?",
+      a: "Each account tier respects PostgreSQL Row Level Security. Super Admins manage global settings, Sales Leads manage opportunities, Support Leads handle tickets, and B2C Owners manage retail lifecycle operations."
     },
     {
       q: "Do you offer custom CRM data onboarding?",

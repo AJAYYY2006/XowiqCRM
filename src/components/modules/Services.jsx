@@ -409,7 +409,7 @@ export default function Services({ session, profile }) {
   }
 
   return (
-    <div className="services-page" style={{ maxWidth: '100%', overflowX: 'hidden' }}>
+    <div className="services-page" style={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
       {/* ── Page Header ── */}
       <div className="page-header" style={{ marginBottom: 20 }}>
         <div>
@@ -1313,7 +1313,8 @@ export default function Services({ session, profile }) {
           borderRadius: 16,
           padding: '22px 24px',
           boxShadow: isDark ? '0 4px 16px rgba(0,0,0,0.2)' : '0 2px 10px rgba(0,0,0,0.04)',
-          borderTop: '4px solid #ff5900'
+          borderTop: '4px solid #ff5900',
+          overflow: 'hidden'
         }}>
           {/* Stage Builder Header */}
           <div style={{
@@ -1355,7 +1356,9 @@ export default function Services({ session, profile }) {
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 6
+                gap: 6,
+                flexShrink: 0,
+                whiteSpace: 'nowrap'
               }}
             >
               <Plus size={14} style={{ color: '#ff5900' }} />
@@ -1413,7 +1416,7 @@ export default function Services({ session, profile }) {
                     <div
                       key={stg.id}
                       style={{
-                        flex: '0 0 300px',
+                        flex: '0 0 260px',
                         background: isDark ? '#0f172a' : '#f8fafc',
                         borderRadius: 14,
                         padding: 14,

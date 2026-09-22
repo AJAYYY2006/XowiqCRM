@@ -714,7 +714,7 @@ export default function ExecutiveSuperAdminDashboard({
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search staff & managers..."
+                placeholder="Search team & managers..."
                 value={searchUser}
                 onChange={(e) => setSearchUser(e.target.value)}
                 className="pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs font-light text-slate-800 focus:outline-none focus:border-[#ff5900]"
@@ -765,7 +765,7 @@ export default function ExecutiveSuperAdminDashboard({
 
                       <td className="py-3.5">
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-medium bg-orange-50 text-[#ff5900] uppercase tracking-wide">
-                          {u.role || 'viewer'}
+                          {u.role || 'manager'}
                         </span>
                       </td>
 

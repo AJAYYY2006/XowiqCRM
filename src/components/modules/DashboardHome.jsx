@@ -127,7 +127,7 @@ export default function DashboardHome({ session, profile }) {
       }
 
       const teamUsers = (allProfiles || []).filter(p =>
-        ['user', 'manager', 'admin', 'b2c', 'agent'].includes((p.role || '').toLowerCase())
+        ['manager', 'admin', 'b2c', 'agent', 'support_agent', 'sales_rep'].includes((p.role || '').toLowerCase())
       )
 
       setUsers(teamUsers)

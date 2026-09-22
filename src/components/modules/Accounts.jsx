@@ -221,8 +221,6 @@ export default function Accounts({ session, profile }) {
     phone: '', 
     email: '', 
     address: '',
-    gender: '',
-    date_of_birth: '',
     notes: '',
     custom_data: {},
     contact_id: null
@@ -256,12 +254,10 @@ export default function Accounts({ session, profile }) {
       if (error) throw error
 
       const coreFieldsTarget = [
-        { label: 'Customer Name', field_key: 'customer_name', field_type: 'text', is_core: true, order: 0 },
+        { label: isB2C ? 'Customer Name' : 'Account Name', field_key: 'customer_name', field_type: 'text', is_core: true, order: 0 },
         { label: 'Contact Number', field_key: 'contact_number', field_type: 'text', is_core: true, order: 1 },
         { label: 'Email ID', field_key: 'email_id', field_type: 'text', is_core: true, order: 2 },
-        { label: 'Gender', field_key: 'gender', field_type: 'dropdown', options: ['Male', 'Female', 'Other'], is_core: true, order: 3 },
-        { label: 'Date of Birth', field_key: 'date_of_birth', field_type: 'date', is_core: true, order: 4 },
-        { label: 'Address', field_key: 'address', field_type: 'long_text', is_core: true, order: 5 }
+        { label: 'Address', field_key: 'address', field_type: 'long_text', is_core: true, order: 3 }
       ]
 
       let finalData = existing || []
@@ -286,7 +282,7 @@ export default function Accounts({ session, profile }) {
         }
       }
 
-      const allowedKeys = ['customer_name', 'contact_number', 'email_id', 'gender', 'date_of_birth', 'address']
+      const allowedKeys = ['customer_name', 'contact_number', 'email_id', 'address']
       setCustomFieldConfigs(finalData.filter(f => !f.is_archived && allowedKeys.includes(f.field_key)))
     } catch (err) {
       console.error('Error loading custom fields:', err)
@@ -444,15 +440,11 @@ export default function Accounts({ session, profile }) {
         email: account.email || account.contacts?.[0]?.email || '', 
         address: account.address || '',
         b2c_stage_id: account.b2c_stage_id || '',
-        gender: account.gender || '',
-        date_of_birth: account.date_of_birth || '',
         notes: account.notes || '',
         custom_data: {
           customer_name: account.account_name || '',
           contact_number: account.phone || account.contacts?.[0]?.phone || '',
           email_id: account.email || account.contacts?.[0]?.email || '',
-          gender: account.gender || '',
-          date_of_birth: account.date_of_birth ? new Date(account.date_of_birth).toISOString().split('T')[0] : '',
           address: account.address || '',
           ...(account.custom_data || {})
         },
@@ -469,15 +461,11 @@ export default function Accounts({ session, profile }) {
         email: '', 
         address: '',
         b2c_stage_id: '',
-        gender: '',
-        date_of_birth: '',
         notes: '',
         custom_data: {
           customer_name: '',
           contact_number: '',
           email_id: '',
-          gender: '',
-          date_of_birth: '',
           address: ''
         },
         contact_id: null 
@@ -782,8 +770,6 @@ export default function Accounts({ session, profile }) {
                     recordName={selectedAccount.account_name}
                   />
                 </div>
-                <div style={detailFieldStyle}><span style={labelStyle}>Gender:</span> {selectedAccount.gender || '—'}</div>
-                <div style={detailFieldStyle}><span style={labelStyle}>DOB:</span> {selectedAccount.date_of_birth ? new Date(selectedAccount.date_of_birth).toLocaleDateString() : '—'}</div>
                 <div style={{ ...detailFieldStyle, gridColumn: 'span 2' }}>
                   <span style={labelStyle}>Address:</span>
                   <div style={{ marginTop: 4, color: '#1e293b', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
@@ -1033,8 +1019,6 @@ export default function Accounts({ session, profile }) {
                       email: formData.custom_data?.email_id || (formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.email || null)),
                       phone: formData.custom_data?.contact_number || (!formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.phone || null)),
                       address: formData.custom_data?.address || formData.address || null,
-                      gender: formData.custom_data?.gender || formData.gender || null,
-                      date_of_birth: formData.custom_data?.date_of_birth || formData.date_of_birth || null,
                       notes: formData.notes,
                       status: formData.status,
                       account_owner: formData.account_owner,
@@ -1353,8 +1337,6 @@ export default function Accounts({ session, profile }) {
                     email: formData.custom_data?.email_id || (formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.email || null)),
                     phone: formData.custom_data?.contact_number || (!formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.phone || null)),
                     address: formData.custom_data?.address || formData.address || null, // Keep legacy columns for compatibility
-                    gender: formData.custom_data?.gender || formData.gender || null,
-                    date_of_birth: formData.custom_data?.date_of_birth || formData.date_of_birth || null,
                     notes: formData.notes,
                     status: formData.status,
                     account_owner: formData.account_owner,

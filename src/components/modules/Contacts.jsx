@@ -22,7 +22,7 @@ export default function Contacts({ session, profile }) {
   const navigate = useNavigate()
   
   const [formData, setFormData] = useState({
-    name: '', email: '', phone: '', account_id: '', contact_owner: ''
+    name: '', email: '', phone: '', gender: '', account_id: '', contact_owner: ''
   })
   const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
@@ -169,13 +169,14 @@ export default function Contacts({ session, profile }) {
         name: contact.name, 
         email: contact.email || '', 
         phone: contact.phone || '', 
+        gender: contact.gender || contact.custom_data?.gender || '',
         account_id: contact.account_id || '',
         contact_owner: contact.contact_owner || ''
       })
     } else {
       setEditingContact(null)
       setFormData({
-        name: '', email: '', phone: '', account_id: '',
+        name: '', email: '', phone: '', gender: '', account_id: '',
         contact_owner: profile?.name || session.user.email
       })
     }
@@ -187,13 +188,20 @@ export default function Contacts({ session, profile }) {
     const toastId = toast.loading(editingContact ? 'Updating contact...' : 'Adding contact...')
     
     try {
+      const payload = { 
+        name: formData.name,
+        email: formData.email || null,
+        phone: formData.phone || null,
+        gender: formData.gender || null,
+        account_id: formData.account_id || null,
+        contact_owner: formData.contact_owner || null,
+        custom_data: { ...(editingContact?.custom_data || {}), gender: formData.gender || null }
+      }
+
       if (editingContact) {
         const { error } = await supabase
           .from('contacts')
-          .update({ 
-            ...formData, 
-            account_id: formData.account_id || null
-          })
+          .update(payload)
           .eq('id', editingContact.id)
           
         if (error) throw error
@@ -209,8 +217,7 @@ export default function Contacts({ session, profile }) {
         const { error } = await supabase
           .from('contacts')
           .insert([{ 
-            ...formData, 
-            account_id: formData.account_id || null, // Handle empty string
+            ...payload,
             user_id: session.user.id 
           }])
           
@@ -306,6 +313,10 @@ export default function Contacts({ session, profile }) {
                     style={{ width: 26, height: 26 }}
                   />
                 </div>
+              </div>
+              <div className="detail-field">
+                <label>Gender</label>
+                <span>{selectedContact.gender || selectedContact.custom_data?.gender || '—'}</span>
               </div>
               <div className="detail-field">
                 <label>Contact Owner</label>
@@ -443,9 +454,10 @@ export default function Contacts({ session, profile }) {
                     <th>No</th>
                     <th>Name</th>
                     <th>Email</th>
+                    <th>Phone</th>
+                    <th>Gender</th>
                     <th>Account</th>
                     <th>Unique ID</th>
-                    <th>Phone</th>
                     <th>Owner</th>
                     <th>Created</th>
                     <th style={{ textAlign: 'right' }}>Actions</th>
@@ -454,7 +466,7 @@ export default function Contacts({ session, profile }) {
                 <tbody>
                   {contacts.length === 0 ? (
                     <tr>
-                      <td colSpan="9">
+                      <td colSpan="10">
                         <div className="empty-state">
                           <div className="empty-state-icon"></div>
                           <h3>No contacts yet</h3>
@@ -471,7 +483,32 @@ export default function Contacts({ session, profile }) {
                       >
                         <td className="font-mono text-muted">{idx + 1}</td>
                         <td className="fw-bold">{contact.name}</td>
-                        <td>{contact.email}</td>
+                        <td>{contact.email || '-'}</td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span>{contact.phone || '-'}</span>
+                            {contact.phone && (
+                              <WhatsAppButton
+                                phone={contact.phone}
+                                messageText={getWhatsAppMessage('customer', {
+                                  firstName: (contact.name || '').split(' ')[0],
+                                  agentName: profile?.name || session.user.email,
+                                  businessName: profile?.company_name || 'our company'
+                                })}
+                                session={session}
+                                recordName={contact.name}
+                                style={{ width: 20, height: 20 }}
+                              />
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          {contact.gender || contact.custom_data?.gender ? (
+                            <span className="badge" style={{ fontSize: '11px', background: '#f1f5f9', color: '#475569' }}>
+                              {contact.gender || contact.custom_data?.gender}
+                            </span>
+                          ) : '-'}
+                        </td>
                         <td>
                           {contact.account_id && contact.accounts?.account_name ? (
                             <span 
@@ -489,7 +526,6 @@ export default function Contacts({ session, profile }) {
                           )}
                         </td>
                         <td className="font-mono">{contact.unique_id}</td>
-                        <td>{contact.phone || '-'}</td>
                         <td>{contact.contact_owner}</td>
                         <td className="text-muted">{new Date(contact.created_at).toLocaleDateString()}</td>
                         <td style={{ textAlign: 'right' }}>
@@ -594,6 +630,16 @@ export default function Contacts({ session, profile }) {
                 <div className="form-group">
                   <label className="form-label">Phone Number</label>
                   <input type="tel" className="form-input" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="+1 (555) 000-0000" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Gender</label>
+                  <select className="form-input" value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})}>
+                    <option value="">-- Select Gender --</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                    <option value="Prefer not to say">Prefer not to say</option>
+                  </select>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Account</label>

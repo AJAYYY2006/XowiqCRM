@@ -67,8 +67,8 @@ export default function AboutPage({ session }) {
               },
               {
                 icon: <Shield className="text-[#ff5900]" size={24} />,
-                title: "5-Role Granular Security",
-                desc: "Super Admin, Sales Manager, Support Lead, B2C Owner, and Staff Viewer roles protect sensitive business metrics."
+                title: "Granular Role Security",
+                desc: "Super Admin, Sales Manager, Support Lead, and B2C Owner roles protect sensitive business metrics."
               },
               {
                 icon: <HeartHandshake className="text-[#ff5900]" size={24} />,

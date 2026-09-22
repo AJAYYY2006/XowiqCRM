@@ -8,6 +8,18 @@ import FieldBuilderModal from '../ui/FieldBuilderModal'
 import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 
+// Invoices share the `quotes` table with Quotes module.
+// Quotes stores JSON in quote_name; Invoices stores plain text.
+function parseInvoiceName(raw) {
+  if (!raw) return ''
+  try {
+    const p = JSON.parse(raw)
+    return p.name || raw
+  } catch {
+    return raw
+  }
+}
+
 export default function Invoices({ session, profile }) {
   const { t } = useTranslation()
   const userIds = profile?.teamUserIds || [session.user.id]
@@ -110,7 +122,7 @@ export default function Invoices({ session, profile }) {
     if (inv) {
       setEditingInvoice(inv)
       setFormData({
-        title: inv.quote_name || '',
+        title: parseInvoiceName(inv.quote_name) || '',
         account_id: inv.account_id || inv.opportunities?.account_id || '',
         amount: inv.total_price || 0,
         due_date: inv.expires_at || '',
@@ -234,7 +246,7 @@ export default function Invoices({ session, profile }) {
       startY: 85,
       head: [['Description', 'Amount']],
       body: [
-        [inv.quote_name, `${profile?.currency || '$'}${amount}`]
+        [parseInvoiceName(inv.quote_name), `${profile?.currency || '$'}${amount}`]
       ],
       foot: [['Total Due', `${profile?.currency || '$'}${amount}`]],
       theme: 'grid',
@@ -273,7 +285,7 @@ export default function Invoices({ session, profile }) {
              placeholder={t('modules.invoices.searchPlaceholder')}
              renderItem={(item) => (
                <>
-                 <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{item.quote_name}</div>
+                 <div className="fw-bold" style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{parseInvoiceName(item.quote_name)}</div>
                  <div className="text-muted" style={{ fontSize: '11px' }}>
                    {item.accounts?.account_name || item.opportunities?.accounts?.account_name || ''}
                  </div>
@@ -329,7 +341,7 @@ export default function Invoices({ session, profile }) {
                       if (config.field_key === 'quote_name') {
                         return (
                           <td key={config.id}>
-                            <div className="fw-bold">{inv.quote_name}</div>
+                            <div className="fw-bold">{parseInvoiceName(inv.quote_name)}</div>
                             <div style={{ fontSize: 10, color: '#94a3b8' }}>{inv.invoice_number || 'No ID'}</div>
                           </td>
                         )
