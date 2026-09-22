@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Search } from 'lucide-react';
 
 export default function LocalSearch({ data = [], searchKeys = [], onSelect = () => {}, placeholder = "Search...", renderItem = (item) => item.name || item.account_name || item.service_name || "Result" }) {
   const [query, setQuery] = useState('');
@@ -32,6 +33,7 @@ export default function LocalSearch({ data = [], searchKeys = [], onSelect = () 
   return (
     <div ref={wrapperRef} className="global-search-container" style={{ width: '260px' }}>
       <div className="search-input-wrap global-search-input-wrap" style={{ height: '36px', padding: '0 12px' }}>
+        <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0, marginRight: 8 }} />
         <input 
           type="text" 
           className="search-input" 

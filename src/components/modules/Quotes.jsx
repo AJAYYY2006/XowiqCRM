@@ -468,21 +468,17 @@ export default function Quotes({ session, profile }) {
                       id={`quote-row-${quote.id}`}
                       style={{ cursor: 'pointer', transition: 'background 0.15s' }}
                       onClick={() => setViewingQuote(quote)}
-                      className="hover:bg-slate-50"
                     >
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span className="fw-bold" style={{ color: '#1e293b' }}>
+                          <span className="fw-bold" style={{ color: 'var(--text-primary)' }}>
                             {meta.name || quote.quote_name}
                           </span>
-                          <span style={{ 
-                            fontSize: 10, padding: '2px 8px', borderRadius: 10, 
-                            background: sCol.bg, color: sCol.color, fontWeight: 800 
-                          }}>
+                          <span className={`badge badge-${(meta.status || 'draft').toLowerCase()}`}>
                             {meta.status || 'Draft'}
                           </span>
                         </div>
-                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
                           Created: {new Date(quote.created_at).toLocaleDateString()}
                         </div>
                       </td>
@@ -490,7 +486,7 @@ export default function Quotes({ session, profile }) {
                       <td onClick={e => e.stopPropagation()}>
                         {quote.opportunities?.id ? (
                           <span 
-                            style={{ color: '#ff5900', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}
+                            style={{ color: 'var(--accent)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}
                             onClick={() => navigate('/dashboard/opportunities', { state: { openId: quote.opportunities.id } })}
                             title="Click to view deal"
                             onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
@@ -506,13 +502,13 @@ export default function Quotes({ session, profile }) {
                       <td onClick={e => e.stopPropagation()}>
                         {quote.opportunities?.account_id && quote.opportunities?.accounts?.account_name ? (
                           <span 
-                            style={{ color: '#1e293b', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}
+                            style={{ color: 'var(--text-primary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}
                             onClick={() => navigate('/dashboard/accounts', { state: { openId: quote.opportunities.account_id } })}
                             title="Click to view account"
                             onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
                             onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
                           >
-                            <Building2 size={13} style={{ color: '#64748b' }} />
+                            <Building2 size={13} style={{ color: 'var(--text-muted)' }} />
                             {quote.opportunities.accounts.account_name}
                           </span>
                         ) : (
@@ -524,23 +520,22 @@ export default function Quotes({ session, profile }) {
                         {linkedInv ? (
                           <span 
                             onClick={() => navigate('/dashboard/invoices', { state: { openId: linkedInv.id } })}
+                            className="badge badge-paid"
                             style={{ 
-                              display: 'inline-flex', alignItems: 'center', gap: 4, 
-                              fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 8, 
-                              background: '#f0fdf4', color: '#15803d', cursor: 'pointer', border: '1px solid #bbf7d0'
+                              display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer'
                             }}
                             title="Click to open linked invoice"
                           >
                             <Receipt size={12} /> {linkedInv.invoice_number || 'View Invoice'}
                           </span>
                         ) : (
-                          <span style={{ fontSize: 11, color: '#94a3b8' }}>Not Invoiced</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Not Invoiced</span>
                         )}
                       </td>
 
-                      <td>{quote.expires_at ? new Date(quote.expires_at).toLocaleDateString() : 'No expiration'}</td>
+                      <td style={{ color: 'var(--text-secondary)' }}>{quote.expires_at ? new Date(quote.expires_at).toLocaleDateString() : 'No expiration'}</td>
 
-                      <td className="fw-bold" style={{ textAlign: 'right', color: '#1e293b' }}>
+                      <td className="fw-bold" style={{ textAlign: 'right', color: 'var(--text-primary)' }}>
                         {currency}{Number(quote.total_price).toLocaleString()}
                       </td>
 
@@ -548,7 +543,7 @@ export default function Quotes({ session, profile }) {
                         <div className="flex gap-1" style={{ justifyContent: 'flex-end' }}>
                           <button 
                             className="btn-icon" 
-                            style={{ color: '#2563eb' }} 
+                            style={{ color: '#60a5fa' }} 
                             onClick={() => setViewingQuote(quote)} 
                             title="Open Proposal Details"
                           >
@@ -557,7 +552,7 @@ export default function Quotes({ session, profile }) {
 
                           <button 
                             className="btn-icon" 
-                            style={{ color: '#16a34a' }} 
+                            style={{ color: '#34d399' }} 
                             onClick={() => handleConvertToInvoice(quote)} 
                             title="Convert to Invoice"
                           >
@@ -611,13 +606,6 @@ export default function Quotes({ session, profile }) {
             {/* Header */}
             {(() => {
               const meta = parseQuoteData(viewingQuote.quote_name)
-              const statusColors = {
-                Draft: { bg: '#f1f5f9', color: '#475569' },
-                Sent: { bg: '#eff6ff', color: '#1d4ed8' },
-                Approved: { bg: '#f0fdf4', color: '#15803d' },
-                Rejected: { bg: '#fef2f2', color: '#b91c1c' }
-              }
-              const sCol = statusColors[meta.status] || statusColors.Draft
               const opp = viewingQuote.opportunities || opportunities.find(o => o.id === viewingQuote.opportunity_id)
               const accName = opp?.accounts?.account_name || 'Client'
 
@@ -630,13 +618,12 @@ export default function Quotes({ session, profile }) {
                   }}>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ 
-                          fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 12, 
-                          background: sCol.bg, color: sCol.color, textTransform: 'uppercase' 
+                        <span className={`badge badge-${(meta.status || 'draft').toLowerCase()}`} style={{ 
+                          fontSize: 11, fontWeight: 800, padding: '4px 12px', textTransform: 'uppercase' 
                         }}>
                           {meta.status || 'Draft'}
                         </span>
-                        <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                           Issued: {new Date(viewingQuote.created_at).toLocaleDateString()}
                           {viewingQuote.expires_at ? ` • Valid until ${new Date(viewingQuote.expires_at).toLocaleDateString()}` : ''}
                         </span>
@@ -644,7 +631,7 @@ export default function Quotes({ session, profile }) {
                       <h2 style={{ margin: '10px 0 4px', fontSize: 22, fontWeight: 800, color: '#fff' }}>
                         {meta.name || viewingQuote.quote_name}
                       </h2>
-                      <div style={{ fontSize: 13, color: '#cbd5e1' }}>
+                      <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                         Client: {accName} {opp ? `• Opportunity: ${opp.name}` : ''}
                       </div>
                     </div>
@@ -664,8 +651,8 @@ export default function Quotes({ session, profile }) {
                         <div 
                           onClick={() => navigate('/dashboard/opportunities', { state: { openId: opp.id } })}
                           style={{ 
-                            padding: '8px 14px', borderRadius: 8, background: '#fff7ed', border: '1px solid #fed7aa',
-                            color: '#ea580c', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 
+                            padding: '8px 14px', borderRadius: 8, background: 'var(--accent-light)', border: '1px solid rgba(255, 89, 0, 0.25)',
+                            color: 'var(--accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 
                           }}
                         >
                           <TrendingUp size={14} /> Open Deal: {opp.name} <ExternalLink size={12} />
@@ -675,48 +662,48 @@ export default function Quotes({ session, profile }) {
                         <div 
                           onClick={() => navigate('/dashboard/accounts', { state: { openId: opp.account_id } })}
                           style={{ 
-                            padding: '8px 14px', borderRadius: 8, background: '#f8fafc', border: '1px solid #e2e8f0',
-                            color: '#1e293b', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 
+                            padding: '8px 14px', borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)',
+                            color: 'var(--text-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 
                           }}
                         >
-                          <Building2 size={14} /> Open Account: {accName} <ExternalLink size={12} />
+                          <Building2 size={14} style={{ color: 'var(--text-muted)' }} /> Open Account: {accName} <ExternalLink size={12} />
                         </div>
                       )}
                     </div>
 
                     {/* Line Items */}
-                    <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+                    <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 10, overflow: 'hidden' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
-                          <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                            <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12 }}>Description</th>
-                            <th style={{ padding: '10px 14px', textAlign: 'center', fontSize: 12 }}>Qty</th>
-                            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 12 }}>Unit Price ({currency})</th>
-                            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 12 }}>Total ({currency})</th>
+                          <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
+                            <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)' }}>Description</th>
+                            <th style={{ padding: '10px 14px', textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>Qty</th>
+                            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>Unit Price ({currency})</th>
+                            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>Total ({currency})</th>
                           </tr>
                         </thead>
                         <tbody>
                           {(meta.items && meta.items.length > 0) ? (
                             meta.items.map((it, idx) => (
-                              <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                <td style={{ padding: '12px 14px', fontWeight: 600, color: '#1e293b' }}>{it.desc}</td>
-                                <td style={{ padding: '12px 14px', textAlign: 'center', color: '#64748b' }}>{it.qty}</td>
-                                <td style={{ padding: '12px 14px', textAlign: 'right', color: '#64748b' }}>{currency}{Number(it.price).toLocaleString()}</td>
-                                <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#1e293b' }}>{currency}{(Number(it.qty) * Number(it.price)).toLocaleString()}</td>
+                              <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                                <td style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--text-primary)' }}>{it.desc}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'center', color: 'var(--text-secondary)' }}>{it.qty}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right', color: 'var(--text-secondary)' }}>{currency}{Number(it.price).toLocaleString()}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)' }}>{currency}{(Number(it.qty) * Number(it.price)).toLocaleString()}</td>
                               </tr>
                             ))
                           ) : (
                             <tr>
-                              <td colSpan={4} style={{ padding: 16, textAlign: 'center', color: '#94a3b8' }}>
+                              <td colSpan={4} style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)' }}>
                                 {meta.name || 'Proposal Item'}
                               </td>
                             </tr>
                           )}
                         </tbody>
                         <tfoot>
-                          <tr style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
-                            <td colSpan={3} style={{ padding: '12px 14px', fontWeight: 800, textAlign: 'right' }}>Total Proposal Value:</td>
-                            <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 900, fontSize: 17, color: '#ea580c' }}>
+                          <tr style={{ background: 'var(--bg-secondary)', borderTop: '2px solid var(--border-subtle)' }}>
+                            <td colSpan={3} style={{ padding: '12px 14px', fontWeight: 800, textAlign: 'right', color: 'var(--text-primary)' }}>Total Proposal Value:</td>
+                            <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 900, fontSize: 17, color: 'var(--accent)' }}>
                               {currency}{Number(viewingQuote.total_price || 0).toLocaleString()}
                             </td>
                           </tr>
@@ -726,25 +713,25 @@ export default function Quotes({ session, profile }) {
 
                     {/* Terms */}
                     {meta.terms && (
-                      <div style={{ background: '#f8fafc', padding: 14, borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', marginBottom: 4 }}>Terms & Conditions</div>
-                        <div style={{ fontSize: 13, color: '#334155', whiteSpace: 'pre-wrap' }}>{meta.terms}</div>
+                      <div style={{ background: 'var(--bg-secondary)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 4 }}>Terms & Conditions</div>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{meta.terms}</div>
                       </div>
                     )}
 
                     {/* Workflow status toggle buttons */}
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Set Status:</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>Set Status:</span>
                       {['Draft', 'Sent', 'Approved', 'Rejected'].map(st => (
                         <button
                           key={st}
                           onClick={() => updateQuoteStatus(viewingQuote, st)}
                           style={{
-                            padding: '4px 10px', borderRadius: 14, fontSize: 11, fontWeight: 700,
-                            border: meta.status === st ? '1.5px solid #ff5900' : '1px solid #e2e8f0',
-                            background: meta.status === st ? '#fff7ed' : '#fff',
-                            color: meta.status === st ? '#ea580c' : '#64748b',
-                            cursor: 'pointer'
+                            padding: '4px 12px', borderRadius: 14, fontSize: 11, fontWeight: 700,
+                            border: meta.status === st ? '1.5px solid var(--accent)' : '1px solid var(--border-subtle)',
+                            background: meta.status === st ? 'var(--accent-light)' : 'var(--bg-secondary)',
+                            color: meta.status === st ? 'var(--accent)' : 'var(--text-secondary)',
+                            cursor: 'pointer', transition: 'all 0.15s ease'
                           }}
                         >
                           {st}
@@ -755,7 +742,7 @@ export default function Quotes({ session, profile }) {
 
                   {/* Actions Footer */}
                   <div style={{ 
-                    padding: '16px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', 
+                    padding: '16px 24px', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border-subtle)', 
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center' 
                   }}>
                     <button 
@@ -834,7 +821,7 @@ export default function Quotes({ session, profile }) {
               </div>
 
               {/* Line Items Builder */}
-              <div style={{ marginTop: 24, padding: 16, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <div style={{ marginTop: 24, padding: 16, background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <h3 style={{ margin: 0, fontSize: 14 }}>Line Items</h3>
                   <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 12 }} onClick={addItem}>

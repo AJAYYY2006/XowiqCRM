@@ -673,12 +673,12 @@ function UserManagementPanel({ session, profile, onUserCreated }) {
 
         {/* User List */}
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
+          <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
               {t('userMgmt.teamMembers')}
-              <span style={{ marginLeft: 8, background: '#f37a23', color: '#fff', fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 12 }}>{users.length}</span>
+              <span style={{ marginLeft: 8, background: 'var(--accent)', color: '#fff', fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 12 }}>{users.length}</span>
             </h3>
-            <button onClick={fetchUsers} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4 }}>
+            <button onClick={fetchUsers} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
               <RefreshCw size={15} />
             </button>
           </div>
@@ -686,29 +686,29 @@ function UserManagementPanel({ session, profile, onUserCreated }) {
             <div className="loading-container" style={{ minHeight: 200 }}><div className="spinner" /></div>
           ) : users.length === 0 ? (
             <div className="empty-state" style={{ padding: 40 }}>
-              <Users size={32} style={{ color: '#cbd5e1', marginBottom: 10 }} />
-              <p>{t('userMgmt.noUsers')}</p>
+              <Users size={32} style={{ color: 'var(--text-muted)', marginBottom: 10 }} />
+              <p style={{ color: 'var(--text-muted)' }}>{t('userMgmt.noUsers')}</p>
             </div>
           ) : (
             <div>
               {users.map(u => (
-                <div key={u.id} style={{ padding: '14px 24px', borderBottom: '1px solid #f8fafc', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div key={u.id} style={{ padding: '14px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,#f37a23,#ef4444)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 14, flexShrink: 0 }}>
                     {u.name?.[0]?.toUpperCase() || u.email?.[0]?.toUpperCase()}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name || 'Unknown'}</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</div>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name || 'Unknown'}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                     <span style={{
-                      background: u.role === 'admin' ? '#fff7ed' : '#f0fdf4',
-                      color: u.role === 'admin' ? '#ea580c' : '#16a34a',
+                      background: u.role === 'admin' ? 'rgba(255, 89, 0, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                      color: u.role === 'admin' ? 'var(--accent)' : '#34d399',
                       padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700
                     }}>
                       {u.role === 'admin' ? t('userMgmt.roleAdmin').split(' ')[0] : t('userMgmt.roleUser').split(' ')[0]}
                     </span>
-                    <span style={{ fontSize: 11, color: '#cbd5e1' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                       {u.company_type || 'B2B'}
                     </span>
                     <button
@@ -840,9 +840,9 @@ function TeamRecordsPanel({ session, profile }) {
     fontWeight: 700,
     fontSize: '13px',
     cursor: 'pointer',
-    background: active ? 'linear-gradient(135deg,#f37a23,#ef4444)' : '#f8fafc',
-    color: active ? '#fff' : '#64748b',
-    border: 'none',
+    background: active ? 'linear-gradient(135deg, #f37a23, #ef4444)' : 'var(--bg-secondary)',
+    color: active ? '#fff' : 'var(--text-secondary)',
+    border: active ? 'none' : '1px solid var(--border-subtle)',
     transition: 'all 0.2s',
   })
 
@@ -878,13 +878,14 @@ function TeamRecordsPanel({ session, profile }) {
         </div>
 
         <div style={{ position: 'relative' }}>
-          <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+          <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
             type="text"
+            className="form-input"
             placeholder={t('teamRecords.searchRecords')}
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ paddingLeft: 36, paddingRight: 16, paddingTop: 9, paddingBottom: 9, border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none', width: 240 }}
+            style={{ paddingLeft: 36, paddingRight: 16, paddingTop: 9, paddingBottom: 9, width: 240, fontSize: 13 }}
           />
         </div>
       </div>
@@ -895,18 +896,18 @@ function TeamRecordsPanel({ session, profile }) {
           <div className="loading-container" style={{ minHeight: 250 }}><div className="spinner" /></div>
         ) : filtered.length === 0 ? (
           <div className="empty-state" style={{ padding: 60 }}>
-            <ClipboardList size={40} style={{ color: '#cbd5e1', marginBottom: 12 }} />
-            <p style={{ color: '#64748b' }}>{t('teamRecords.noRecords')}</p>
+            <ClipboardList size={40} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+            <p style={{ color: 'var(--text-muted)' }}>{t('teamRecords.noRecords')}</p>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ background: '#f8fafc' }}>
-                  <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', borderBottom: '1px solid #f1f5f9' }}>{t('teamRecords.colRecord')}</th>
-                  <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', borderBottom: '1px solid #f1f5f9' }}>{t('teamRecords.colCreatedBy')}</th>
-                  <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', borderBottom: '1px solid #f1f5f9' }}>{t('teamRecords.colDate')}</th>
-                  <th style={{ padding: '12px 20px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', borderBottom: '1px solid #f1f5f9' }}>{t('teamRecords.colAction')}</th>
+                <tr style={{ background: 'var(--bg-secondary)' }}>
+                  <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-subtle)' }}>{t('teamRecords.colRecord')}</th>
+                  <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-subtle)' }}>{t('teamRecords.colCreatedBy')}</th>
+                  <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-subtle)' }}>{t('teamRecords.colDate')}</th>
+                  <th style={{ padding: '12px 20px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-subtle)' }}>{t('teamRecords.colAction')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -917,31 +918,31 @@ function TeamRecordsPanel({ session, profile }) {
                   const creatorEmail = r.owner || t('teamRecords.unassigned')
 
                   return (
-                    <tr key={r.id} style={{ borderBottom: '1px solid #f8fafc', transition: 'background 0.15s' }}
-                      onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
+                    <tr key={r.id} style={{ borderBottom: '1px solid var(--border-subtle)', transition: 'background 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card-hover)'}
                       onMouseLeave={e => e.currentTarget.style.background = ''}
                     >
                       <td style={{ padding: '14px 20px' }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>{title}</div>
-                        {subtitle && <div style={{ fontSize: 11, color: '#94a3b8' }}>{subtitle}</div>}
+                        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{title}</div>
+                        {subtitle && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{subtitle}</div>}
                       </td>
-                      <td style={{ padding: '14px 20px', fontSize: 13, color: '#475569', fontWeight: 500 }}>
+                      <td style={{ padding: '14px 20px', fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>
                         {creatorEmail}
                       </td>
-                      <td style={{ padding: '14px 20px', fontSize: 12, color: '#64748b' }}>
+                      <td style={{ padding: '14px 20px', fontSize: 12, color: 'var(--text-muted)' }}>
                         {createdDate}
                       </td>
                       <td style={{ padding: '14px 20px', textAlign: 'center' }}>
                         <button
                           onClick={() => handleOpenRecord(r.id)}
                           style={{
-                            background: 'linear-gradient(135deg,#fff7ed,#fed7aa)',
-                            border: '1px solid #fed7aa',
+                            background: 'var(--accent-light)',
+                            border: '1px solid rgba(255, 89, 0, 0.25)',
                             borderRadius: '6px',
-                            color: '#ea580c',
+                            color: 'var(--accent)',
                             fontSize: '11px',
                             fontWeight: 700,
-                            padding: '6px 12px',
+                            padding: '6px 14px',
                             cursor: 'pointer',
                             transition: 'all 0.15s',
                           }}

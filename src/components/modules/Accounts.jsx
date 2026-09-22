@@ -12,8 +12,8 @@ import { useTranslation } from 'react-i18next'
 import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 
-const labelStyle = { color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }
-const detailFieldStyle = { fontSize: '14px', color: '#1e293b' }
+const labelStyle = { color: 'var(--text-muted)', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }
+const detailFieldStyle = { fontSize: '14px', color: 'var(--text-primary)' }
 
 async function handleFileUpload(file, businessId) {
   const fileName = `${businessId}/${Date.now()}-${file.name}`
@@ -863,8 +863,8 @@ export default function Accounts({ session, profile }) {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <h1 style={{ margin: 0, fontSize: 32, fontWeight: 900 }}>{selectedAccount.account_name}</h1>
-                <span className={`badge`} style={{ fontSize: 12, padding: '4px 12px', background: selectedAccount.status === 'Active' ? '#dcfce3' : '#f1f5f9', color: selectedAccount.status === 'Active' ? '#16a34a' : '#64748b' }}>{selectedAccount.status}</span>
+                <h1 style={{ margin: 0, fontSize: 32, fontWeight: 900, color: 'var(--text-primary)' }}>{selectedAccount.account_name}</h1>
+                <span className={`badge badge-${(selectedAccount.status || '').toLowerCase()}`}>{selectedAccount.status}</span>
                 {isB2C && b2cStages.length > 0 && (() => {
                   const currentStg = b2cStages.find(st => st.id === selectedAccount.b2c_stage_id)
                   return currentStg && (
@@ -875,10 +875,10 @@ export default function Accounts({ session, profile }) {
                 })()}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px', marginTop: 15 }}>
-                <div style={detailFieldStyle}><span style={labelStyle}>Email:</span> {selectedAccount.email || selectedAccount.contacts?.[0]?.email || '—'}</div>
+                <div style={detailFieldStyle}><span style={labelStyle}>Email:</span> <span style={{ color: 'var(--text-primary)' }}>{selectedAccount.email || selectedAccount.contacts?.[0]?.email || '—'}</span></div>
                 <div style={{ ...detailFieldStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={labelStyle}>Phone:</span>
-                  <span>{(() => { const raw = selectedAccount.phone || selectedAccount.contacts?.[0]?.phone; const cleaned = cleanPhoneNumber(raw); return cleaned ? formatPhoneDisplay(cleaned) : (raw || '—'); })()}</span>
+                  <span style={{ color: 'var(--text-primary)' }}>{(() => { const raw = selectedAccount.phone || selectedAccount.contacts?.[0]?.phone; const cleaned = cleanPhoneNumber(raw); return cleaned ? formatPhoneDisplay(cleaned) : (raw || '—'); })()}</span>
                   <WhatsAppButton
                     phone={selectedAccount.phone || selectedAccount.contacts?.[0]?.phone}
                     messageText={getWhatsAppMessage('customer', {
@@ -892,17 +892,17 @@ export default function Accounts({ session, profile }) {
                 </div>
                 <div style={{ ...detailFieldStyle, gridColumn: 'span 2' }}>
                   <span style={labelStyle}>Address:</span>
-                  <div style={{ marginTop: 4, color: '#1e293b', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                  <div style={{ marginTop: 4, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
                     {selectedAccount.address || 'No address provided'}
                   </div>
                 </div>
               </div>
             </div>
-            <div style={{ textAlign: 'right', paddingLeft: 24, borderLeft: '1px solid #f1f5f9' }}>
-               <div style={{ fontSize: 14, color: '#64748b', marginBottom: 15 }}>
-                 <div style={{ marginBottom: 4 }}><span style={labelStyle}>Owner:</span> {selectedAccount.account_owner || 'Unassigned'}</div>
-                 <div><span style={labelStyle}>Joined:</span> {new Date(selectedAccount.created_at).toLocaleDateString()}</div>
-                 <div><span style={labelStyle}>Last Update:</span> {new Date(selectedAccount.updated_at || selectedAccount.created_at).toLocaleString()}</div>
+            <div style={{ textAlign: 'right', paddingLeft: 24, borderLeft: '1px solid var(--border-subtle)' }}>
+               <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 15 }}>
+                 <div style={{ marginBottom: 4 }}><span style={labelStyle}>Owner:</span> <span style={{ color: 'var(--text-primary)' }}>{selectedAccount.account_owner || 'Unassigned'}</span></div>
+                 <div><span style={labelStyle}>Joined:</span> <span style={{ color: 'var(--text-primary)' }}>{new Date(selectedAccount.created_at).toLocaleDateString()}</span></div>
+                 <div><span style={labelStyle}>Last Update:</span> <span style={{ color: 'var(--text-primary)' }}>{new Date(selectedAccount.updated_at || selectedAccount.created_at).toLocaleString()}</span></div>
                </div>
                
                {/* Custom Fields Summary */}
@@ -1053,7 +1053,7 @@ export default function Accounts({ session, profile }) {
                                   {opp.stage || 'Prospecting'}
                                 </span>
                               </td>
-                              <td style={{ padding: '14px 16px', fontWeight: 800, color: '#1e293b' }}>
+                              <td style={{ padding: '14px 16px', fontWeight: 800, color: 'var(--text-primary)' }}>
                                 {profile?.currency || '$'}{Number(opp.amount || 0).toLocaleString()}
                               </td>
                               <td style={{ padding: '14px 16px' }}>
@@ -1109,40 +1109,38 @@ export default function Accounts({ session, profile }) {
                             {/* Expanded: Linked Quotes & Invoices */}
                             {isExpanded && totalLinked > 0 && (
                               <tr>
-                                <td colSpan={7} style={{ padding: 0, background: '#fefcf9' }}>
-                                  <div style={{ padding: '12px 20px 16px 52px', borderBottom: '2px solid #fed7aa' }}>
+                                <td colSpan={7} style={{ padding: 0, background: 'var(--bg-secondary)' }}>
+                                  <div style={{ padding: '12px 20px 16px 52px', borderBottom: '2px solid var(--border)' }}>
                                     {/* Linked Quotes */}
                                     {linkedQuotes.length > 0 && (
                                       <div style={{ marginBottom: linkedInvoices.length > 0 ? 16 : 0 }}>
-                                        <div style={{ fontSize: 11, fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <div style={{ fontSize: 11, fontWeight: 800, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                                           <FileText size={13} /> Linked Quotes
                                         </div>
                                         <div style={{ display: 'grid', gap: 8 }}>
                                           {linkedQuotes.map(q => {
                                             const qMeta = (() => { try { const p = JSON.parse(q.quote_name); return p } catch { return { name: q.quote_name, status: 'Draft' } } })()
-                                            const statusColors = { Draft: { bg: '#f1f5f9', color: '#475569' }, Sent: { bg: '#eff6ff', color: '#1d4ed8' }, Approved: { bg: '#f0fdf4', color: '#15803d' }, Accepted: { bg: '#f0fdf4', color: '#15803d' }, Rejected: { bg: '#fef2f2', color: '#b91c1c' } }
-                                            const sCol = statusColors[qMeta.status] || statusColors.Draft
                                             return (
                                               <div key={q.id}
                                                 onClick={() => navigate('/dashboard/quotes', { state: { openId: q.id } })}
-                                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.15s' }}
-                                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 0 0 2px #dbeafe' }}
-                                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none' }}
+                                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'all 0.15s' }}
+                                                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.boxShadow = '0 0 0 2px var(--accent-light)' }}
+                                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = 'none' }}
                                                 title="Open in Quotes module"
                                               >
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                  <div style={{ width: 30, height: 30, borderRadius: 8, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <FileText size={14} style={{ color: '#3b82f6' }} />
+                                                  <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(59, 130, 246, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <FileText size={14} style={{ color: '#60a5fa' }} />
                                                   </div>
                                                   <div>
-                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{qMeta.name || 'Untitled Quote'}</div>
-                                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{q.created_at ? new Date(q.created_at).toLocaleDateString() : ''}</div>
+                                                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{qMeta.name || 'Untitled Quote'}</div>
+                                                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{q.created_at ? new Date(q.created_at).toLocaleDateString() : ''}</div>
                                                   </div>
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                  <span style={{ fontWeight: 800, fontSize: 13, color: '#1e293b' }}>{profile?.currency || '$'}{Number(q.total_price || 0).toLocaleString()}</span>
-                                                  <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 10, background: sCol.bg, color: sCol.color, fontWeight: 800 }}>{qMeta.status || 'Draft'}</span>
-                                                  <ExternalLink size={13} style={{ color: '#94a3b8' }} />
+                                                  <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--text-primary)' }}>{profile?.currency || '$'}{Number(q.total_price || 0).toLocaleString()}</span>
+                                                  <span className={`badge badge-${(qMeta.status || 'draft').toLowerCase()}`}>{qMeta.status || 'Draft'}</span>
+                                                  <ExternalLink size={13} style={{ color: 'var(--text-muted)' }} />
                                                 </div>
                                               </div>
                                             )
@@ -1154,36 +1152,34 @@ export default function Accounts({ session, profile }) {
                                     {/* Linked Invoices */}
                                     {linkedInvoices.length > 0 && (
                                       <div>
-                                        <div style={{ fontSize: 11, fontWeight: 800, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <div style={{ fontSize: 11, fontWeight: 800, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                                           <Receipt size={13} /> Linked Invoices
                                         </div>
                                         <div style={{ display: 'grid', gap: 8 }}>
                                           {linkedInvoices.map(inv => {
                                             const invName = parseQName(inv.quote_name)
                                             const invNo = inv.invoice_number || `INV-${inv.id.slice(0,6).toUpperCase()}`
-                                            const invStatusColors = { Paid: { bg: '#dcfce3', color: '#166534' }, Unpaid: { bg: '#fef9c3', color: '#854d0e' }, Overdue: { bg: '#fee2e2', color: '#991b1b' } }
-                                            const isCol = invStatusColors[inv.status] || invStatusColors.Unpaid
                                             return (
                                               <div key={inv.id}
                                                 onClick={() => navigate('/dashboard/invoices', { state: { openId: inv.id } })}
-                                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.15s' }}
-                                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#22c55e'; e.currentTarget.style.boxShadow = '0 0 0 2px #dcfce7' }}
-                                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none' }}
+                                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'all 0.15s' }}
+                                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#10b981'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(16, 185, 129, 0.15)' }}
+                                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = 'none' }}
                                                 title="Open in Invoices module"
                                               >
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                  <div style={{ width: 30, height: 30, borderRadius: 8, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <Receipt size={14} style={{ color: '#22c55e' }} />
+                                                  <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <Receipt size={14} style={{ color: '#34d399' }} />
                                                   </div>
                                                   <div>
-                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{invName || invNo}</div>
-                                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{invNo} • {inv.expires_at ? `Due: ${new Date(inv.expires_at).toLocaleDateString()}` : (inv.created_at ? new Date(inv.created_at).toLocaleDateString() : '')}</div>
+                                                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{invName || invNo}</div>
+                                                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{invNo} • {inv.expires_at ? `Due: ${new Date(inv.expires_at).toLocaleDateString()}` : (inv.created_at ? new Date(inv.created_at).toLocaleDateString() : '')}</div>
                                                   </div>
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                  <span style={{ fontWeight: 800, fontSize: 13, color: '#1e293b' }}>{profile?.currency || '$'}{Number(inv.total_price || 0).toLocaleString()}</span>
-                                                  <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 10, background: isCol.bg, color: isCol.color, fontWeight: 800 }}>{inv.status || 'Unpaid'}</span>
-                                                  <ExternalLink size={13} style={{ color: '#94a3b8' }} />
+                                                  <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--text-primary)' }}>{profile?.currency || '$'}{Number(inv.total_price || 0).toLocaleString()}</span>
+                                                  <span className={`badge badge-${(inv.status || 'unpaid').toLowerCase()}`}>{inv.status || 'Unpaid'}</span>
+                                                  <ExternalLink size={13} style={{ color: 'var(--text-muted)' }} />
                                                 </div>
                                               </div>
                                             )
@@ -1314,12 +1310,12 @@ export default function Accounts({ session, profile }) {
                 </thead>
                 <tbody>
                   {accInvoices.map(inv => (
-                    <tr key={inv.id} style={{ borderTop: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: 15, fontWeight: 600 }}>{inv.invoice_number || `INV-${inv.id.slice(0,6).toUpperCase()}`}</td>
-                      <td style={{ padding: 15 }}>{parseQName(inv.quote_name)}</td>
-                      <td style={{ padding: 15, fontWeight: 800 }}>{profile?.currency || '$'}{Number(inv.total_price).toLocaleString()}</td>
+                    <tr key={inv.id} style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                      <td style={{ padding: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{inv.invoice_number || `INV-${inv.id.slice(0,6).toUpperCase()}`}</td>
+                      <td style={{ padding: 15, color: 'var(--text-primary)' }}>{parseQName(inv.quote_name)}</td>
+                      <td style={{ padding: 15, fontWeight: 800, color: 'var(--text-primary)' }}>{profile?.currency || '$'}{Number(inv.total_price).toLocaleString()}</td>
                       <td style={{ padding: 15 }}>
-                        <button onClick={() => handleStatusToggle(inv)} className={`badge`} style={{ border: 'none', cursor: 'pointer', background: inv.status === 'Paid' ? '#dcfce3' : inv.status === 'Overdue' ? '#fee2e2' : '#fef9c3', color: inv.status === 'Paid' ? '#166534' : inv.status === 'Overdue' ? '#991b1b' : '#854d0e', fontWeight: 800 }}>{inv.status || 'Unpaid'}</button>
+                        <button onClick={() => handleStatusToggle(inv)} className={`badge badge-${(inv.status || 'unpaid').toLowerCase()}`} style={{ border: 'none', cursor: 'pointer' }}>{inv.status || 'Unpaid'}</button>
                       </td>
                       <td style={{ padding: 15, textAlign: 'right' }}>
                         <button className="btn-icon" style={{ marginRight: 8, color: '#2563eb' }} onClick={() => handleOpenInvoiceModal(inv)} title="Open Invoice"><Eye size={16} /></button>
@@ -1342,25 +1338,25 @@ export default function Accounts({ session, profile }) {
                   return (
                     <div key={t.id} className="card reminder-item" style={{ padding: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: `6px solid ${isOverdue ? '#ef4444' : '#f37a23'}`, backgroundColor: isOverdue ? '#fef2f2' : '#fff' }}>
                       <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                        <div style={{ background: isOverdue ? '#fee2e2' : '#fff5f0', color: isOverdue ? '#ef4444' : '#f37a23', padding: 14, borderRadius: 12 }}>
+                        <div style={{ background: isOverdue ? 'rgba(239, 68, 68, 0.15)' : 'var(--accent-light)', color: isOverdue ? '#f87171' : 'var(--accent)', padding: 14, borderRadius: 12 }}>
                           {isOverdue ? <AlertCircle size={24} /> : <Calendar size={24} />}
                         </div>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontWeight: 800, fontSize: 16, color: '#1e293b' }}>{selectedAccount.account_name}</span>
-                            <span style={{ color: '#94a3b8' }}>•</span>
-                            <span style={{ fontWeight: 700, color: '#64748b' }}>{t.title.split(': ')[1]?.split(' for ')[0] || t.title}</span>
+                            <span style={{ fontWeight: 800, fontSize: 16, color: 'var(--text-primary)' }}>{selectedAccount.account_name}</span>
+                            <span style={{ color: 'var(--text-muted)' }}>•</span>
+                            <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{t.title.split(': ')[1]?.split(' for ')[0] || t.title}</span>
                           </div>
-                          <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
-                            <span style={{ color: isOverdue ? '#ef4444' : '#f37a23', fontWeight: 800 }}>⚡ Action Due: {new Date(t.due_date).toLocaleDateString()}</span>
-                            {isOverdue && <span className="badge badge-error" style={{ marginLeft: 8, fontSize: 10, background: '#ef4444', color: '#fff' }}>OVERDUE</span>}
+                          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+                            <span style={{ color: isOverdue ? '#f87171' : 'var(--accent)', fontWeight: 800 }}>⚡ Action Due: {new Date(t.due_date).toLocaleDateString()}</span>
+                            {isOverdue && <span className="badge badge-lost" style={{ marginLeft: 8, fontSize: 10 }}>OVERDUE</span>}
                           </div>
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 12 }}>
-                        <button className="btn btn-sm btn-secondary" style={{ color: '#16a34a', background: '#f0fdf4', border: '1px solid #dcfce3', fontWeight: 700 }} onClick={() => handleTaskAction(t, 'done')}><Check size={14} /> Mark as Done</button>
-                        <button className="btn btn-sm btn-secondary" style={{ color: '#f37a23', background: '#fff9f5', border: '1px solid #ffedd5', fontWeight: 700 }} onClick={() => handleTaskAction(t, 'snooze')}><Clock size={14} /> Snooze (1d)</button>
-                        <button className="btn btn-sm btn-primary" style={{ background: '#f37a23', padding: '0 15px' }} onClick={() => { 
+                        <button className="btn btn-sm btn-secondary" style={{ color: '#34d399', fontWeight: 700 }} onClick={() => handleTaskAction(t, 'done')}><Check size={14} /> Mark as Done</button>
+                        <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent)', fontWeight: 700 }} onClick={() => handleTaskAction(t, 'snooze')}><Clock size={14} /> Snooze (1d)</button>
+                        <button className="btn btn-sm btn-primary" style={{ padding: '0 15px' }} onClick={() => { 
                           setContactPopupData({
                             name: selectedAccount.account_name,
                             phone: accContacts[0]?.phone || selectedAccount.phone || 'No phone',
@@ -1382,9 +1378,9 @@ export default function Accounts({ session, profile }) {
                     <div key={a.id} className="activity-item" style={{ display: 'flex', gap: 15, marginBottom: 20 }}>
                       <div className="activity-dot" style={{ marginTop: 5 }} />
                       <div>
-                        <div style={{ fontWeight: 800, color: '#1e293b' }}>{a.type}</div>
-                        <div style={{ fontSize: 14, color: '#64748b' }}>{a.description}</div>
-                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{new Date(a.created_at).toLocaleString()}</div>
+                        <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{a.type}</div>
+                        <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>{a.description}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{new Date(a.created_at).toLocaleString()}</div>
                       </div>
                     </div>
                   ))}
@@ -1758,13 +1754,13 @@ export default function Accounts({ session, profile }) {
                         {acc.account_name?.[0]?.toUpperCase() || '?'}
                       </div>
                       <div>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>{acc.account_name}</div>
-                        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>{acc.phone || acc.email || 'No contact info'}</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{acc.account_name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{acc.phone || acc.email || 'No contact info'}</div>
                       </div>
                     </div>
                   </td>
                   <td>
-                    <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 12, background: acc.status === 'Active' ? '#dcfce3' : '#f1f5f9', color: acc.status === 'Active' ? '#16a34a' : '#64748b', fontWeight: 800 }}>{acc.status}</span>
+                    <span className={`badge badge-${(acc.status || '').toLowerCase()}`}>{acc.status}</span>
                   </td>
                   {isB2C && b2cStages.length > 0 && (
                     <td>
@@ -1778,7 +1774,7 @@ export default function Accounts({ session, profile }) {
                   {customFieldConfigs.filter(c => c.show_in_list && !c.is_core).map(config => {
                     const val = acc.custom_data?.[config.field_key]
                     return (
-                      <td key={config.id} style={{ fontSize: 13, color: '#475569' }}>
+                      <td key={config.id} style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                         {config.field_type === 'checkbox' ? (val ? '✅' : '❌') : (val?.toString() || '-')}
                       </td>
                     )
@@ -1921,15 +1917,15 @@ export default function Accounts({ session, profile }) {
               {contactPopupData.name[0]?.toUpperCase()}
             </div>
             <h2 style={{ margin: '0 0 16px 0', fontSize: 20 }}>{contactPopupData.name}</h2>
-            <div style={{ background: '#f8fafc', padding: 16, borderRadius: 12, marginBottom: 20, textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', padding: 16, borderRadius: 12, marginBottom: 20, textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 800 }}>Contact Number</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b' }}>{contactPopupData.phone}</div>
-                <a href={`tel:${contactPopupData.phone}`} className="btn btn-sm" style={{ background: '#f37a2315', color: '#f37a23', marginTop: 8, display: 'inline-flex', padding: '4px 12px' }}><Phone size={14} style={{ marginRight: 6 }}/> Call Now</a>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 800 }}>Contact Number</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{contactPopupData.phone}</div>
+                <a href={`tel:${contactPopupData.phone}`} className="btn btn-sm" style={{ background: 'var(--accent-light)', color: 'var(--accent)', marginTop: 8, display: 'inline-flex', padding: '4px 12px' }}><Phone size={14} style={{ marginRight: 6 }}/> Call Now</a>
               </div>
-              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-                <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 800 }}>Email Address</div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: '#1e293b' }}>{contactPopupData.email}</div>
+              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 800 }}>Email Address</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{contactPopupData.email}</div>
               </div>
             </div>
             <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => setContactPopupData(null)}>Close</button>
@@ -1947,25 +1943,25 @@ export default function Accounts({ session, profile }) {
             </div>
             <div style={{ padding: '0 24px 24px' }}>
               {viewContactsLoading ? (
-                <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
+                <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
                   <div className="spinner" style={{ margin: '0 auto 12px' }} />
                   Loading contacts...
                 </div>
               ) : viewContactsModal.contacts.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 48, color: '#94a3b8' }}>
+                <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>👥</div>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: '#64748b' }}>No contacts added yet for this account.</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-secondary)' }}>No contacts added yet for this account.</div>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {viewContactsModal.contacts.map((c, i) => (
-                    <div key={c.id} onClick={() => { setViewContactsModal(null); navigate('/dashboard/contacts', { state: { openId: c.id } }) }} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'border-color 0.15s, background 0.15s' }} onMouseEnter={e => { e.currentTarget.style.background = '#fff5f0'; e.currentTarget.style.borderColor = '#f37a23' }} onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0' }}>
+                    <div key={c.id} onClick={() => { setViewContactsModal(null); navigate('/dashboard/contacts', { state: { openId: c.id } }) }} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px', background: 'var(--bg-secondary)', borderRadius: 12, border: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'border-color 0.15s, background 0.15s' }} onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-card-hover)'; e.currentTarget.style.borderColor = 'var(--accent)' }} onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-secondary)'; e.currentTarget.style.borderColor = 'var(--border-subtle)' }}>
                       <div style={{ width: 42, height: 42, borderRadius: 12, background: 'linear-gradient(135deg, #f37a23, #ff8c42)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 900, flexShrink: 0 }}>
                         {(c.name || c.email || '#')[0]?.toUpperCase()}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 800, fontSize: 14, color: '#1e293b', marginBottom: 2 }}>{c.name || '—'}</div>
-                        <div style={{ fontSize: 12, color: '#64748b', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-primary)', marginBottom: 2 }}>{c.name || '—'}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                           {c.phone && <span>📞 {c.phone}</span>}
                           {c.email && <span>✉️ {c.email}</span>}
                           {c.designation && <span>💼 {c.designation}</span>}

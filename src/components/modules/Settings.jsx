@@ -1193,10 +1193,10 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
 
           {/* Inline Add Form */}
           {isAdding && (
-            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
+            <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h4 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#1e293b' }}>{t('settings.team.addNewUser')}</h4>
-                <button onClick={() => { setIsAdding(false); setAddForm(BLANK_ADD) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                <h4 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{t('settings.team.addNewUser')}</h4>
+                <button onClick={() => { setIsAdding(false); setAddForm(BLANK_ADD) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                   <X size={18} />
                 </button>
               </div>
@@ -1245,23 +1245,23 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
 
           {/* Team List */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <h4 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#334155' }}>{t('settings.team.existingMembers')}</h4>
+            <h4 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{t('settings.team.existingMembers')}</h4>
             {loading ? (
-              <div style={{ padding: 20, textAlign: 'center', color: '#64748b', fontSize: 14 }}>{t('settings.team.loadingTeam')}</div>
+              <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>{t('settings.team.loadingTeam')}</div>
             ) : teamMembers.length === 0 ? (
-              <div style={{ padding: 20, textAlign: 'center', background: '#f8fafc', borderRadius: 8, color: '#64748b', fontSize: 14 }}>
+              <div style={{ padding: 20, textAlign: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 14 }}>
                 {t('settings.team.noMembers')}
               </div>
             ) : (
               teamMembers.map(user => {
                 const isEditing = editingId === user.id
                 return (
-                  <div key={user.id} style={{ border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff', overflow: 'hidden' }}>
+                  <div key={user.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, background: 'var(--bg-secondary)', overflow: 'hidden' }}>
                     {/* VIEW MODE */}
                     {!isEditing && (
                       <div style={{ display: 'flex', gap: 16, padding: 16, alignItems: 'flex-start' }}>
                         {/* Photo */}
-                        <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#f1f5f9', border: '2px solid #e2e8f0', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: '#94a3b8' }}>
+                        <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--bg-card)', border: '2px solid var(--border-subtle)', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: 'var(--text-muted)' }}>
                           {user.photo_url
                             ? <img src={user.photo_url} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             : (user.name?.[0] || '?').toUpperCase()}
@@ -1269,24 +1269,24 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                             <div>
-                              <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 15 }}>{user.name || t('settings.team.unnamed')}</div>
+                              <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 15 }}>{user.name || t('settings.team.unnamed')}</div>
                             </div>
                             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                              <span style={{ padding: '3px 10px', background: user.role === 'admin' ? '#ede9fe' : '#f0fdf4', color: user.role === 'admin' ? '#7c3aed' : '#16a34a', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
+                              <span style={{ padding: '3px 10px', background: user.role === 'admin' ? 'rgba(124, 58, 237, 0.15)' : 'rgba(16, 185, 129, 0.15)', color: user.role === 'admin' ? '#a78bfa' : '#34d399', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
                                 {ROLE_OPTIONS.find(r => r.value === user.role)?.label || user.role}
                               </span>
-                              <button onClick={() => startEdit(user)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b5cf6', padding: 6 }} title={t('settings.team.edit')}><Edit3 size={15} /></button>
-                              <button onClick={() => handleRemove(user.id, user.name)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 6 }} title={t('settings.team.remove')}><Trash2 size={15} /></button>
+                              <button onClick={() => startEdit(user)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a78bfa', padding: 6 }} title={t('settings.team.edit')}><Edit3 size={15} /></button>
+                              <button onClick={() => handleRemove(user.id, user.name)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', padding: 6 }} title={t('settings.team.remove')}><Trash2 size={15} /></button>
                             </div>
                           </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '6px 16px', fontSize: 12, color: '#64748b' }}>
-                            {user.email && <div><strong>{t('settings.team.email')}</strong> {user.email}</div>}
-                            {user.phone && <div><strong>{t('settings.team.phone')}</strong> {user.phone}</div>}
-                            {user.gender && <div><strong>{t('settings.team.genderLabel')}</strong> {user.gender}</div>}
-                            {user.age && <div><strong>{t('settings.team.ageLabel')}</strong> {user.age}</div>}
-                            {user.date_of_birth && <div><strong>{t('settings.team.dobLabel')}</strong> {new Date(user.date_of_birth).toLocaleDateString()}</div>}
-                            {user.date_of_joining && <div><strong>{t('settings.team.joinedLabel')}</strong> {new Date(user.date_of_joining).toLocaleDateString()}</div>}
-                            {user.address && <div style={{ gridColumn: '1 / -1' }}><strong>{t('settings.team.addressLabel')}</strong> {user.address}</div>}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '6px 16px', fontSize: 12, color: 'var(--text-muted)' }}>
+                            {user.email && <div><strong style={{ color: 'var(--text-secondary)' }}>{t('settings.team.email')}</strong> {user.email}</div>}
+                            {user.phone && <div><strong style={{ color: 'var(--text-secondary)' }}>{t('settings.team.phone')}</strong> {user.phone}</div>}
+                            {user.gender && <div><strong style={{ color: 'var(--text-secondary)' }}>{t('settings.team.genderLabel')}</strong> {user.gender}</div>}
+                            {user.age && <div><strong style={{ color: 'var(--text-secondary)' }}>{t('settings.team.ageLabel')}</strong> {user.age}</div>}
+                            {user.date_of_birth && <div><strong style={{ color: 'var(--text-secondary)' }}>{t('settings.team.dobLabel')}</strong> {new Date(user.date_of_birth).toLocaleDateString()}</div>}
+                            {user.date_of_joining && <div><strong style={{ color: 'var(--text-secondary)' }}>{t('settings.team.joinedLabel')}</strong> {new Date(user.date_of_joining).toLocaleDateString()}</div>}
+                            {user.address && <div style={{ gridColumn: '1 / -1' }}><strong style={{ color: 'var(--text-secondary)' }}>{t('settings.team.addressLabel')}</strong> {user.address}</div>}
                           </div>
                         </div>
                       </div>
@@ -1299,7 +1299,7 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
                           {/* Photo edit */}
                           <div
                             onClick={() => editPhotoRef.current?.click()}
-                            style={{ width: 70, height: 70, borderRadius: '50%', background: '#f1f5f9', border: '2px dashed #8b5cf6', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 11, color: '#8b5cf6', textAlign: 'center' }}
+                            style={{ width: 70, height: 70, borderRadius: '50%', background: 'var(--bg-card)', border: '2px dashed #8b5cf6', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 11, color: '#a78bfa', textAlign: 'center' }}
                             title={t('settings.team.changePhoto')}
                           >
                             {editPhoto
@@ -1310,8 +1310,8 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
                           </div>
                           <input type="file" accept="image/*" ref={editPhotoRef} style={{ display: 'none' }} onChange={e => setEditPhoto(e.target.files[0] || null)} />
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>{t('settings.team.editingPrefix')} {editForm.name}</div>
-                            <div style={{ fontSize: 12, color: '#94a3b8' }}>{t('settings.team.clickPhotoHint')}</div>
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{t('settings.team.editingPrefix')} {editForm.name}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('settings.team.clickPhotoHint')}</div>
                           </div>
                         </div>
 

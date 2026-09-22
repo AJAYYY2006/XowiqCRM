@@ -454,9 +454,9 @@ export default function Invoices({ session, profile }) {
               onClick={() => setStatusFilter(f)}
               style={{
                 padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-                border: statusFilter === f ? '1.5px solid #f37a23' : '1.5px solid #e5e7eb',
-                background: statusFilter === f ? '#fff5f0' : '#fff',
-                color: statusFilter === f ? '#f37a23' : '#666',
+                border: statusFilter === f ? '1.5px solid var(--accent)' : '1px solid var(--border-subtle)',
+                background: statusFilter === f ? 'var(--accent-light)' : 'var(--bg-secondary)',
+                color: statusFilter === f ? 'var(--accent)' : 'var(--text-secondary)',
                 cursor: 'pointer', transition: 'all 0.2s'
               }}
             >
@@ -508,25 +508,25 @@ export default function Invoices({ session, profile }) {
                       key={inv.id}
                       style={{ cursor: 'pointer', transition: 'background 0.15s' }}
                       onClick={() => setViewingInvoice(inv)}
-                      className="hover:bg-slate-50"
                     >
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ 
                             fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 6, 
-                            background: '#ffedd5', color: '#ea580c', fontFamily: 'monospace' 
+                            background: 'rgba(255, 89, 0, 0.12)', color: 'var(--accent)', 
+                            border: '1px solid rgba(255, 89, 0, 0.25)', fontFamily: 'monospace' 
                           }}>
                             {invNo}
                           </span>
-                          <span className="fw-bold" style={{ color: '#1e293b' }}>{meta.name || 'Invoice'}</span>
+                          <span className="fw-bold" style={{ color: 'var(--text-primary)' }}>{meta.name || 'Invoice'}</span>
                         </div>
-                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
                           Created: {new Date(inv.created_at).toLocaleDateString()}
                         </div>
                       </td>
 
                       <td>
-                        <span style={{ fontWeight: 600, color: '#1e293b' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
                           {inv.accounts?.account_name || inv.opportunities?.accounts?.account_name || '—'}
                         </span>
                       </td>
@@ -538,7 +538,7 @@ export default function Invoices({ session, profile }) {
                               onClick={() => navigate('/dashboard/opportunities', { state: { openId: linkedOpp.id } })}
                               style={{ 
                                 display: 'inline-flex', alignItems: 'center', gap: 4, 
-                                fontSize: 11, color: '#ff5900', fontWeight: 700, 
+                                fontSize: 11, color: 'var(--accent)', fontWeight: 700, 
                                 cursor: 'pointer', textDecoration: 'none'
                               }}
                               title="Click to open Opportunity"
@@ -548,7 +548,7 @@ export default function Invoices({ session, profile }) {
                               <TrendingUp size={12} /> {linkedOpp.name}
                             </span>
                           ) : (
-                            <span style={{ fontSize: 11, color: '#94a3b8' }}>No linked deal</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>No linked deal</span>
                           )}
 
                           {linkedQuote ? (
@@ -556,7 +556,7 @@ export default function Invoices({ session, profile }) {
                               onClick={() => navigate('/dashboard/quotes', { state: { openId: linkedQuote.id } })}
                               style={{ 
                                 display: 'inline-flex', alignItems: 'center', gap: 4, 
-                                fontSize: 11, color: '#2563eb', fontWeight: 600, 
+                                fontSize: 11, color: '#60a5fa', fontWeight: 600, 
                                 cursor: 'pointer'
                               }}
                               title="Click to open Quote"
@@ -569,24 +569,19 @@ export default function Invoices({ session, profile }) {
                         </div>
                       </td>
 
-                      <td className="fw-bold" style={{ color: '#1e293b' }}>
+                      <td className="fw-bold" style={{ color: 'var(--text-primary)' }}>
                         {profile?.currency || '$'}{Number(inv.total_price).toLocaleString()}
                       </td>
 
-                      <td>
+                      <td style={{ color: 'var(--text-secondary)' }}>
                         {inv.expires_at ? new Date(inv.expires_at).toLocaleDateString() : '—'}
                       </td>
 
                       <td>
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleQuickStatusToggle(inv) }}
-                          className="badge" 
-                          style={{
-                            border: 'none', cursor: 'pointer',
-                            padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700,
-                            backgroundColor: inv.status === 'Paid' ? '#dcfce3' : inv.status === 'Overdue' ? '#fee2e2' : '#fef9c3',
-                            color: inv.status === 'Paid' ? '#166534' : inv.status === 'Overdue' ? '#991b1b' : '#854d0e'
-                          }}
+                          className={`badge badge-${(inv.status || 'unpaid').toLowerCase()}`}
+                          style={{ border: 'none', cursor: 'pointer' }}
                           title="Click to toggle status"
                         >
                           {inv.status || 'Unpaid'}
@@ -597,7 +592,7 @@ export default function Invoices({ session, profile }) {
                         <div className="flex gap-1" style={{ justifyContent: 'flex-end' }}>
                           <button 
                             className="btn-icon" 
-                            style={{ color: '#2563eb' }} 
+                            style={{ color: '#60a5fa' }} 
                             onClick={() => setViewingInvoice(inv)} 
                             title="Open Invoice Preview"
                           >
@@ -659,10 +654,10 @@ export default function Invoices({ session, profile }) {
                   }}>
                     {viewingInvoice.invoice_number || `INV-${viewingInvoice.id.slice(0,6).toUpperCase()}`}
                   </div>
-                  <span style={{
-                    padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 800,
-                    background: viewingInvoice.status === 'Paid' ? '#dcfce3' : '#fef3c7',
-                    color: viewingInvoice.status === 'Paid' ? '#166534' : '#b45309'
+                  <span className={`badge badge-${(viewingInvoice.status || 'unpaid').toLowerCase()}`} style={{
+                    padding: '4px 12px', fontSize: 12, fontWeight: 800,
+                    background: viewingInvoice.status === 'Paid' ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.25)',
+                    color: '#fff'
                   }}>
                     {viewingInvoice.status || 'Unpaid'}
                   </span>
@@ -687,17 +682,17 @@ export default function Invoices({ session, profile }) {
               {/* Linked Records Strip */}
               <div style={{ 
                 display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
-                gap: 12, background: '#f8fafc', padding: 16, borderRadius: 12, border: '1px solid #e2e8f0' 
+                gap: 12, background: 'var(--bg-secondary)', padding: 16, borderRadius: 12, border: '1px solid var(--border-subtle)' 
               }}>
                 <div>
-                  <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Billed Customer</div>
-                  <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 14 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Billed Customer</div>
+                  <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 14 }}>
                     {viewingInvoice.accounts?.account_name || viewingInvoice.opportunities?.accounts?.account_name || '—'}
                   </div>
                   {viewingInvoice.accounts?.id && (
                     <span 
                       onClick={() => navigate('/dashboard/accounts', { state: { openId: viewingInvoice.accounts.id } })}
-                      style={{ fontSize: 11, color: '#ff5900', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4 }}
+                      style={{ fontSize: 11, color: 'var(--accent)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontWeight: 600 }}
                     >
                       View Account <ExternalLink size={11} />
                     </span>
@@ -705,26 +700,26 @@ export default function Invoices({ session, profile }) {
                 </div>
 
                 <div>
-                  <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Linked Deal / Opportunity</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Linked Deal / Opportunity</div>
                   {viewingInvoice.opportunities ? (
                     <div>
-                      <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 13 }}>
+                      <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 13 }}>
                         {viewingInvoice.opportunities.name}
                       </div>
                       <span 
                         onClick={() => navigate('/dashboard/opportunities', { state: { openId: viewingInvoice.opportunities.id } })}
-                        style={{ fontSize: 11, color: '#ff5900', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontWeight: 600 }}
+                        style={{ fontSize: 11, color: 'var(--accent)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontWeight: 600 }}
                       >
                         Open Deal <ExternalLink size={11} />
                       </span>
                     </div>
                   ) : (
-                    <span style={{ fontSize: 13, color: '#94a3b8' }}>No Deal Linked</span>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>No Deal Linked</span>
                   )}
                 </div>
 
                 <div>
-                  <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Linked Proposal / Quote</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Linked Proposal / Quote</div>
                   {(() => {
                     const meta = parseInvoiceMeta(viewingInvoice.quote_name)
                     const q = quotesList.find(item => item.id === meta.quote_id || (viewingInvoice.opportunity_id && item.opportunity_id === viewingInvoice.opportunity_id))
@@ -733,46 +728,46 @@ export default function Invoices({ session, profile }) {
                       try { qName = JSON.parse(q.quote_name)?.name || q.quote_name } catch { qName = q.quote_name }
                       return (
                         <div>
-                          <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 13 }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 13 }}>
                             {qName || 'Linked Proposal'}
                           </div>
                           <span 
                             onClick={() => navigate('/dashboard/quotes', { state: { openId: q.id } })}
-                            style={{ fontSize: 11, color: '#2563eb', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontWeight: 600 }}
+                            style={{ fontSize: 11, color: '#60a5fa', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontWeight: 600 }}
                           >
                             Open Quote <ExternalLink size={11} />
                           </span>
                         </div>
                       )
                     }
-                    return <span style={{ fontSize: 13, color: '#94a3b8' }}>No Quote Linked</span>
+                    return <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>No Quote Linked</span>
                   })()}
                 </div>
               </div>
 
               {/* Amount Breakdown Card */}
-              <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12 }}>Description</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 12 }}>Total</th>
+                    <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)' }}>Description</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>Total</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <td style={{ padding: '14px 16px', fontWeight: 600, color: '#1e293b' }}>
+                      <td style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--text-primary)' }}>
                         {parseInvoiceName(viewingInvoice.quote_name)}
                       </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 700, color: '#1e293b' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)' }}>
                         {profile?.currency || '$'}{Number(viewingInvoice.total_price).toLocaleString()}
                       </td>
                     </tr>
                   </tbody>
                   <tfoot>
-                    <tr style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
-                      <td style={{ padding: '14px 16px', fontWeight: 800, fontSize: 14 }}>Total Due:</td>
-                      <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 900, fontSize: 18, color: '#ea580c' }}>
+                    <tr style={{ background: 'var(--bg-secondary)', borderTop: '2px solid var(--border-subtle)' }}>
+                      <td style={{ padding: '14px 16px', fontWeight: 800, fontSize: 14, color: 'var(--text-primary)' }}>Total Due:</td>
+                      <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 900, fontSize: 18, color: 'var(--accent)' }}>
                         {profile?.currency || '$'}{Number(viewingInvoice.total_price).toLocaleString()}
                       </td>
                     </tr>
@@ -783,7 +778,7 @@ export default function Invoices({ session, profile }) {
 
             {/* Modal Actions */}
             <div style={{ 
-              padding: '16px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', 
+              padding: '16px 24px', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border-subtle)', 
               display: 'flex', justifyContent: 'space-between', alignItems: 'center' 
             }}>
               <button 
