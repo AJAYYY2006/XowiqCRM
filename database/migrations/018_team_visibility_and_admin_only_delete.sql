@@ -72,10 +72,25 @@ AS $$
   );
 $$;
 
+-- True when the current user is an admin or administrator
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE(
+    (SELECT LOWER(COALESCE(p.role, 'user')) IN ('admin', 'administrator')
+       FROM public.profiles p
+      WHERE p.id = auth.uid()),
+    false
+  );
+$$;
+
 GRANT EXECUTE ON FUNCTION public.admin_of(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.team_admin_id() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.same_team(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.can_edit_records() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 1b. Allow the B2C Store Owner role (assignable in the UI) in profiles.role,
