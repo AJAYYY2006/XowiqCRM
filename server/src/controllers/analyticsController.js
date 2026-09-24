@@ -1,4 +1,4 @@
-import { supabaseServer } from '../config/supabase.js'
+import prisma from '../config/prisma.js'
 
 export async function getDashboardMetrics(req, res, next) {
   try {
@@ -7,23 +7,42 @@ export async function getDashboardMetrics(req, res, next) {
 
     // Calculate dates
     const now = new Date()
-    let startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    let startDate = new Date(now.getFullYear(), now.getMonth(), 1)
     if (range === 'last_30_days') {
-      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
     } else if (range === 'this_year') {
-      startDate = new Date(now.getFullYear(), 0, 1).toISOString()
+      startDate = new Date(now.getFullYear(), 0, 1)
     }
 
-    const [leadsRes, dealsRes, ticketsRes, tasksRes, invoicesRes] = await Promise.all([
-      supabaseServer.from('leads').select('id, status', { count: 'exact' }).eq('user_id', userId),
-      supabaseServer.from('opportunities').select('id, stage, amount, probability').eq('user_id', userId),
-      supabaseServer.from('tickets').select('id, status, priority', { count: 'exact' }).eq('user_id', userId).in('status', ['open', 'pending']),
-      supabaseServer.from('tasks').select('id, status, priority', { count: 'exact' }).eq('user_id', userId).neq('status', 'Completed'),
-      supabaseServer.from('invoices').select('id, amount, status, created_at').eq('user_id', userId)
+    const [
+      totalLeads,
+      deals,
+      openTickets,
+      pendingTasks,
+      invoices
+    ] = await Promise.all([
+      prisma.lead.count({ where: { userId } }),
+      prisma.opportunity.findMany({
+        where: { userId },
+        select: { id: true, stage: true, amount: true, probability: true }
+      }),
+      prisma.ticket.count({
+        where: {
+          userId,
+          status: { in: ['open', 'pending'] }
+        }
+      }),
+      prisma.task.count({
+        where: {
+          userId,
+          status: { not: 'Completed' }
+        }
+      }),
+      prisma.invoice.findMany({
+        where: { userId },
+        select: { id: true, amount: true, status: true, createdAt: true }
+      })
     ])
-
-    const deals = dealsRes.data || []
-    const invoices = invoicesRes.data || []
 
     const totalPipeline = deals.reduce((sum, d) => sum + (Number(d.amount) || 0), 0)
     const paidRevenue = invoices
@@ -38,13 +57,13 @@ export async function getDashboardMetrics(req, res, next) {
       success: true,
       data: {
         summary: {
-          totalLeads: leadsRes.count || 0,
+          totalLeads,
           totalDeals: deals.length,
           totalPipelineValue: totalPipeline,
           paidRevenue,
           pendingRevenue,
-          openTickets: ticketsRes.count || 0,
-          pendingTasks: tasksRes.count || 0
+          openTickets,
+          pendingTasks
         },
         dealsByStage: deals.reduce((acc, d) => {
           const st = d.stage || 'prospecting'

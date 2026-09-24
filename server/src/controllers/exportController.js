@@ -1,35 +1,50 @@
-import { supabaseServer } from '../config/supabase.js'
+import prisma from '../config/prisma.js'
 
 export async function exportCsv(req, res, next) {
   try {
     const userId = req.userId
     const { module = 'leads' } = req.params
 
-    const validModules = ['leads', 'accounts', 'contacts', 'opportunities', 'invoices', 'tasks', 'tickets']
-    if (!validModules.includes(module)) {
-      return res.status(400).json({ success: false, error: 'Invalid module specified for CSV export' })
+    const validModules = {
+      leads: 'lead',
+      accounts: 'account',
+      contacts: 'contact',
+      opportunities: 'opportunity',
+      deals: 'opportunity',
+      invoices: 'invoice',
+      quotes: 'quote',
+      tasks: 'task',
+      tickets: 'ticket',
+      services: 'service'
     }
 
-    const { data, error } = await supabaseServer
-      .from(module)
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
+    const prismaModel = validModules[module.toLowerCase()]
+    if (!prismaModel) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid module '${module}'. Valid options: ${Object.keys(validModules).join(', ')}`
+      })
+    }
 
-    if (error) throw error
+    // Query data using Prisma
+    const data = await prisma[prismaModel].findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' }
+    })
 
     if (!data || data.length === 0) {
       return res.status(200).send('No records found')
     }
 
-    // Convert JSON array to CSV format
-    const headers = Object.keys(data[0]).filter(k => k !== 'custom_data')
+    // Convert objects to clean CSV format
+    const headers = Object.keys(data[0]).filter(k => k !== 'customData' && k !== 'lineItems')
     const csvRows = [
       headers.join(','),
       ...data.map(row => {
         return headers.map(header => {
           const val = row[header]
           if (val === null || val === undefined) return '""'
+          if (val instanceof Date) return `"${val.toISOString()}"`
           const str = typeof val === 'object' ? JSON.stringify(val) : String(val)
           return `"${str.replace(/"/g, '""')}"`
         }).join(',')

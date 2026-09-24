@@ -1,4 +1,4 @@
-import { supabaseServer } from '../config/supabase.js'
+import prisma from '../config/prisma.js'
 
 export async function checkHealth(req, res) {
   const startTime = Date.now()
@@ -7,9 +7,9 @@ export async function checkHealth(req, res) {
 
   try {
     const dbStart = Date.now()
-    const { error } = await supabaseServer.from('_migrations').select('count', { count: 'exact', head: true })
+    // Test database connection through Prisma Client
+    await prisma.$queryRaw`SELECT 1`
     dbLatencyMs = Date.now() - dbStart
-    if (error) dbStatus = 'degraded: ' + error.message
   } catch (err) {
     dbStatus = 'unreachable: ' + err.message
   }
@@ -20,6 +20,7 @@ export async function checkHealth(req, res) {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     responseTimeMs: Date.now() - startTime,
+    orm: 'Prisma v6',
     database: {
       status: dbStatus,
       latencyMs: dbLatencyMs
