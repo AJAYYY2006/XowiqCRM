@@ -34,7 +34,7 @@ export default function Leads({ session, profile }) {
 
   // Form State
   const [formData, setFormData] = useState({
-    name: '', company: '', email: '', lead_owner: '', status: 'new',
+    name: '', company: '', email: '', contact_number: '', gender: '', lead_owner: '', status: 'new',
     custom_data: {}
   })
 
@@ -191,7 +191,8 @@ export default function Leads({ session, profile }) {
         lead_name: lead.name || '',
         email: lead.email || '',
         company: lead.company || '',
-        contact_number: lead.contact_number || ''
+        contact_number: lead.contact_number || '',
+        gender: lead.gender || lead.custom_data?.gender || ''
       })
       Object.entries(lead.custom_data || {}).forEach(([k, v]) => {
         if (v !== null && v !== undefined && v !== '') seeded[k] = v
@@ -201,6 +202,7 @@ export default function Leads({ session, profile }) {
         company: lead.company || '',
         email: lead.email || '',
         contact_number: lead.contact_number || '',
+        gender: lead.gender || lead.custom_data?.gender || '',
         lead_owner: lead.lead_owner || '',
         status: lead.status || 'new',
         custom_data: seeded
@@ -212,7 +214,7 @@ export default function Leads({ session, profile }) {
       customFieldConfigs.forEach(f => { initialCustom[f.field_key] = '' })
 
       setFormData({
-        name: '', company: '', email: '',
+        name: '', company: '', email: '', contact_number: '', gender: '',
         lead_owner: profile?.name || session.user.email,
         status: 'new',
         custom_data: initialCustom
@@ -389,8 +391,12 @@ export default function Leads({ session, profile }) {
       email: custom_data?.email || dbFields.email || null,
       company: custom_data?.company || dbFields.company || null,
       contact_number: custom_data?.contact_number || dbFields.contact_number || '',
+      gender: dbFields.gender || custom_data?.gender || null,
       lead_owner: dbFields.lead_owner || profile?.name || session.user.email,
-      custom_data: custom_data || {}
+      custom_data: {
+        ...(custom_data || {}),
+        gender: dbFields.gender || custom_data?.gender || ''
+      }
     }
 
     try {
@@ -933,7 +939,7 @@ export default function Leads({ session, profile }) {
                       <label className="form-label">Gender</label>
                       <select
                         className="form-input"
-                        value={formData.custom_data?.gender || ''}
+                        value={formData.gender || formData.custom_data?.gender || ''}
                         onChange={e => setFormData({
                           ...formData,
                           gender: e.target.value,
