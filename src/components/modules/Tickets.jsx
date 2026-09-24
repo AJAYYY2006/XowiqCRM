@@ -290,6 +290,8 @@ export default function Tickets({ session, profile }) {
       if (error) throw error
       toast.success(`Ticket marked as ${newStatus}`)
       
+      setSelectedTicket(prev => (prev && prev.id === id ? { ...prev, status: newStatus } : prev))
+      
       const ticket = tickets.find(t => t.id === id)
       await supabase.from('activities').insert([{
         user_id: session.user.id,
@@ -310,6 +312,10 @@ export default function Tickets({ session, profile }) {
         .update({ priority: newPriority })
         .eq('id', id)
         
+      if (error) throw error
+
+      setSelectedTicket(prev => (prev && prev.id === id ? { ...prev, priority: newPriority } : prev))
+
       const ticket = tickets.find(t => t.id === id)
       await supabase.from('activities').insert([{
         user_id: session.user.id,
@@ -455,7 +461,17 @@ export default function Tickets({ session, profile }) {
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                   <span className="font-mono text-muted" style={{ fontSize: '14px' }}>{selectedTicket.ticket_no}</span>
-                  <span className={`badge badge-${selectedTicket.status}`}>{selectedTicket.status}</span>
+                  <select
+                    value={selectedTicket.status}
+                    onChange={(e) => handleStatusChange(selectedTicket.id, e.target.value)}
+                    className={`badge badge-${selectedTicket.status}`}
+                    style={{ border: 'none', fontWeight: 700, cursor: 'pointer', outline: 'none', padding: '4px 8px', borderRadius: 6 }}
+                    title="Change Status"
+                  >
+                    <option value="open">Open</option>
+                    <option value="pending">Pending</option>
+                    <option value="closed">Closed</option>
+                  </select>
                 </div>
                 <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 800 }}>{selectedTicket.subject}</h1>
               </div>
@@ -471,7 +487,17 @@ export default function Tickets({ session, profile }) {
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Priority</label>
                   <div style={{ marginTop: 4 }}>
-                    <span className={`badge badge-${selectedTicket.priority}`}>{selectedTicket.priority}</span>
+                    <select
+                      value={selectedTicket.priority}
+                      onChange={(e) => handlePriorityChange(selectedTicket.id, e.target.value)}
+                      className={`badge badge-${selectedTicket.priority}`}
+                      style={{ border: 'none', fontWeight: 700, cursor: 'pointer', outline: 'none', padding: '4px 8px', borderRadius: 6 }}
+                      title="Change Priority"
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
                   </div>
                 </div>
                 <div>
@@ -514,21 +540,32 @@ export default function Tickets({ session, profile }) {
                 </div>
 
                 <div style={{ marginTop: 8, padding: 16, background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0 }}>
-                     Need to update the status quickly?
-                   </p>
-                   <select 
+                  <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+                    Quick Status
+                  </label>
+                  <select 
                     value={selectedTicket.status} 
-                    onChange={(e) => {
-                      handleStatusChange(selectedTicket.id, e.target.value);
-                      setSelectedTicket(prev => ({...prev, status: e.target.value}));
-                    }}
+                    onChange={(e) => handleStatusChange(selectedTicket.id, e.target.value)}
                     className={`badge badge-${selectedTicket.status}`}
-                    style={{ marginTop: 12, width: '100%', border: '1.5px solid var(--border-subtle)', borderRadius: 8 }}
+                    style={{ width: '100%', border: '1.5px solid var(--border-subtle)', borderRadius: 8, padding: '6px 10px', fontWeight: 600, cursor: 'pointer' }}
                   >
                     <option value="open">Open</option>
                     <option value="pending">Pending</option>
                     <option value="closed">Closed</option>
+                  </select>
+
+                  <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginTop: 14, marginBottom: 6 }}>
+                    Quick Priority
+                  </label>
+                  <select 
+                    value={selectedTicket.priority} 
+                    onChange={(e) => handlePriorityChange(selectedTicket.id, e.target.value)}
+                    className={`badge badge-${selectedTicket.priority}`}
+                    style={{ width: '100%', border: '1.5px solid var(--border-subtle)', borderRadius: 8, padding: '6px 10px', fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
                   </select>
                 </div>
               </div>
@@ -795,12 +832,13 @@ export default function Tickets({ session, profile }) {
                       }
                       if (config.field_key === 'priority') {
                         return (
-                          <td key={config.id}>
+                          <td key={config.id} onClick={(e) => e.stopPropagation()}>
                             <select 
                               value={ticket.priority} 
                               onChange={(e) => { e.stopPropagation(); handlePriorityChange(ticket.id, e.target.value); }}
                               className={`badge badge-${ticket.priority}`}
-                              style={{ border: 'none', fontWeight: 600, appearance: 'none', paddingRight: 16 }}
+                              style={{ border: 'none', fontWeight: 600, cursor: 'pointer', outline: 'none', padding: '4px 8px', borderRadius: 6 }}
+                              title="Change Priority"
                             >
                               <option value="low">Low</option>
                               <option value="medium">Medium</option>
@@ -811,12 +849,13 @@ export default function Tickets({ session, profile }) {
                       }
                       if (config.field_key === 'status') {
                         return (
-                          <td key={config.id}>
+                          <td key={config.id} onClick={(e) => e.stopPropagation()}>
                             <select 
                               value={ticket.status} 
                               onChange={(e) => { e.stopPropagation(); handleStatusChange(ticket.id, e.target.value); }}
                               className={`badge badge-${ticket.status}`}
-                              style={{ border: 'none', fontWeight: 600, appearance: 'none', paddingRight: 16 }}
+                              style={{ border: 'none', fontWeight: 600, cursor: 'pointer', outline: 'none', padding: '4px 8px', borderRadius: 6 }}
+                              title="Change Status"
                             >
                               <option value="open">Open</option>
                               <option value="pending">Pending</option>

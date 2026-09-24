@@ -514,7 +514,36 @@ export default function Leads({ session, profile }) {
                     recordName={selectedLead.name}
                   />
                 </div>
-                <div className={`badge badge-${selectedLead.status} mt-2`}>{selectedLead.status}</div>
+                <div style={{ marginTop: 8 }}>
+                  <select
+                    value={selectedLead.status}
+                    onChange={async (e) => {
+                      const newStatus = e.target.value
+                      await handleStatusChange(selectedLead.id, newStatus, selectedLead)
+                      if (newStatus === 'converted') {
+                        setSelectedLead(null)
+                      } else {
+                        setSelectedLead(prev => prev ? ({ ...prev, status: newStatus }) : null)
+                      }
+                    }}
+                    className={`badge badge-${selectedLead.status}`}
+                    style={{
+                      border: 'none',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      outline: 'none',
+                      padding: '4px 10px',
+                      fontSize: '12px'
+                    }}
+                    title="Change status"
+                  >
+                    <option value="new">New</option>
+                    <option value="contacted">Contacted</option>
+                    <option value="working">Working</option>
+                    <option value="converted">Converted</option>
+                    <option value="lost">Lost</option>
+                  </select>
+                </div>
               </div>
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
                 <button className="btn btn-secondary" onClick={() => handleOpenModal(selectedLead)}>
@@ -538,12 +567,28 @@ export default function Leads({ session, profile }) {
               </div>
               <div className="detail-field">
                 <label>Lead Owner</label>
-                <span>{selectedLead.lead_owner}</span>
+                <span>{selectedLead.lead_owner || '—'}</span>
+              </div>
+              <div className="detail-field">
+                <label>Gender</label>
+                <span style={{ fontWeight: 600 }}>{selectedLead.gender || selectedLead.custom_data?.gender || '—'}</span>
               </div>
               <div className="detail-field">
                 <label>Created Date</label>
                 <span>{new Date(selectedLead.created_at).toLocaleDateString()}</span>
               </div>
+              {customFieldConfigs
+                .filter(f => !['name', 'lead_name', 'email', 'company', 'contact_number', 'phone', 'gender', 'lead_owner', 'status', 'unique_id'].includes(f.field_key))
+                .map(f => {
+                  const val = selectedLead[f.field_key] || selectedLead.custom_data?.[f.field_key]
+                  if (!val && val !== false) return null
+                  return (
+                    <div key={f.id} className="detail-field">
+                      <label>{f.field_label || f.label || f.name || f.field_key}</label>
+                      <span>{String(val)}</span>
+                    </div>
+                  )
+                })}
             </div>
           </div>
 

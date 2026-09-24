@@ -875,6 +875,7 @@ export default function Accounts({ session, profile }) {
                 })()}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px', marginTop: 15 }}>
+                <div style={detailFieldStyle}><span style={labelStyle}>Owner:</span> <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{selectedAccount.account_owner || 'Unassigned'}</span></div>
                 <div style={detailFieldStyle}><span style={labelStyle}>Email:</span> <span style={{ color: 'var(--text-primary)' }}>{selectedAccount.email || selectedAccount.contacts?.[0]?.email || '—'}</span></div>
                 <div style={{ ...detailFieldStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={labelStyle}>Phone:</span>
@@ -1737,6 +1738,7 @@ export default function Accounts({ session, profile }) {
             <thead>
               <tr>
                 <th style={{ minWidth: 180 }}>{t('modules.accounts.colProfile')}</th>
+                <th>{t('modules.accounts.colOwner', 'Account Owner')}</th>
                 <th>{t('modules.accounts.colStatus')}</th>
                 {isB2C && b2cStages.length > 0 && <th>{t('modules.accounts.colStage')}</th>}
                 {customFieldConfigs.filter(c => c.show_in_list && !c.is_core).map(config => (
@@ -1758,6 +1760,11 @@ export default function Accounts({ session, profile }) {
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{acc.phone || acc.email || 'No contact info'}</div>
                       </div>
                     </div>
+                  </td>
+                  <td>
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                      {acc.account_owner || '—'}
+                    </span>
                   </td>
                   <td>
                     <span className={`badge badge-${(acc.status || '').toLowerCase()}`}>{acc.status}</span>

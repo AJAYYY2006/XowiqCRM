@@ -621,7 +621,9 @@ function AboutSection({ session, profile, onBack }) {
 // ════════════════════════════════════════════════════════════════════════════
 function MoneySection({ session, profile, onBack }) {
   const { t } = useTranslation()
-  const [currency, setCurrency] = useState(profile?.currency || '$')
+  const [currency, setCurrency] = useState(
+    profile?.currency || lsGet('currency') || localStorage.getItem('xowiq_currency') || '$'
+  )
   const [taxRate, setTaxRate] = useState(
     String(profile?.tax_rate ?? lsGet('tax_rate', 18))
   )
@@ -657,37 +659,53 @@ function MoneySection({ session, profile, onBack }) {
     setSaving(true)
     const tid = toast.loading(t('settings.money.savingMsg'))
 
-    // Save to localStorage always
+    // Save to localStorage immediately for fast fallback
     lsSet('currency', currency)
+    localStorage.setItem('xowiq_currency', currency)
+    localStorage.setItem('currency', currency)
     lsSet('tax_rate', parseFloat(taxRate))
     lsSet('payment_due_days', parseInt(dueDays, 10))
     lsSet('revenue_goal', parseFloat(revenueGoal))
 
-    // Save currency (this column definitely exists)
-    const { error } = await supabase
-      .from('profiles')
-      .update({ currency })
-      .eq('id', session.user.id)
+    try {
+      // 1. Update currency & money settings on current user's profile
+      const { error: profileErr } = await supabase
+        .from('profiles')
+        .update({
+          currency,
+          tax_rate: parseFloat(taxRate),
+          payment_due_days: parseInt(dueDays, 10),
+          revenue_goal: parseFloat(revenueGoal),
+        })
+        .eq('id', session.user.id)
 
-    // Attempt to save new columns (might silently fail if migration not run yet, but localStorage handles it locally)
-    await supabase
-      .from('profiles')
-      .update({
-        tax_rate: parseFloat(taxRate),
-        payment_due_days: parseInt(dueDays, 10),
-        revenue_goal: parseFloat(revenueGoal),
-      })
-      .eq('id', session.user.id)
+      if (profileErr) {
+        console.warn('Full profile update had an issue, falling back to currency-only update:', profileErr)
+        const { error: currErr } = await supabase
+          .from('profiles')
+          .update({ currency })
+          .eq('id', session.user.id)
+        if (currErr) throw currErr
+      }
 
-    if (error) {
+      // 2. If current user is an admin, also update currency for team members
+      const userRole = (profile?.role || session?.user?.user_metadata?.role || '').toLowerCase()
+      if (['admin', 'administrator'].includes(userRole)) {
+        await supabase
+          .from('profiles')
+          .update({ currency })
+          .eq('created_by_admin_id', session.user.id)
+      }
+
       toast.success(t('settings.money.savedSuccess'), { id: tid })
-    } else {
-      toast.success(t('settings.money.savedSuccess'), { id: tid })
+      // Reload so currency propagates to all tiles and modules
+      setTimeout(() => window.location.reload(), 600)
+    } catch (err) {
+      console.error('Error saving currency settings:', err)
+      toast.error('Failed to update currency settings: ' + (err.message || 'Unknown error'), { id: tid })
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
-    // Reload so currency propagates to all tiles (same as original behaviour)
-    setTimeout(() => window.location.reload(), 900)
   }
 
   return (

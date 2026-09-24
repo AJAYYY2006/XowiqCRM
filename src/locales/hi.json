@@ -469,6 +469,7 @@
       "addNewAccount": "नया खाता जोड़ें",
       "searchPlaceholder": "नाम, फ़ोन या ईमेल द्वारा ग्राहकों को खोजें...",
       "colProfile": "ग्राहक प्रोफाइल",
+      "colOwner": "खाता स्वामी",
       "colStatus": "स्थिति",
       "colStage": "चरण",
       "colActions": "कार्रवाइयां"

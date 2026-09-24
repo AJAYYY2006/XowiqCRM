@@ -469,6 +469,7 @@
       "addNewAccount": "Add New Account",
       "searchPlaceholder": "Search customers by name, phone, email...",
       "colProfile": "Customer Profile",
+      "colOwner": "Account Owner",
       "colStatus": "Status",
       "colStage": "Stage",
       "colActions": "Actions"
