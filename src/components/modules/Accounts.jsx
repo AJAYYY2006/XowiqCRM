@@ -546,12 +546,13 @@ export default function Accounts({ session, profile }) {
   }
 
   const handleOpenModal = (account = null) => {
+    const defaultOwner = profile?.name || session?.user?.user_metadata?.name || session?.user?.email || ''
     if (account) {
       setEditingAccount(account)
       setFormData({
         account_name: account.account_name, 
         domain: account.domain || '', 
-        account_owner: account.account_owner || profile?.name || session.user.email, 
+        account_owner: account.account_owner || account.custom_data?.account_owner || defaultOwner, 
         status: account.status || 'Active',
         phone: account.phone || account.contacts?.[0]?.phone || '', 
         email: account.email || account.contacts?.[0]?.email || '', 
@@ -572,7 +573,7 @@ export default function Accounts({ session, profile }) {
       setFormData({ 
         account_name: '', 
         domain: '', 
-        account_owner: profile?.name || session.user.email, 
+        account_owner: defaultOwner, 
         status: 'Active', 
         phone: '', 
         email: '', 
@@ -875,7 +876,7 @@ export default function Accounts({ session, profile }) {
                 })()}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px', marginTop: 15 }}>
-                <div style={detailFieldStyle}><span style={labelStyle}>Owner:</span> <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{selectedAccount.account_owner || 'Unassigned'}</span></div>
+                <div style={detailFieldStyle}><span style={labelStyle}>Owner:</span> <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{selectedAccount.account_owner || selectedAccount.custom_data?.account_owner || (selectedAccount.user_id === session.user.id ? (profile?.name || session.user.email) : null) || 'Unassigned'}</span></div>
                 <div style={detailFieldStyle}><span style={labelStyle}>Email:</span> <span style={{ color: 'var(--text-primary)' }}>{selectedAccount.email || selectedAccount.contacts?.[0]?.email || '—'}</span></div>
                 <div style={{ ...detailFieldStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={labelStyle}>Phone:</span>
@@ -901,7 +902,7 @@ export default function Accounts({ session, profile }) {
             </div>
             <div style={{ textAlign: 'right', paddingLeft: 24, borderLeft: '1px solid var(--border-subtle)' }}>
                <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 15 }}>
-                 <div style={{ marginBottom: 4 }}><span style={labelStyle}>Owner:</span> <span style={{ color: 'var(--text-primary)' }}>{selectedAccount.account_owner || 'Unassigned'}</span></div>
+                 <div style={{ marginBottom: 4 }}><span style={labelStyle}>Owner:</span> <span style={{ color: 'var(--text-primary)' }}>{selectedAccount.account_owner || selectedAccount.custom_data?.account_owner || (selectedAccount.user_id === session.user.id ? (profile?.name || session.user.email) : null) || 'Unassigned'}</span></div>
                  <div><span style={labelStyle}>Joined:</span> <span style={{ color: 'var(--text-primary)' }}>{new Date(selectedAccount.created_at).toLocaleDateString()}</span></div>
                  <div><span style={labelStyle}>Last Update:</span> <span style={{ color: 'var(--text-primary)' }}>{new Date(selectedAccount.updated_at || selectedAccount.created_at).toLocaleString()}</span></div>
                </div>
@@ -1408,7 +1409,7 @@ export default function Accounts({ session, profile }) {
                       address: formData.custom_data?.address || formData.address || null,
                       notes: formData.notes,
                       status: formData.status,
-                      account_owner: formData.account_owner,
+                      account_owner: formData.account_owner || profile?.name || session.user.email || null,
                       custom_data: formData.custom_data,
                       user_id: session.user.id,
                       updated_at: new Date().toISOString()
@@ -1482,6 +1483,17 @@ export default function Accounts({ session, profile }) {
                         }, session.user.id)}
                       </div>
                     ))}
+
+                   <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                     <label className="form-label">{t('modules.accounts.colOwner', 'Account Owner')}</label>
+                     <input
+                       type="text"
+                       className="form-input"
+                       value={formData.account_owner || ''}
+                       onChange={e => setFormData({ ...formData, account_owner: e.target.value })}
+                       placeholder="Enter account owner..."
+                     />
+                   </div>
                  </div>
                  
                  <div className="form-actions" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid #f1f5f9' }}>
@@ -1534,7 +1546,7 @@ export default function Accounts({ session, profile }) {
                 </div>
                 <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                    <div className="form-group">
-                      <label className="form-label">Price ($)</label>
+                      <label className="form-label">Price ({profile?.currency || '₹'})</label>
                       <input type="number" className="form-input" value={serviceAssignForm.price} onChange={e => setServiceAssignForm({...serviceAssignForm, price: e.target.value})} />
                    </div>
                    <div className="form-group">
@@ -1763,7 +1775,7 @@ export default function Accounts({ session, profile }) {
                   </td>
                   <td>
                     <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>
-                      {acc.account_owner || '—'}
+                      {acc.account_owner || acc.custom_data?.account_owner || (acc.user_id === session.user.id ? (profile?.name || session.user.email) : null) || '—'}
                     </span>
                   </td>
                   <td>
@@ -1838,7 +1850,7 @@ export default function Accounts({ session, profile }) {
                     address: formData.custom_data?.address || formData.address || null, // Keep legacy columns for compatibility
                     notes: formData.notes,
                     status: formData.status,
-                    account_owner: formData.account_owner,
+                    account_owner: formData.account_owner || profile?.name || session.user.email || null,
                     custom_data: formData.custom_data,
                     user_id: session.user.id,
                     updated_at: new Date().toISOString()
@@ -1905,6 +1917,17 @@ export default function Accounts({ session, profile }) {
                       }, session.user.id)}
                     </div>
                   ))}
+
+                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                   <label className="form-label">{t('modules.accounts.colOwner', 'Account Owner')}</label>
+                   <input
+                     type="text"
+                     className="form-input"
+                     value={formData.account_owner || ''}
+                     onChange={e => setFormData({ ...formData, account_owner: e.target.value })}
+                     placeholder="Enter account owner..."
+                   />
+                 </div>
                </div>
                
                <div className="form-actions" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid #f1f5f9' }}>

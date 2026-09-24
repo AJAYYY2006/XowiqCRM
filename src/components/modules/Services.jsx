@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
 import {
-  Plus, Edit2, Trash2, Package, DollarSign, Clock, Save,
+  Plus, Edit2, Trash2, Package, Clock, Save,
   Settings2, Zap, Layers, UploadCloud, Search, X,
   LayoutGrid, List, Activity, Users, ArrowRight
 } from 'lucide-react'
@@ -1711,7 +1711,21 @@ export default function Services({ session, profile }) {
                     Standard Price ({profile?.currency || '₹'}) *
                   </label>
                   <div style={{ position: 'relative' }}>
-                    <DollarSign size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: isDark ? '#64748b' : '#94a3b8' }} />
+                    <span
+                      style={{
+                        position: 'absolute',
+                        left: 12,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: isDark ? '#94a3b8' : '#64748b',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        pointerEvents: 'none',
+                        lineHeight: 1
+                      }}
+                    >
+                      {profile?.currency || '₹'}
+                    </span>
                     <input
                       type="number"
                       required

@@ -237,7 +237,7 @@ export default function Leads({ session, profile }) {
       const payload = {
         user_id: session.user.id,
         account_name: leadData.name,
-        account_owner: leadData.lead_owner || null,
+        account_owner: leadData.lead_owner || profile?.name || session.user.email || null,
         status: 'Active',
         b2c_stage_id: stageId,
         email: leadData.email || leadData.custom_data?.email || leadData.custom_data?.email_id || null,
@@ -281,7 +281,7 @@ export default function Leads({ session, profile }) {
         .insert([{
           user_id: session.user.id,
           account_name: leadData.company || `${leadData.name}'s Account`,
-          account_owner: leadData.lead_owner || null,
+          account_owner: leadData.lead_owner || profile?.name || session.user.email || null,
           status: 'prospect'
         }]).select()
         
