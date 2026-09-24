@@ -10,6 +10,12 @@
     "build": "vite build",
     "seed": "node scripts/seed_dev_users.js",
     "migrate": "node scripts/migrate.js",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
+    "prisma:studio": "prisma studio",
+    "prisma:pull": "prisma db pull",
+    "prisma:push": "prisma db push",
+    "prisma:verify": "node scripts/verify_prisma.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -44,6 +50,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@prisma/client": "^6.19.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.0",
@@ -55,6 +62,7 @@
     "globals": "^17.4.0",
     "pg": "^8.23.0",
     "postcss": "^8.5.28",
+    "prisma": "^6.19.3",
     "tailwindcss": "^3.4.19",
     "vite": "^8.0.0"
   }

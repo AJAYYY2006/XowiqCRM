@@ -1,0 +1,564 @@
+// ==============================================================================
+// XOWIQ CRM — Prisma Schema
+// Enterprise-Scale Multi-Tenant CRM Database Definition
+// Target Database: PostgreSQL (Supabase)
+// ==============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = []
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ==============================================================================
+// Enums
+// ==============================================================================
+
+enum FieldTypeEnum {
+  text
+  number
+  dropdown
+  multi_select
+  date
+  checkbox
+  file_upload
+  url
+  long_text
+
+  @@map("field_type_enum")
+}
+
+// ==============================================================================
+// Core CRM Models
+// ==============================================================================
+
+/// Customer and company directory (supports B2B and B2C modes with custom fields and stages)
+model Account {
+  id               String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId           String            @map("user_id") @db.Uuid
+  accountName      String            @map("account_name")
+  domain           String?
+  accountOwner     String?           @map("account_owner")
+  status           String?           @default("active")
+  createdAt        DateTime?         @default(now()) @map("created_at") @db.Timestamptz(6)
+  address          String?
+  gender           String?
+  dateOfBirth      DateTime?         @map("date_of_birth") @db.Date
+  notes            String?
+  email            String?
+  phone            String?
+  b2cStageId       String?           @map("b2c_stage_id") @db.Uuid
+  customData       Json?             @default("{}") @map("custom_data")
+  updatedAt        DateTime?         @default(now()) @map("updated_at") @db.Timestamptz(6)
+  industry         String?
+  website          String?
+  accountType      String?           @default("B2B") @map("account_type")
+  assignedTo       String?           @map("assigned_to") @db.Uuid
+
+  // Relations
+  b2cStage         B2cStage?         @relation(fields: [b2cStageId], references: [id], onDelete: SetNull)
+  contacts         Contact[]
+  opportunities    Opportunity[]
+  quotes           Quote[]
+  invoices         Invoice[]
+  customerServices CustomerService[]
+  tasks            Task[]
+  tickets          Ticket[]
+
+  @@index([b2cStageId], map: "idx_accounts_b2c_stage")
+  @@index([userId, createdAt], map: "idx_accounts_user_created")
+  @@map("accounts")
+}
+
+/// Individual contact persons linked to accounts and inbound leads
+model Contact {
+  id           String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId       String       @map("user_id") @db.Uuid
+  name         String
+  email        String?
+  accountId    String?      @map("account_id") @db.Uuid
+  uniqueId     String?      @unique(map: "contacts_unique_id_key") @default(dbgenerated("('CT-'::text || upper(substr((uuid_generate_v4())::text, 1, 8)))")) @map("unique_id")
+  phone        String?
+  contactOwner String?      @map("contact_owner")
+  leadId       String?      @map("lead_id") @db.Uuid
+  createdAt    DateTime?    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime?    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  title        String?
+  department   String?
+  customData   Json?        @default("{}") @map("custom_data")
+  gender       String?
+
+  // Relations
+  account      Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  tickets      Ticket[]
+
+  @@index([userId, accountId], map: "idx_contacts_user_acc")
+  @@index([leadId], map: "idx_contacts_lead")
+  @@map("contacts")
+}
+
+/// Inbound inquiries, lead scoring, status tracking, and source attribution
+model Lead {
+  id            String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId        String        @map("user_id") @db.Uuid
+  serialNo      Int           @default(autoincrement()) @map("serial_no")
+  name          String
+  company       String?
+  email         String?
+  uniqueId      String?       @unique(map: "leads_unique_id_key") @default(dbgenerated("('LD-'::text || upper(substr((uuid_generate_v4())::text, 1, 8)))")) @map("unique_id")
+  leadOwner     String?       @map("lead_owner")
+  status        String?       @default("new")
+  createdAt     DateTime?     @default(now()) @map("created_at") @db.Timestamptz(6)
+  contactNumber String?       @default("") @map("contact_number")
+  customData    Json?         @default("{}") @map("custom_data")
+  updatedAt     DateTime?     @default(now()) @map("updated_at") @db.Timestamptz(6)
+  source        String?       @default("Website")
+  score         Int?          @default(0)
+
+  // Relations
+  contacts      Contact[]
+  opportunities Opportunity[]
+
+  @@index([userId, createdAt], map: "idx_leads_user_created")
+  @@index([status], map: "idx_leads_status")
+  @@map("leads")
+}
+
+/// Deal pipeline stages, deal values, win probabilities, and expected revenues
+model Opportunity {
+  id              String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId          String     @map("user_id") @db.Uuid
+  name            String
+  accountId       String?    @map("account_id") @db.Uuid
+  stage           String?    @default("prospecting")
+  closedDate      DateTime?  @map("closed_date") @db.Date
+  amount          Decimal?   @default(0) @db.Decimal
+  owner           String?
+  createdAt       DateTime?  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime?  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  probability     Int?       @default(50)
+  expectedRevenue Decimal?   @default(0) @map("expected_revenue") @db.Decimal
+  leadId          String?    @map("lead_id") @db.Uuid
+  customData      Json?      @default("{}") @map("custom_data")
+
+  // Relations
+  account         Account?   @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  lead            Lead?      @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  products        Product[]
+  quotes          Quote[]
+  invoices        Invoice[]
+
+  @@index([userId, stage], map: "idx_opps_user_stage")
+  @@index([accountId], map: "idx_opps_account")
+  @@index([createdAt], map: "idx_opps_created")
+  @@map("opportunities")
+}
+
+/// Catalog products attached to deals/opportunities
+model Product {
+  id            String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId        String       @map("user_id") @db.Uuid
+  opportunityId String?      @map("opportunity_id") @db.Uuid
+  name          String
+  quantity      Int?         @default(1)
+  unitPrice     Decimal?     @default(0) @map("unit_price") @db.Decimal
+  total         Decimal?     @db.Decimal
+  createdAt     DateTime?    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@map("products")
+}
+
+/// Proposals, custom line items, expiration dates, discount & tax calculations
+model Quote {
+  id               String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId           String            @map("user_id") @db.Uuid
+  quoteName        String            @map("quote_name")
+  opportunityId    String?           @map("opportunity_id") @db.Uuid
+  expiresAt        DateTime?         @map("expires_at") @db.Date
+  totalPrice       Decimal?          @default(0) @map("total_price") @db.Decimal
+  createdAt        DateTime?         @default(now()) @map("created_at") @db.Timestamptz(6)
+  invoiceNumber    String?           @map("invoice_number")
+  status           String?           @default("Unpaid")
+  accountId        String?           @map("account_id") @db.Uuid
+  updatedAt        DateTime?         @default(now()) @map("updated_at") @db.Timestamptz(6)
+  lineItems        Json?             @default("[]") @map("line_items")
+  taxRate          Decimal?          @default(18) @map("tax_rate") @db.Decimal
+  discount         Decimal?          @default(0) @db.Decimal
+  customData       Json?             @default("{}") @map("custom_data")
+
+  // Relations
+  opportunity      Opportunity?      @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  account          Account?          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  invoices         Invoice[]
+  customerServices CustomerService[]
+
+  @@index([userId, status], map: "idx_quotes_user_status")
+  @@index([accountId], map: "idx_quotes_account")
+  @@map("quotes")
+}
+
+/// Billing records, status tracking (Paid/Unpaid/Overdue), and PDF documents
+model Invoice {
+  id            String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId        String       @map("user_id") @db.Uuid
+  opportunityId String?      @map("opportunity_id") @db.Uuid
+  quoteId       String?      @map("quote_id") @db.Uuid
+  invoiceName   String       @map("invoice_name")
+  amount        Decimal?     @default(0) @db.Decimal
+  status        String?      @default("draft")
+  dueDate       DateTime?    @map("due_date") @db.Date
+  createdAt     DateTime?    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime?    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  accountId     String?      @map("account_id") @db.Uuid
+  paidAt        DateTime?    @map("paid_at") @db.Timestamptz(6)
+  pdfUrl        String?      @map("pdf_url")
+  lineItems     Json?        @default("[]") @map("line_items")
+  customData    Json?        @default("{}") @map("custom_data")
+
+  // Relations
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  quote         Quote?       @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  account       Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status], map: "idx_invoices_user_status")
+  @@index([dueDate], map: "idx_invoices_due_date")
+  @@map("invoices")
+}
+
+/// Master catalog of customer services and recurring subscription packages
+model Service {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String?           @map("user_id") @db.Uuid
+  serviceName      String            @map("service_name")
+  price            Decimal?          @default(0) @db.Decimal
+  reminderDays     Int?              @default(7) @map("reminder_days")
+  description      String?
+  status           String?           @default("active")
+  createdAt        DateTime?         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime?         @default(now()) @map("updated_at") @db.Timestamptz(6)
+  serviceType      String?           @default("Instant") @map("service_type")
+
+  // Relations
+  customerServices CustomerService[]
+
+  @@index([userId], map: "idx_services_user")
+  @@map("services")
+}
+
+/// Client-specific service instances, stages, and recurring tracking
+model CustomerService {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String?   @map("user_id") @db.Uuid
+  accountId    String?   @map("account_id") @db.Uuid
+  serviceId    String?   @map("service_id") @db.Uuid
+  price        Decimal?  @default(0) @db.Decimal
+  assignedDate DateTime? @default(now()) @map("assigned_date") @db.Date
+  status       String?   @default("Active")
+  notes        String?
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  quoteId      String?   @map("quote_id") @db.Uuid
+  taskId       String?   @map("task_id") @db.Uuid
+  customData   Json?     @default("{}") @map("custom_data")
+  updatedAt    DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  account      Account?  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  service      Service?  @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  quote        Quote?    @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  task         Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([accountId], map: "idx_customer_services_acc")
+  @@map("customer_services")
+}
+
+/// Actionable tasks, deadlines, priorities, and assignments
+model Task {
+  id               String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId           String            @map("user_id") @db.Uuid
+  title            String
+  dueDate          DateTime?         @map("due_date") @db.Date
+  status           String?           @default("Open")
+  relatedTo        String?           @map("related_to")
+  relatedId        String?           @map("related_id") @db.Uuid
+  createdAt        DateTime?         @default(now()) @map("created_at") @db.Timestamptz(6)
+  taskType         String?           @map("task_type")
+  owner            String?
+  accountId        String?           @map("account_id") @db.Uuid
+  updatedAt        DateTime?         @default(now()) @map("updated_at") @db.Timestamptz(6)
+  customData       Json?             @default("{}") @map("custom_data")
+  priority         String?           @default("Medium")
+  assignedTo       String?           @map("assigned_to") @db.Uuid
+
+  // Relations
+  account          Account?          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  customerServices CustomerService[]
+
+  @@index([userId, status, dueDate], map: "idx_tasks_user_status_due")
+  @@map("tasks")
+}
+
+/// Customer support tickets, priority levels, assignments, and resolution notes
+model Ticket {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  ticketNo    String?   @unique(map: "tickets_ticket_no_key") @default(dbgenerated("('TK-'::text || lpad((floor((random() * (100000)::double precision)))::text, 5, '0'::text))")) @map("ticket_no")
+  subject     String
+  priority    String?   @default("medium")
+  status      String?   @default("open")
+  owner       String?
+  contactId   String?   @map("contact_id") @db.Uuid
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  description String?
+  accountId   String?   @map("account_id") @db.Uuid
+  customData  Json?     @default("{}") @map("custom_data")
+  updatedAt   DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  resolution  String?
+  closedAt    DateTime? @map("closed_at") @db.Timestamptz(6)
+
+  // Relations
+  contact     Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  account     Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, priority], map: "idx_tickets_user_status_prio")
+  @@map("tickets")
+}
+
+/// Custom BI reporting templates, saved configurations, and filters
+model Report {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  reportName  String    @map("report_name")
+  description String?
+  folder      String?   @default("General")
+  createdBy   String?   @map("created_by")
+  reportType  String?   @default("custom") @map("report_type")
+  filters     Json?     @default("{}")
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("reports")
+}
+
+/// Audit log of user interactions and milestone completions
+model Activity {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  type        String
+  description String?
+  relatedTo   String?   @map("related_to")
+  relatedId   String?   @map("related_id") @db.Uuid
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, createdAt], map: "idx_activities_user_created")
+  @@map("activities")
+}
+
+/// Extended user and tenant profile metadata (branding, tax rates, GST, company details)
+model Profile {
+  id               String    @id @db.Uuid
+  name             String
+  email            String
+  createdAt        DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  role             String?   @default("user")
+  phone            String?
+  currency         String?   @default("$")
+  createdBy        String?   @map("created_by") @db.Uuid
+  companyName      String?   @map("company_name")
+  companyType      String?   @default("B2B") @map("company_type")
+  createdByAdminId String?   @map("created_by_admin_id") @db.Uuid
+  businessName     String?   @map("business_name")
+  businessLogoUrl  String?   @map("business_logo_url")
+  businessAddress  String?   @map("business_address")
+  gstId            String?   @map("gst_id")
+  taxRate          Decimal?  @default(18) @map("tax_rate") @db.Decimal
+  paymentDueDays   Int?      @default(15) @map("payment_due_days")
+  updatedAt        DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  avatarUrl        String?   @map("avatar_url")
+  timeZone         String?   @default("UTC") @map("time_zone")
+  revenueGoal      Decimal?  @default(10000) @map("revenue_goal") @db.Decimal
+
+  @@index([createdBy], map: "idx_profiles_created_by")
+  @@map("profiles")
+}
+
+// ==============================================================================
+// Enterprise Scaling & Collaboration
+// ==============================================================================
+
+/// In-app user notifications and system alerts
+model Notification {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  title     String
+  message   String
+  type      String?   @default("info")
+  link      String?
+  isRead    Boolean?  @default(false) @map("is_read")
+  metadata  Json?     @default("{}")
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, isRead], map: "idx_notifications_user_unread")
+  @@map("notifications")
+}
+
+/// Detailed compliance audit trails, security tracking, and entity changelogs
+model AuditLog {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String?   @map("user_id") @db.Uuid
+  entityType String    @map("entity_type")
+  entityId   String    @map("entity_id") @db.Uuid
+  action     String
+  changes    Json?     @default("{}")
+  ipAddress  String?   @map("ip_address")
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([entityType, entityId], map: "idx_audit_logs_entity")
+  @@map("audit_logs")
+}
+
+/// Multi-tenant file and document storage attachments for all CRM entities
+model DocumentAttachment {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  entityType String    @map("entity_type")
+  entityId   String    @map("entity_id") @db.Uuid
+  fileName   String    @map("file_name")
+  fileUrl    String    @map("file_url")
+  fileSize   BigInt?   @map("file_size")
+  fileType   String?   @map("file_type")
+  createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([entityType, entityId], map: "idx_docs_entity")
+  @@map("documents_attachments")
+}
+
+/// Organization team hierarchy, roles (Admin, Manager, Agent), and permissions
+model TeamMember {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adminId      String    @map("admin_id") @db.Uuid
+  memberUserId String    @map("member_user_id") @db.Uuid
+  role         String?   @default("member")
+  department   String?   @default("Sales")
+  permissions  Json?     @default("{\"deals\": true, \"leads\": true, \"reports\": true, \"invoices\": true}")
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([adminId, memberUserId], map: "team_members_admin_id_member_user_id_key")
+  @@map("team_members")
+}
+
+/// Reusable categorization tags with custom hex colors
+model Tag {
+  id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String      @map("user_id") @db.Uuid
+  name       String
+  color      String?     @default("#6366f1")
+  entityType String      @map("entity_type")
+  createdAt  DateTime?   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  entityTags EntityTag[]
+
+  @@unique([userId, name, entityType], map: "tags_user_id_name_entity_type_key")
+  @@map("tags")
+}
+
+/// Relational mapping connecting tags to leads, deals, accounts, tickets, etc.
+model EntityTag {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tagId     String    @map("tag_id") @db.Uuid
+  entityId  String    @map("entity_id") @db.Uuid
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  tag       Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([tagId, entityId], map: "entity_tags_tag_id_entity_id_key")
+  @@map("entity_tags")
+}
+
+/// Outbound webhooks for real-time event-driven automation and third-party integrations
+model WebhookIntegration {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  name            String
+  targetUrl       String    @map("target_url")
+  events          String[]  @default(["lead.created", "opportunity.won", "invoice.paid"])
+  secretKey       String?   @map("secret_key")
+  isActive        Boolean?  @default(true) @map("is_active")
+  lastTriggeredAt DateTime? @map("last_triggered_at") @db.Timestamptz(6)
+  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("webhook_integrations")
+}
+
+/// Customizable stage pipelines for B2C customer lifecycles
+model B2cStage {
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String?            @map("user_id") @db.Uuid
+  name           String
+  color          String             @default("#f97316")
+  orderIndex     Int                @default(0) @map("order_index")
+  createdAt      DateTime?          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  accounts       Account[]
+  customerStages B2cCustomerStage[]
+
+  @@map("b2c_stages")
+}
+
+/// Stage movement history log for B2C customers
+model B2cCustomerStage {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stageId    String?   @map("stage_id") @db.Uuid
+  serviceId  String?   @map("service_id") @db.Uuid
+  movedAt    DateTime? @default(now()) @map("moved_at") @db.Timestamptz(6)
+  customerId BigInt?   @map("customer_id")
+
+  // Relations
+  stage      B2cStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
+
+  @@map("b2c_customer_stages")
+}
+
+/// Dynamic custom field schema configurations per module
+model CustomFieldConfig {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId   String        @map("business_id") @db.Uuid
+  module       String        @default("customer_profile")
+  fieldKey     String        @map("field_key")
+  label        String
+  fieldType    FieldTypeEnum @default(text) @map("field_type")
+  options      String[]
+  isRequired   Boolean?      @default(false) @map("is_required")
+  isCore       Boolean?      @default(false) @map("is_core")
+  showInList   Boolean?      @default(true) @map("show_in_list")
+  displayOrder Int           @default(0) @map("display_order")
+  isArchived   Boolean?      @default(false) @map("is_archived")
+  createdAt    DateTime?     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime?     @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([businessId, module, fieldKey], map: "unique_field_per_module")
+  @@map("custom_field_configs")
+}
+
+/// Migration execution tracking table
+model Migration {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique(map: "_migrations_name_key") @db.VarChar
+  appliedAt DateTime? @default(now()) @map("applied_at") @db.Timestamptz(6)
+
+  @@map("_migrations")
+}
