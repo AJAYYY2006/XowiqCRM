@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
-import { Trash2, Edit2, Package, Plus, Calendar, CreditCard, Clock, FileText, CheckCircle, Download, Check, X, Phone, Save, Link2, Settings, AlertCircle, ArrowUp, ArrowDown, LayoutGrid, UploadCloud, TrendingUp, ExternalLink, ChevronDown, ChevronRight, Receipt, Eye } from 'lucide-react'
+import { Trash2, Edit2, Package, Plus, Calendar, CreditCard, Clock, FileText, CheckCircle, Download, Check, X, Phone, Save, Link2, Settings, AlertCircle, ArrowUp, ArrowDown, LayoutGrid, UploadCloud, TrendingUp, ExternalLink, ChevronDown, ChevronRight, Receipt, Eye, Users, Globe, Mail } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
 import BulkUploadModal from '../ui/BulkUploadModal'
 import WhatsAppButton from '../ui/WhatsAppButton'
 import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../lib/whatsapp'
+import { sanitizePhone, validatePhone, validateEmail, validateWebsite, validateRequired } from '../../lib/validation'
 import { useTranslation } from 'react-i18next'
 import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
@@ -38,6 +39,42 @@ function renderCustomFieldInput(config, value, onChange, businessId) {
     className: 'form-input',
     value: value || '',
     onChange: (e) => onChange(e.target.value)
+  }
+
+  // Handle phone / contact number fields strictly
+  if (config.field_key === 'contact_number' || config.field_type === 'phone' || config.field_type === 'tel') {
+    return (
+      <input
+        type="tel"
+        {...commonProps}
+        maxLength={10}
+        inputMode="numeric"
+        placeholder="10-digit mobile number"
+        onChange={(e) => onChange(sanitizePhone(e.target.value))}
+      />
+    )
+  }
+
+  // Handle email fields strictly
+  if (config.field_key === 'email_id' || config.field_type === 'email') {
+    return (
+      <input
+        type="email"
+        {...commonProps}
+        placeholder="user@gmail.com"
+      />
+    )
+  }
+
+  // Handle website URL fields strictly
+  if (config.field_key === 'website' || config.field_type === 'url') {
+    return (
+      <input
+        type="url"
+        {...commonProps}
+        placeholder="https://example.com"
+      />
+    )
   }
 
   switch (config.field_type) {
@@ -160,7 +197,15 @@ export default function Accounts({ session, profile }) {
     next_follow_up_date: ''
   })
   
-  const [activeTab, setActiveTab] = useState(isB2C ? 'services' : 'opportunities')
+  const [activeTab, setActiveTab] = useState(isB2C ? 'services' : 'contacts')
+  const [isAddContactModalOpen, setIsAddContactModalOpen] = useState(false)
+  const [newContactForm, setNewContactForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    gender: '',
+    contact_owner: profile?.name || session?.user?.email || ''
+  })
   const { t } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
@@ -368,10 +413,15 @@ export default function Accounts({ session, profile }) {
       
       if (error) throw error
 
-      const coreFieldsTarget = [
-        { label: isB2C ? 'Customer Name' : 'Account Name', field_key: 'customer_name', field_type: 'text', is_core: true, order: 0 },
+      const coreFieldsTarget = isB2C ? [
+        { label: 'Customer Name', field_key: 'customer_name', field_type: 'text', is_core: true, order: 0 },
         { label: 'Contact Number', field_key: 'contact_number', field_type: 'text', is_core: true, order: 1 },
         { label: 'Email ID', field_key: 'email_id', field_type: 'text', is_core: true, order: 2 },
+        { label: 'Address', field_key: 'address', field_type: 'long_text', is_core: true, order: 3 }
+      ] : [
+        { label: 'Account Name', field_key: 'customer_name', field_type: 'text', is_core: true, order: 0 },
+        { label: 'Contact Number', field_key: 'contact_number', field_type: 'text', is_core: true, order: 1 },
+        { label: 'Website Link', field_key: 'website', field_type: 'url', is_core: true, order: 2 },
         { label: 'Address', field_key: 'address', field_type: 'long_text', is_core: true, order: 3 }
       ]
 
@@ -397,8 +447,10 @@ export default function Accounts({ session, profile }) {
         }
       }
 
-      const allowedKeys = ['customer_name', 'contact_number', 'email_id', 'address']
-      setCustomFieldConfigs(finalData.filter(f => !f.is_archived && allowedKeys.includes(f.field_key)))
+      const allowedKeys = isB2C 
+        ? ['customer_name', 'contact_number', 'email_id', 'address'] 
+        : ['customer_name', 'contact_number', 'website', 'address']
+      setCustomFieldConfigs(finalData.filter(f => !f.is_archived && (!f.is_core || allowedKeys.includes(f.field_key))))
     } catch (err) {
       console.error('Error loading custom fields:', err)
     }
@@ -562,6 +614,7 @@ export default function Accounts({ session, profile }) {
         custom_data: {
           customer_name: account.account_name || '',
           contact_number: account.phone || account.contacts?.[0]?.phone || '',
+          website: account.website || account.domain || account.custom_data?.website || '',
           email_id: account.email || account.contacts?.[0]?.email || '',
           address: account.address || '',
           ...(account.custom_data || {})
@@ -583,6 +636,7 @@ export default function Accounts({ session, profile }) {
         custom_data: {
           customer_name: '',
           contact_number: '',
+          website: '',
           email_id: '',
           address: ''
         },
@@ -846,14 +900,26 @@ export default function Accounts({ session, profile }) {
           <button className="back-btn" onClick={() => setSelectedAccount(null)} style={{ margin: 0 }} title="Back to Accounts">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
           </button>
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary" onClick={() => {
+              setNewContactForm({
+                name: '',
+                email: '',
+                phone: '',
+                gender: '',
+                contact_owner: profile?.name || session?.user?.email || ''
+              })
+              setIsAddContactModalOpen(true)
+            }}>
+              <Plus size={16} /> Add Contact
+            </button>
             <button className="btn btn-secondary" onClick={() => { setActiveTab('opportunities'); handleOpenOppModal(); }}>
               <TrendingUp size={16} /> Add Opportunity
             </button>
             {!isB2C && (
               <button className="btn btn-secondary" onClick={() => handleOpenServiceModal()}><Plus size={16} /> Add Service Entry</button>
             )}
-            <button className="btn btn-primary" onClick={() => handleOpenModal(selectedAccount)}><Edit2 size={16} /> Edit Profile</button>
+            <button className="btn btn-primary" onClick={() => handleOpenModal(selectedAccount)}><Edit2 size={16} /> {isB2C ? 'Edit Profile' : 'Edit Account'}</button>
           </div>
         </div>
 
@@ -877,7 +943,31 @@ export default function Accounts({ session, profile }) {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px', marginTop: 15 }}>
                 <div style={detailFieldStyle}><span style={labelStyle}>Owner:</span> <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{selectedAccount.account_owner || selectedAccount.custom_data?.account_owner || (selectedAccount.user_id === session.user.id ? (profile?.name || session.user.email) : null) || 'Unassigned'}</span></div>
-                <div style={detailFieldStyle}><span style={labelStyle}>Email:</span> <span style={{ color: 'var(--text-primary)' }}>{selectedAccount.email || selectedAccount.contacts?.[0]?.email || '—'}</span></div>
+                
+                {/* Website Link */}
+                {(!isB2C || selectedAccount.website || selectedAccount.domain || selectedAccount.custom_data?.website) && (
+                  <div style={detailFieldStyle}>
+                    <span style={labelStyle}>Website:</span>{' '}
+                    {(selectedAccount.website || selectedAccount.domain || selectedAccount.custom_data?.website) ? (
+                      <a
+                        href={(selectedAccount.website || selectedAccount.domain || selectedAccount.custom_data?.website).startsWith('http') ? (selectedAccount.website || selectedAccount.domain || selectedAccount.custom_data?.website) : `https://${selectedAccount.website || selectedAccount.domain || selectedAccount.custom_data?.website}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: '#f37a23', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      >
+                        {selectedAccount.website || selectedAccount.domain || selectedAccount.custom_data?.website} <ExternalLink size={12} />
+                      </a>
+                    ) : (
+                      <span style={{ color: 'var(--text-secondary)' }}>—</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Email (Shown for B2C or if present) */}
+                {(isB2C || selectedAccount.email || selectedAccount.contacts?.[0]?.email) && (
+                  <div style={detailFieldStyle}><span style={labelStyle}>Email:</span> <span style={{ color: 'var(--text-primary)' }}>{selectedAccount.email || selectedAccount.contacts?.[0]?.email || '—'}</span></div>
+                )}
+
                 <div style={{ ...detailFieldStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={labelStyle}>Phone:</span>
                   <span style={{ color: 'var(--text-primary)' }}>{(() => { const raw = selectedAccount.phone || selectedAccount.contacts?.[0]?.phone; const cleaned = cleanPhoneNumber(raw); return cleaned ? formatPhoneDisplay(cleaned) : (raw || '—'); })()}</span>
@@ -892,6 +982,17 @@ export default function Accounts({ session, profile }) {
                     recordName={selectedAccount.account_name}
                   />
                 </div>
+
+                <div style={{ ...detailFieldStyle, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={labelStyle}>Contacts:</span>
+                  <button
+                    onClick={() => setActiveTab('contacts')}
+                    style={{ background: 'none', border: 'none', padding: 0, color: '#f37a23', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    {accContacts.length} linked contact{accContacts.length === 1 ? '' : 's'}
+                  </button>
+                </div>
+
                 <div style={{ ...detailFieldStyle, gridColumn: 'span 2' }}>
                   <span style={labelStyle}>Address:</span>
                   <div style={{ marginTop: 4, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
@@ -931,9 +1032,14 @@ export default function Accounts({ session, profile }) {
         </div>
 
         <div className="tabs" style={{ marginBottom: 24 }}>
-          <button className={`tab ${activeTab === 'opportunities' ? 'active' : ''}`} onClick={() => setActiveTab('opportunities')}>
-            <TrendingUp size={16} /> Opportunities {accOpportunities.length > 0 && <span className="tab-badge">{accOpportunities.length}</span>}
+          <button className={`tab ${activeTab === 'contacts' ? 'active' : ''}`} onClick={() => setActiveTab('contacts')}>
+            <Users size={16} /> Contacts {accContacts.length > 0 && <span className="tab-badge">{accContacts.length}</span>}
           </button>
+          {!isB2C && (
+            <button className={`tab ${activeTab === 'opportunities' ? 'active' : ''}`} onClick={() => setActiveTab('opportunities')}>
+              <TrendingUp size={16} /> Opportunities {accOpportunities.length > 0 && <span className="tab-badge">{accOpportunities.length}</span>}
+            </button>
+          )}
           <button className={`tab ${activeTab === 'services' ? 'active' : ''}`} onClick={() => setActiveTab('services')}><Package size={16} /> Service History</button>
           <button className={`tab ${activeTab === 'invoices' ? 'active' : ''}`} onClick={() => setActiveTab('invoices')}><CreditCard size={16} /> Invoices</button>
           <button className={`tab ${activeTab === 'reminders' ? 'active' : ''}`} onClick={() => setActiveTab('reminders')}><Calendar size={16} /> Reminders {activeTasks.length > 0 && <span className="tab-badge">{activeTasks.length}</span>}</button>
@@ -941,6 +1047,163 @@ export default function Accounts({ session, profile }) {
         </div>
 
         <div className="tab-content">
+          {activeTab === 'contacts' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+                    Contacts ({accContacts.length})
+                  </h3>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    People and stakeholders associated with {selectedAccount.account_name}
+                  </div>
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setNewContactForm({
+                      name: '',
+                      email: '',
+                      phone: '',
+                      gender: '',
+                      contact_owner: profile?.name || session?.user?.email || ''
+                    })
+                    setIsAddContactModalOpen(true)
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                >
+                  <Plus size={16} /> Add Contact
+                </button>
+              </div>
+
+              {accContacts.length === 0 ? (
+                <div className="card" style={{ padding: '48px 24px', textAlign: 'center' }}>
+                  <div style={{ width: 64, height: 64, borderRadius: 20, background: '#fff7ed', border: '1px solid #fed7aa', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: '#f37a23' }}>
+                    <Users size={32} />
+                  </div>
+                  <h4 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>
+                    No contacts created under this account yet
+                  </h4>
+                  <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-secondary)', maxWidth: 420, marginInline: 'auto' }}>
+                    Add key contacts, managers, and stakeholders to track discussions and communicate with {selectedAccount.account_name}.
+                  </p>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      setNewContactForm({
+                        name: '',
+                        email: '',
+                        phone: '',
+                        gender: '',
+                        contact_owner: profile?.name || session?.user?.email || ''
+                      })
+                      setIsAddContactModalOpen(true)
+                    }}
+                  >
+                    <Plus size={16} /> Add First Contact
+                  </button>
+                </div>
+              ) : (
+                <div className="table-container card">
+                  <div style={{ overflowX: 'auto' }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Contact Name</th>
+                          <th>Email Address</th>
+                          <th>Phone Number</th>
+                          <th>Contact Owner</th>
+                          <th>Added On</th>
+                          <th style={{ textAlign: 'right' }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {accContacts.map(c => (
+                          <tr key={c.id}>
+                            <td className="fw-bold">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>
+                                  {c.name?.[0]?.toUpperCase() || '?'}
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{c.name}</div>
+                                  {c.gender && (
+                                    <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{c.gender}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              {c.email ? (
+                                <a href={`mailto:${c.email}`} style={{ color: '#f37a23', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                  <Mail size={13} /> {c.email}
+                                </a>
+                              ) : (
+                                <span style={{ color: 'var(--text-muted)' }}>—</span>
+                              )}
+                            </td>
+                            <td>
+                              {c.phone ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>
+                                    {formatPhoneDisplay(cleanPhoneNumber(c.phone)) || c.phone}
+                                  </span>
+                                  <WhatsAppButton
+                                    phone={c.phone}
+                                    messageText={getWhatsAppMessage('customer', {
+                                      firstName: (c.name || '').split(' ')[0],
+                                      agentName: profile?.name || session.user.email,
+                                      businessName: profile?.company_name || 'our company'
+                                    })}
+                                    session={session}
+                                    recordName={c.name}
+                                  />
+                                </div>
+                              ) : (
+                                <span style={{ color: 'var(--text-muted)' }}>—</span>
+                              )}
+                            </td>
+                            <td>
+                              <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                                {c.contact_owner || profile?.name || session.user.email || '—'}
+                              </span>
+                            </td>
+                            <td>
+                              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                {c.created_at ? new Date(c.created_at).toLocaleDateString() : '—'}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '6px 10px', color: '#ef4444', borderColor: '#fecaca', background: '#fff' }}
+                                title="Remove contact"
+                                onClick={async () => {
+                                  if (!window.confirm(`Delete contact "${c.name}" from this account?`)) return
+                                  const tId = toast.loading('Deleting contact...')
+                                  try {
+                                    const { error } = await supabase.from('contacts').delete().eq('id', c.id)
+                                    if (error) throw error
+                                    setAccContacts(prev => prev.filter(x => x.id !== c.id))
+                                    toast.success('Contact deleted', { id: tId })
+                                  } catch (err) {
+                                    toast.error(err.message || 'Failed to delete contact', { id: tId })
+                                  }
+                                }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'opportunities' && (
             <div>
               {/* Summary Metric Cards */}
@@ -1395,17 +1658,40 @@ export default function Accounts({ session, profile }) {
           <div className="modal-overlay">
             <div className="modal" style={{ maxWidth: 800 }}>
               <div className="modal-header">
-                <h2 className="modal-title">{editingAccount ? 'Edit Profile' : 'Add New Customer'}</h2>
+                <h2 className="modal-title">{editingAccount ? (isB2C ? 'Edit Profile' : 'Edit Account') : (isB2C ? 'Add New Customer' : 'Add New Account')}</h2>
                 <button className="modal-close" onClick={() => setIsModalOpen(false)}>✕</button>
               </div>
               <form onSubmit={async (e) => {
                   e.preventDefault()
-                  const toastId = toast.loading('Saving profile...')
+                  const nameVal = formData.custom_data?.customer_name || formData.custom_data?.account_name || formData.custom_data?.full_name || formData.account_name
+                  const nameCheck = validateRequired(nameVal, isB2C ? 'Customer Name' : 'Account Name')
+                  if (!nameCheck.valid) { toast.error(nameCheck.error); return }
+
+                  const phoneVal = formData.custom_data?.contact_number || (!formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.phone || ''))
+                  const phoneCheck = validatePhone(phoneVal, { label: 'Contact Number', required: isB2C })
+                  if (!phoneCheck.valid) { toast.error(phoneCheck.error); return }
+
+                  const emailVal = isB2C 
+                    ? (formData.custom_data?.email_id || (formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.email || '')))
+                    : (formData.email || '')
+                  const emailCheck = validateEmail(emailVal, { label: 'Email Address', required: false })
+                  if (!emailCheck.valid) { toast.error(emailCheck.error); return }
+
+                  const websiteVal = formData.custom_data?.website || formData.website || formData.domain || ''
+                  if (!isB2C && websiteVal) {
+                    const webCheck = validateWebsite(websiteVal, { label: 'Website Link', required: false })
+                    if (!webCheck.valid) { toast.error(webCheck.error); return }
+                  }
+
+                  const toastId = toast.loading('Saving...')
                   try {
+                    const cleanWebsite = websiteVal || null
                     const payload = { 
-                      account_name: formData.custom_data?.customer_name || formData.custom_data?.full_name || formData.account_name, 
-                      email: formData.custom_data?.email_id || (formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.email || null)),
-                      phone: formData.custom_data?.contact_number || (!formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.phone || null)),
+                      account_name: nameVal, 
+                      email: emailVal || null,
+                      phone: phoneVal ? sanitizePhone(phoneVal) : null,
+                      website: cleanWebsite,
+                      domain: cleanWebsite,
                       address: formData.custom_data?.address || formData.address || null,
                       notes: formData.notes,
                       status: formData.status,
@@ -1434,16 +1720,18 @@ export default function Accounts({ session, profile }) {
                       const { data: n, error: nErr } = await supabase.from('accounts').insert([payload]).select().single()
                       if (nErr) throw nErr
                       accountId = n.id
-                      await supabase.from('contacts').insert([{ 
-                        account_id: n.id, 
-                        phone: payload.phone, 
-                        email: payload.email, 
-                        name: payload.account_name, 
-                        user_id: session.user.id 
-                      }])
+                      if (isB2C) {
+                        await supabase.from('contacts').insert([{ 
+                          account_id: n.id, 
+                          phone: payload.phone, 
+                          email: payload.email, 
+                          name: payload.account_name, 
+                          user_id: session.user.id 
+                        }])
+                      }
                     }
                     
-                    toast.success('Customer profile saved!', { id: toastId })
+                    toast.success(isB2C ? 'Customer profile saved!' : 'Account saved!', { id: toastId })
                     setIsModalOpen(false)
                     fetchAccounts()
                     // Refresh the detail view with updated data
@@ -1459,7 +1747,7 @@ export default function Accounts({ session, profile }) {
               }}>
                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                    <div className="form-group" style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '12px 20px', borderRadius: 12, border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <label className="form-label" style={{ margin: 0 }}>Customer Relationship Status</label>
+                      <label className="form-label" style={{ margin: 0 }}>{isB2C ? 'Customer Relationship Status' : 'Account Status'}</label>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <span style={{ fontSize: 13, fontWeight: 800, color: formData.status === 'Active' ? '#16a34a' : '#64748b' }}>
                           {formData.status.toUpperCase()}
@@ -1498,8 +1786,123 @@ export default function Accounts({ session, profile }) {
                  
                  <div className="form-actions" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid #f1f5f9' }}>
                     <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
-                    <button type="submit" className="btn btn-primary">{editingAccount ? 'Update Profile' : 'Create Customer'}</button>
+                    <button type="submit" className="btn btn-primary">{editingAccount ? (isB2C ? 'Update Profile' : 'Update Account') : (isB2C ? 'Create Customer' : 'Create Account')}</button>
                  </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Add Contact directly to Account Modal */}
+        {isAddContactModalOpen && selectedAccount && (
+          <div className="modal-overlay">
+            <div className="modal" style={{ maxWidth: 480 }}>
+              <div className="modal-header">
+                <h2 className="modal-title">Add Contact to {selectedAccount.account_name}</h2>
+                <button className="modal-close" onClick={() => setIsAddContactModalOpen(false)}>✕</button>
+              </div>
+              <form onSubmit={async (e) => {
+                e.preventDefault()
+                const nameCheck = validateRequired(newContactForm.name, 'Full Name')
+                if (!nameCheck.valid) { toast.error(nameCheck.error); return }
+
+                const phoneCheck = validatePhone(newContactForm.phone, { label: 'Phone Number', required: false })
+                if (!phoneCheck.valid) { toast.error(phoneCheck.error); return }
+
+                const emailCheck = validateEmail(newContactForm.email, { label: 'Email Address', required: false })
+                if (!emailCheck.valid) { toast.error(emailCheck.error); return }
+
+                const toastId = toast.loading('Saving contact...')
+                try {
+                  const { data, error } = await supabase.from('contacts').insert([{
+                    account_id: selectedAccount.id,
+                    name: newContactForm.name.trim(),
+                    email: newContactForm.email ? newContactForm.email.trim() : null,
+                    phone: newContactForm.phone ? sanitizePhone(newContactForm.phone) : null,
+                    gender: newContactForm.gender || null,
+                    contact_owner: newContactForm.contact_owner || profile?.name || session.user.email,
+                    user_id: session.user.id
+                  }]).select().single()
+
+                  if (error) throw error
+
+                  setAccContacts(prev => [data, ...prev])
+                  setIsAddContactModalOpen(false)
+                  setNewContactForm({
+                    name: '',
+                    email: '',
+                    phone: '',
+                    gender: '',
+                    contact_owner: profile?.name || session.user.email
+                  })
+                  toast.success('Contact added successfully!', { id: toastId })
+                } catch (err) {
+                  toast.error(err.message || 'Failed to add contact', { id: toastId })
+                }
+              }}>
+                <div style={{ display: 'grid', gap: 16 }}>
+                  <div className="form-group">
+                    <label className="form-label">Full Name *</label>
+                    <input
+                      required
+                      className="form-input"
+                      value={newContactForm.name}
+                      onChange={e => setNewContactForm({ ...newContactForm, name: e.target.value })}
+                      placeholder="e.g. John Smith"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Email Address</label>
+                    <input
+                      type="email"
+                      className="form-input"
+                      value={newContactForm.email}
+                      onChange={e => setNewContactForm({ ...newContactForm, email: e.target.value })}
+                      placeholder="e.g. john@gmail.com"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Phone Number (10 digits)</label>
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      inputMode="numeric"
+                      className="form-input"
+                      value={newContactForm.phone}
+                      onChange={e => setNewContactForm({ ...newContactForm, phone: sanitizePhone(e.target.value) })}
+                      placeholder="e.g. 9876543210"
+                    />
+                  </div>
+                  <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    <div className="form-group">
+                      <label className="form-label">Gender</label>
+                      <select
+                        className="form-input"
+                        value={newContactForm.gender}
+                        onChange={e => setNewContactForm({ ...newContactForm, gender: e.target.value })}
+                      >
+                        <option value="">-- Select Gender --</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Contact Owner</label>
+                      <input
+                        className="form-input"
+                        value={newContactForm.contact_owner}
+                        onChange={e => setNewContactForm({ ...newContactForm, contact_owner: e.target.value })}
+                        placeholder="Owner..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-actions" style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid #f1f5f9' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setIsAddContactModalOpen(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary">Save Contact</button>
+                </div>
               </form>
             </div>
           </div>
@@ -1769,7 +2172,11 @@ export default function Accounts({ session, profile }) {
                       </div>
                       <div>
                         <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{acc.account_name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{acc.phone || acc.email || 'No contact info'}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
+                          {isB2C 
+                            ? (acc.phone || acc.email || 'No contact info') 
+                            : (acc.website || acc.domain || acc.custom_data?.website || acc.phone || 'No website')}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -1836,17 +2243,40 @@ export default function Accounts({ session, profile }) {
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: 800 }}>
             <div className="modal-header">
-              <h2 className="modal-title">{editingAccount ? 'Edit Profile' : 'Add New Customer'}</h2>
+              <h2 className="modal-title">{editingAccount ? (isB2C ? 'Edit Profile' : 'Edit Account') : (isB2C ? 'Add New Customer' : 'Add New Account')}</h2>
               <button className="modal-close" onClick={() => setIsModalOpen(false)}>✕</button>
             </div>
             <form onSubmit={async (e) => {
                 e.preventDefault()
-                const toastId = toast.loading('Saving profile...')
+                const nameVal = formData.custom_data?.customer_name || formData.custom_data?.full_name || formData.account_name
+                const nameCheck = validateRequired(nameVal, isB2C ? 'Customer Name' : 'Account Name')
+                if (!nameCheck.valid) { toast.error(nameCheck.error); return }
+
+                const phoneVal = formData.custom_data?.contact_number || (!formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.phone || ''))
+                const phoneCheck = validatePhone(phoneVal, { label: 'Contact Number', required: isB2C })
+                if (!phoneCheck.valid) { toast.error(phoneCheck.error); return }
+
+                const emailVal = isB2C 
+                  ? (formData.custom_data?.email_id || (formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.email || '')))
+                  : (formData.email || '')
+                const emailCheck = validateEmail(emailVal, { label: 'Email Address', required: false })
+                if (!emailCheck.valid) { toast.error(emailCheck.error); return }
+
+                const websiteVal = formData.custom_data?.website || formData.website || formData.domain || ''
+                if (!isB2C && websiteVal) {
+                  const webCheck = validateWebsite(websiteVal, { label: 'Website Link', required: false })
+                  if (!webCheck.valid) { toast.error(webCheck.error); return }
+                }
+
+                const toastId = toast.loading(isB2C ? 'Saving profile...' : 'Saving account...')
                 try {
+                  const cleanWebsite = websiteVal || null
                   const payload = { 
-                    account_name: formData.custom_data?.customer_name || formData.custom_data?.full_name || formData.account_name, 
-                    email: formData.custom_data?.email_id || (formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.email || null)),
-                    phone: formData.custom_data?.contact_number || (!formData.custom_data?.contact_primary?.includes('@') ? formData.custom_data.contact_primary : (formData.phone || null)),
+                    account_name: nameVal, 
+                    website: cleanWebsite,
+                    domain: cleanWebsite,
+                    email: emailVal || null,
+                    phone: phoneVal ? sanitizePhone(phoneVal) : null,
                     address: formData.custom_data?.address || formData.address || null, // Keep legacy columns for compatibility
                     notes: formData.notes,
                     status: formData.status,
@@ -1864,7 +2294,7 @@ export default function Accounts({ session, profile }) {
                   if (editingAccount) {
                     await supabase.from('accounts').update(payload).eq('id', editingAccount.id)
                     accountId = editingAccount.id
-                    if (formData.contact_id) { 
+                    if (formData.contact_id && isB2C) { 
                       await supabase.from('contacts').update({ 
                         phone: payload.phone, 
                         email: payload.email, 
@@ -1875,16 +2305,18 @@ export default function Accounts({ session, profile }) {
                     const { data: n, error: nErr } = await supabase.from('accounts').insert([payload]).select().single()
                     if (nErr) throw nErr
                     accountId = n.id
-                    await supabase.from('contacts').insert([{ 
-                      account_id: n.id, 
-                      phone: payload.phone, 
-                      email: payload.email, 
-                      name: payload.account_name, 
-                      user_id: session.user.id 
-                    }])
+                    if (isB2C) {
+                      await supabase.from('contacts').insert([{ 
+                        account_id: n.id, 
+                        phone: payload.phone, 
+                        email: payload.email, 
+                        name: payload.account_name, 
+                        user_id: session.user.id 
+                      }])
+                    }
                   }
                   
-                  toast.success('Customer profile saved!', { id: toastId })
+                  toast.success(isB2C ? 'Customer profile saved!' : 'Account saved successfully!', { id: toastId })
                   setIsModalOpen(false)
                   fetchAccounts()
                 } catch (e) { toast.error(e.message, { id: toastId }) }
@@ -1892,7 +2324,7 @@ export default function Accounts({ session, profile }) {
                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                  {/* Status is a system-fixed field */}
                  <div className="form-group" style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '12px 20px', borderRadius: 12, border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label className="form-label" style={{ margin: 0 }}>Customer Relationship Status</label>
+                    <label className="form-label" style={{ margin: 0 }}>{isB2C ? 'Customer Relationship Status' : 'Account Status'}</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <span style={{ fontSize: 13, fontWeight: 800, color: formData.status === 'Active' ? '#16a34a' : '#64748b' }}>
                         {formData.status.toUpperCase()}
@@ -1932,7 +2364,7 @@ export default function Accounts({ session, profile }) {
                
                <div className="form-actions" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid #f1f5f9' }}>
                   <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary">{editingAccount ? 'Update Profile' : 'Create Customer'}</button>
+                  <button type="submit" className="btn btn-primary">{editingAccount ? (isB2C ? 'Update Profile' : 'Update Account') : (isB2C ? 'Create Customer' : 'Create Account')}</button>
                </div>
             </form>
           </div>

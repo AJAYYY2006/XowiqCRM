@@ -88,8 +88,13 @@ export const MODULE_PERMISSIONS = {
   },
   kpis: {
     name: 'Analytics Dashboard',
-    allowedRoles: ['*'],
-    minLevel: 10
+    allowedRoles: ['admin', 'administrator', 'manager'],
+    minLevel: 70
+  },
+  kpi: {
+    name: 'Executive KPI Dashboard',
+    allowedRoles: ['admin', 'administrator'],
+    minLevel: 100
   },
   leads: {
     name: 'Leads Management',

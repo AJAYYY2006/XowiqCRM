@@ -7,6 +7,7 @@ import LocalSearch from '../ui/LocalSearch'
 import toast from 'react-hot-toast'
 import WhatsAppButton from '../ui/WhatsAppButton'
 import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../lib/whatsapp'
+import { sanitizePhone, validatePhone, validateEmail, validateRequired } from '../../lib/validation'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
 import BulkUploadModal from '../ui/BulkUploadModal'
 
@@ -185,13 +186,23 @@ export default function Contacts({ session, profile }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    const nameCheck = validateRequired(formData.name, 'Full Name')
+    if (!nameCheck.valid) { toast.error(nameCheck.error); return }
+
+    const phoneCheck = validatePhone(formData.phone, { label: 'Phone Number', required: false })
+    if (!phoneCheck.valid) { toast.error(phoneCheck.error); return }
+
+    const emailCheck = validateEmail(formData.email, { label: 'Email Address', required: false })
+    if (!emailCheck.valid) { toast.error(emailCheck.error); return }
+
     const toastId = toast.loading(editingContact ? 'Updating contact...' : 'Adding contact...')
     
     try {
       const payload = { 
-        name: formData.name,
-        email: formData.email || null,
-        phone: formData.phone || null,
+        name: formData.name.trim(),
+        email: formData.email ? formData.email.trim() : null,
+        phone: formData.phone ? sanitizePhone(formData.phone) : null,
         gender: formData.gender || null,
         account_id: formData.account_id || null,
         contact_owner: formData.contact_owner || null,
@@ -625,11 +636,19 @@ export default function Contacts({ session, profile }) {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Email Address</label>
-                  <input type="email" className="form-input" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="jane@example.com" />
+                  <input type="email" className="form-input" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="e.g. user@gmail.com" />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Phone Number</label>
-                  <input type="tel" className="form-input" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="+1 (555) 000-0000" />
+                  <label className="form-label">Phone Number (10 digits)</label>
+                  <input 
+                    type="tel" 
+                    maxLength={10}
+                    inputMode="numeric"
+                    className="form-input" 
+                    value={formData.phone} 
+                    onChange={e => setFormData({...formData, phone: sanitizePhone(e.target.value)})} 
+                    placeholder="e.g. 9876543210" 
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Gender</label>

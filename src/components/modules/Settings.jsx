@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
 import { ASSIGNABLE_ROLES } from '../../config/roles'
 import toast from 'react-hot-toast'
+import { sanitizePhone, validatePhone, validateEmail, validateRequired } from '../../lib/validation'
 import {
   Settings as SettingsIcon,
   ArrowLeft,
@@ -1079,8 +1080,17 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
 
   const handleCreate = async (e) => {
     e.preventDefault()
-    if (!addForm.name.trim()) return toast.error(t('settings.team.nameRequired'))
-    if (!isValidEmail(addForm.email)) return toast.error(t('settings.team.invalidEmail'))
+    const nameCheck = validateRequired(addForm.name, 'Full Name')
+    if (!nameCheck.valid) return toast.error(nameCheck.error)
+
+    const emailCheck = validateEmail(addForm.email, { required: true, label: 'Email Address' })
+    if (!emailCheck.valid) return toast.error(emailCheck.error)
+
+    if (addForm.phone) {
+      const phoneCheck = validatePhone(addForm.phone, { label: 'Phone Number' })
+      if (!phoneCheck.valid) return toast.error(phoneCheck.error)
+    }
+
     if (addForm.password.length < 6) return toast.error(t('settings.team.passwordShort'))
 
     setCreating(true)
@@ -1093,7 +1103,7 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
       const tempClient = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } })
 
       const { error } = await tempClient.auth.signUp({
-        email: addForm.email, password: addForm.password,
+        email: addForm.email.trim().toLowerCase(), password: addForm.password,
         options: {
           data: {
             name: addForm.name.trim(), role: addForm.role,
@@ -1137,7 +1147,14 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
   const cancelEdit = () => { setEditingId(null); setEditForm({}); setEditPhoto(null) }
 
   const saveEdit = async (userId) => {
-    if (!editForm.name.trim()) return toast.error(t('settings.team.nameEmpty'))
+    const nameCheck = validateRequired(editForm.name, 'Full Name')
+    if (!nameCheck.valid) return toast.error(nameCheck.error)
+
+    if (editForm.phone) {
+      const phoneCheck = validatePhone(editForm.phone, { label: 'Phone Number' })
+      if (!phoneCheck.valid) return toast.error(phoneCheck.error)
+    }
+
     const tid = toast.loading(t('settings.team.savingChanges'))
     try {
       let photo_url = editForm.photo_url || null
@@ -1147,9 +1164,9 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
       }
 
       const updatePayload = {
-        name: editForm.name,
+        name: editForm.name.trim(),
         role: editForm.role,
-        phone: editForm.phone || null,
+        phone: editForm.phone ? sanitizePhone(editForm.phone) : null,
         address: editForm.address || null,
         age: editForm.age ? parseInt(editForm.age) : null,
         gender: editForm.gender || null,
@@ -1223,7 +1240,7 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
                   { label: t('settings.team.fullName'), key: 'name', type: 'text' },
                   { label: t('settings.team.emailAddress'), key: 'email', type: 'email' },
                   { label: t('settings.team.password'), key: 'password', type: 'password' },
-                  { label: t('settings.team.phoneNumber'), key: 'phone', type: 'tel' },
+                  { label: t('settings.team.phoneNumber') + ' (10 digits)', key: 'phone', type: 'tel' },
                   { label: t('settings.team.dateOfJoining'), key: 'date_of_joining', type: 'date' },
                   { label: t('settings.team.dateOfBirth'), key: 'date_of_birth', type: 'date' },
                   { label: t('settings.team.age'), key: 'age', type: 'number' },
@@ -1231,7 +1248,14 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
                   <div key={f.key} className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label" style={{ fontSize: 12 }}>{f.label}</label>
                     <input type={f.type} className="form-input" style={{ padding: '8px 12px' }}
-                      value={addForm[f.key]} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))}
+                      value={addForm[f.key]} 
+                      onChange={e => {
+                        const val = f.key === 'phone' ? sanitizePhone(e.target.value) : e.target.value
+                        setAddForm(p => ({ ...p, [f.key]: val }))
+                      }}
+                      maxLength={f.key === 'phone' ? 10 : undefined}
+                      inputMode={f.key === 'phone' ? 'numeric' : undefined}
+                      placeholder={f.key === 'phone' ? 'e.g. 9876543210' : f.key === 'email' ? 'e.g. user@gmail.com' : undefined}
                       required={f.label.includes('*')} min={f.type === 'number' ? 1 : undefined} />
                   </div>
                 ))}
@@ -1336,7 +1360,7 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                           {[
                             { label: t('settings.team.fullName'), key: 'name', type: 'text' },
-                            { label: t('settings.team.phoneNumber'), key: 'phone', type: 'tel' },
+                            { label: t('settings.team.phoneNumber') + ' (10 digits)', key: 'phone', type: 'tel' },
                             { label: t('settings.team.age'), key: 'age', type: 'number' },
                             { label: t('settings.team.dateOfBirth'), key: 'date_of_birth', type: 'date' },
                             { label: t('settings.team.dateOfJoining'), key: 'date_of_joining', type: 'date' },
@@ -1345,7 +1369,13 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
                               <label style={labelStyle}>{f.label}</label>
                               <input type={f.type} className="form-input" style={fieldStyle}
                                 value={editForm[f.key] || ''}
-                                onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
+                                onChange={e => {
+                                  const val = f.key === 'phone' ? sanitizePhone(e.target.value) : e.target.value
+                                  setEditForm(p => ({ ...p, [f.key]: val }))
+                                }}
+                                maxLength={f.key === 'phone' ? 10 : undefined}
+                                inputMode={f.key === 'phone' ? 'numeric' : undefined}
+                                placeholder={f.key === 'phone' ? 'e.g. 9876543210' : undefined}
                                 min={f.type === 'number' ? 1 : undefined} />
                             </div>
                           ))}

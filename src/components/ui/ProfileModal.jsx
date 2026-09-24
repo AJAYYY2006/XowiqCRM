@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
+import { sanitizePhone, validatePhone, validateRequired } from '../../lib/validation'
 import {
   X, User, Mail, Phone, Shield, Lock, Eye, EyeOff,
   Save, Edit3, ChevronRight, KeyRound, CheckCircle2, Briefcase
@@ -39,11 +40,19 @@ export default function ProfileModal({ session, profile, onClose, onProfileUpdat
   }
 
   const handleSaveProfile = async () => {
-    if (!name.trim()) return toast.error('Name cannot be empty')
+    const nameCheck = validateRequired(name, 'Name')
+    if (!nameCheck.valid) return toast.error(nameCheck.error)
+
+    if (phone.trim()) {
+      const phoneCheck = validatePhone(phone, { label: 'Phone Number' })
+      if (!phoneCheck.valid) return toast.error(phoneCheck.error)
+    }
+
     setSaving(true)
+    const cleanPhone = phone.trim() ? sanitizePhone(phone) : null
     const { error } = await supabase
       .from('profiles')
-      .update({ name: name.trim(), phone: phone.trim() })
+      .update({ name: name.trim(), phone: cleanPhone })
       .eq('id', session.user.id)
     setSaving(false)
     if (error) {
@@ -51,7 +60,7 @@ export default function ProfileModal({ session, profile, onClose, onProfileUpdat
     } else {
       toast.success('Profile updated!')
       setEditing(false)
-      onProfileUpdate && onProfileUpdate({ ...profile, name: name.trim(), phone: phone.trim() })
+      onProfileUpdate && onProfileUpdate({ ...profile, name: name.trim(), phone: cleanPhone })
     }
   }
 
@@ -214,10 +223,13 @@ export default function ProfileModal({ session, profile, onClose, onProfileUpdat
           <FieldLabel icon={<Phone size={13} color="#ff5900" />} label="Phone / Contact" />
           {editing ? (
             <input
+              type="tel"
+              maxLength={10}
+              inputMode="numeric"
               value={phone}
-              onChange={e => setPhone(e.target.value)}
+              onChange={e => setPhone(sanitizePhone(e.target.value))}
               style={editInputStyle}
-              placeholder="+91 00000 00000"
+              placeholder="10-digit mobile number (e.g. 9876543210)"
             />
           ) : (
             <div style={readonlyFieldStyle}>

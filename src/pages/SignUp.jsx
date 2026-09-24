@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import { SpotlightCard, ShinyButton, BlurText, ParticlesBackground } from '../components/reactbits'
 import { CheckCircle2, AlertCircle, Sparkles } from 'lucide-react'
+import { validateEmail, validateRequired } from '../lib/validation'
 
 export default function SignUp() {
   const { t } = useTranslation()
@@ -20,13 +21,24 @@ export default function SignUp() {
   const handleSignUp = async (e) => {
     e.preventDefault()
     setError('')
+
+    const nameCheck = validateRequired(name, 'Full Name')
+    if (!nameCheck.valid) { setError(nameCheck.error); return }
+
+    const emailCheck = validateEmail(email, { required: true, label: 'Email Address' })
+    if (!emailCheck.valid) { setError(emailCheck.error); return }
+
+    const companyCheck = validateRequired(companyName, 'Company Name')
+    if (!companyCheck.valid) { setError(companyCheck.error); return }
+
     if (password !== confirm) { setError(t('auth.passwordsNoMatch')); return }
     if (password.length < 6) { setError(t('auth.passwordMinLength')); return }
     setLoading(true)
+    const assignedRole = companyType === 'B2C' ? 'b2c' : 'admin'
     const { error } = await supabase.auth.signUp({
-      email,
+      email: email.trim().toLowerCase(),
       password,
-      options: { data: { name, role: 'admin', companyName, companyType } }
+      options: { data: { name: name.trim(), role: assignedRole, companyName: companyName.trim(), companyType } }
     })
     if (error) {
       setError(error.message)

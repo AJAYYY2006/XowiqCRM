@@ -9,6 +9,7 @@ import FieldBuilderModal from '../ui/FieldBuilderModal'
 import BulkUploadModal from '../ui/BulkUploadModal'
 import WhatsAppButton from '../ui/WhatsAppButton'
 import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../lib/whatsapp'
+import { sanitizePhone, validatePhone, validateEmail, validateRequired } from '../../lib/validation'
 
 export default function Leads({ session, profile }) {
   const { t } = useTranslation()
@@ -380,21 +381,37 @@ export default function Leads({ session, profile }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    const leadName = formData.custom_data?.lead_name || formData.name
+    const nameCheck = validateRequired(leadName, 'Lead Name')
+    if (!nameCheck.valid) { toast.error(nameCheck.error); return }
+
+    const phoneVal = formData.custom_data?.contact_number || formData.contact_number
+    const phoneCheck = validatePhone(phoneVal, { label: 'Contact Number', required: true })
+    if (!phoneCheck.valid) { toast.error(phoneCheck.error); return }
+
+    const emailVal = formData.custom_data?.email || formData.email
+    const emailCheck = validateEmail(emailVal, { label: 'Email Address', required: false })
+    if (!emailCheck.valid) { toast.error(emailCheck.error); return }
+
     let toastId;
     
     // Core fields live in their own columns; everything the user typed is also kept
     // in custom_data so non-core custom fields are preserved between edits.
     const { custom_data, ...dbFields } = formData
+    const cleanPhone = sanitizePhone(phoneVal)
     const dbSafe = {
       ...dbFields,
-      name: custom_data?.lead_name || dbFields.name,
-      email: custom_data?.email || dbFields.email || null,
+      name: leadName.trim(),
+      email: emailVal ? emailVal.trim() : null,
       company: custom_data?.company || dbFields.company || null,
-      contact_number: custom_data?.contact_number || dbFields.contact_number || '',
+      contact_number: cleanPhone,
       gender: dbFields.gender || custom_data?.gender || null,
       lead_owner: dbFields.lead_owner || profile?.name || session.user.email,
       custom_data: {
         ...(custom_data || {}),
+        contact_number: cleanPhone,
+        email: emailVal ? emailVal.trim() : '',
         gender: dbFields.gender || custom_data?.gender || ''
       }
     }
@@ -953,17 +970,23 @@ export default function Leads({ session, profile }) {
                       />
                     </div>
                     <div className="form-group">
-                      <label className="form-label">Contact Number <span style={{ color: '#ef4444' }}>*</span></label>
+                      <label className="form-label">Contact Number (10 digits) <span style={{ color: '#ef4444' }}>*</span></label>
                       <input 
-                        type="text"
+                        type="tel"
                         required
+                        maxLength={10}
+                        inputMode="numeric"
                         className="form-input"
-                        value={formData.custom_data?.contact_number || ''}
-                        onChange={e => setFormData({
-                          ...formData,
-                          custom_data: { ...formData.custom_data, contact_number: e.target.value }
-                        })}
-                        placeholder="Enter contact number..."
+                        value={formData.custom_data?.contact_number || formData.contact_number || ''}
+                        onChange={e => {
+                          const sanitized = sanitizePhone(e.target.value)
+                          setFormData({
+                            ...formData,
+                            contact_number: sanitized,
+                            custom_data: { ...formData.custom_data, contact_number: sanitized }
+                          })
+                        }}
+                        placeholder="10-digit mobile number (e.g. 9876543210)"
                       />
                     </div>
                     <div className="form-group">
@@ -977,7 +1000,7 @@ export default function Leads({ session, profile }) {
                           email: e.target.value,
                           custom_data: { ...formData.custom_data, email: e.target.value }
                         })}
-                        placeholder="Enter email address..."
+                        placeholder="e.g. user@gmail.com"
                       />
                     </div>
                     <div className="form-group">

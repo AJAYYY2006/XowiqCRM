@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import FlowaNavbar from '../components/flowa/FlowaNavbar'
 import FlowaFooter from '../components/flowa/FlowaFooter'
 import toast from 'react-hot-toast'
+import { validateEmail, validateRequired } from '../lib/validation'
 import {
   Mail,
   Phone,
@@ -29,8 +30,14 @@ export default function ContactPage({ session }) {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!formData.name || !formData.email) {
-      toast.error('Please provide your name and work email.')
+    const nameCheck = validateRequired(formData.name, 'Name')
+    if (!nameCheck.valid) {
+      toast.error(nameCheck.error)
+      return
+    }
+    const emailCheck = validateEmail(formData.email, { required: true, label: 'Work email' })
+    if (!emailCheck.valid) {
+      toast.error(emailCheck.error)
       return
     }
     setSubmitted(true)

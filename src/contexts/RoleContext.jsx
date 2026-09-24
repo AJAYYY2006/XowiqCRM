@@ -5,39 +5,56 @@ import toast from 'react-hot-toast'
 const RoleContext = createContext(null)
 
 export function RoleProvider({ children, session, profile }) {
-  // Current active role (defaults to profile.role or user_metadata.role or 'admin')
-  const baseRole = profile?.role || session?.user?.user_metadata?.role || 'admin'
+  // Check if the current account/profile is B2C
+  const rawCompanyType = profile?.company_type || session?.user?.user_metadata?.companyType || ''
+  const isB2CAccount = String(rawCompanyType).toUpperCase() === 'B2C' || String(profile?.role || '').toLowerCase() === 'b2c'
+
+  // If the user's company is B2C or role is b2c, they are strictly locked to 'b2c' role:
+  // they cannot be super admin or switch to B2B or any other role!
+  const baseRole = isB2CAccount ? 'b2c' : (profile?.role || session?.user?.user_metadata?.role || 'admin')
   const [activeRole, setActiveRole] = useState(baseRole)
 
-  // Only a Super Admin (as stored in the profile / auth metadata) may change roles.
-  // Everyone else keeps the role assigned to them at creation.
-  const canSwitchRole = ['admin', 'administrator'].includes(String(baseRole).toLowerCase())
+  // Only B2B Super Admins may switch roles. B2C users are strictly restricted.
+  const canSwitchRole = !isB2CAccount && ['admin', 'administrator'].includes(String(baseRole).toLowerCase())
 
   // Sync activeRole whenever session/profile changes
   useEffect(() => {
-    if (baseRole) {
+    if (isB2CAccount) {
+      setActiveRole('b2c')
+    } else if (baseRole) {
       setActiveRole(baseRole)
     }
-  }, [baseRole])
+  }, [baseRole, isB2CAccount])
 
   const roleInfo = useMemo(() => {
+    if (isB2CAccount) return ROLE_DEFINITIONS.b2c
     const norm = String(activeRole).toLowerCase()
     return ROLE_DEFINITIONS[norm] || ROLE_DEFINITIONS.admin
-  }, [activeRole])
+  }, [activeRole, isB2CAccount])
 
   const checkModuleAccess = (moduleId) => {
+    if (isB2CAccount) {
+      // Strict B2C whitelist: B2C cannot access B2B deals/opportunities, quotes, users, team_records, or executive super admin kpi
+      const B2C_ALLOWED_MODULES = [
+        'dashboard', 'accounts', 'contacts', 'leads', 
+        'services', 'invoices', 'tickets', 'tasks', 'reports', 'settings'
+      ]
+      return B2C_ALLOWED_MODULES.includes(moduleId)
+    }
     return hasModuleAccess(activeRole, moduleId)
   }
 
   const checkActionPermission = (action) => {
+    if (isB2CAccount) {
+      if (['manage_users', 'edit_security'].includes(action)) return false
+    }
     return canPerformAction(activeRole, action)
   }
 
   // Super Admin only: preview the CRM as another role for this session.
-  // The stored role is never changed, so the Super Admin can always switch back.
   const switchRole = async (newRole) => {
-    if (!canSwitchRole) {
-      toast.error('Only a Super Admin can change roles')
+    if (isB2CAccount || !canSwitchRole) {
+      toast.error('B2C accounts cannot switch to B2B or administrative roles')
       return
     }
     const normRole = String(newRole).toLowerCase()
@@ -46,15 +63,15 @@ export function RoleProvider({ children, session, profile }) {
   }
 
   const value = {
-    role: activeRole,
+    role: isB2CAccount ? 'b2c' : activeRole,
     roleInfo,
-    isAdmin: ['admin', 'administrator'].includes(String(activeRole).toLowerCase()),
-    isManager: ['admin', 'administrator', 'manager'].includes(String(activeRole).toLowerCase()),
-    isSupport: ['admin', 'administrator', 'agent', 'support_agent'].includes(String(activeRole).toLowerCase()),
-    isB2C: session?.user?.user_metadata?.companyType === 'B2C' || String(activeRole).toLowerCase() === 'b2c',
+    isAdmin: !isB2CAccount && ['admin', 'administrator'].includes(String(activeRole).toLowerCase()),
+    isManager: !isB2CAccount && ['admin', 'administrator', 'manager'].includes(String(activeRole).toLowerCase()),
+    isSupport: !isB2CAccount && ['admin', 'administrator', 'agent', 'support_agent'].includes(String(activeRole).toLowerCase()),
+    isB2C: isB2CAccount,
     hasAccess: checkModuleAccess,
     can: checkActionPermission,
-    canSwitchRole,
+    canSwitchRole: !isB2CAccount && canSwitchRole,
     switchRole
   }
 

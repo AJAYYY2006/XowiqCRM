@@ -54,7 +54,7 @@ export default function AppSidebar({
 
   // Navigation Items Configured by Role & Section
   const getSections = () => {
-    if (isAdmin) {
+    if (isAdmin && !isB2C) {
       return [
         {
           title: 'DASHBOARD',
@@ -106,7 +106,7 @@ export default function AppSidebar({
       ]
     }
 
-    if (role === 'b2c') {
+    if (isB2C || role === 'b2c') {
       return [
         {
           title: 'DASHBOARD',
@@ -118,7 +118,7 @@ export default function AppSidebar({
         {
           title: 'STORE & OPS',
           items: [
-            { id: 'accounts', path: 'accounts', label: t('sidebar.customers', 'Accounts'), icon: <Building2 size={18} strokeWidth={1.75} />, badge: null },
+            { id: 'accounts', path: 'accounts', label: isB2C ? t('modules.accounts.customerProfiles', 'Customer Profiles') : t('sidebar.customers', 'Accounts'), icon: <Building2 size={18} strokeWidth={1.75} />, badge: null },
             { id: 'contacts', path: 'contacts', label: t('sidebar.contacts', 'Contacts'), icon: <Users size={18} strokeWidth={1.75} />, badge: null },
             { id: 'leads', path: 'leads', label: t('sidebar.marketing', 'Leads'), icon: <UserSquare2 size={18} strokeWidth={1.75} />, badge: null },
             { id: 'tasks', path: 'tasks', label: t('sidebar.tasks', 'Tasks'), icon: <CheckSquare size={18} strokeWidth={1.75} />, badge: null },

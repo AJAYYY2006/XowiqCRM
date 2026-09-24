@@ -6,6 +6,7 @@ import { FlowaLogo } from '../components/flowa/FlowaNavbar'
 import DevQuickLoginModal, { DEV_ACCOUNTS } from '../components/ui/DevQuickLoginModal'
 import { Sparkles, KeyRound, Zap, ArrowLeft, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { validateEmail } from '../lib/validation'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -18,11 +19,23 @@ export default function Login() {
 
   const executeLogin = async (userEmail, userPassword) => {
     setError('')
+    const emailCheck = validateEmail(userEmail, { required: true, label: 'Email Address' })
+    if (!emailCheck.valid) {
+      setError(emailCheck.error)
+      toast.error(emailCheck.error)
+      return
+    }
+    if (!userPassword) {
+      setError('Password is required')
+      toast.error('Password is required')
+      return
+    }
+
     setLoading(true)
 
     const toastId = toast.loading('Authenticating XOWIQ workspace...')
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email: userEmail,
+      email: userEmail.trim().toLowerCase(),
       password: userPassword
     })
 
@@ -35,17 +48,19 @@ export default function Login() {
 
     const userId = signInData.user.id
 
-    // Fetch role from profiles table (source of truth)
+    // Fetch role and company type from profiles table (source of truth)
     const { data: profileData } = await supabase
       .from('profiles')
       .select('role, company_name, company_type')
       .eq('id', userId)
       .maybeSingle()
 
-    const role = profileData?.role || signInData.user.user_metadata?.role || 'user'
+    const rawCompanyType = profileData?.company_type || signInData.user.user_metadata?.companyType || 'B2B'
+    const isB2CUser = String(rawCompanyType).toUpperCase() === 'B2C' || String(profileData?.role).toLowerCase() === 'b2c'
+    const role = isB2CUser ? 'b2c' : (profileData?.role || signInData.user.user_metadata?.role || 'admin')
 
-    // Sync role back to user_metadata
-    await supabase.auth.updateUser({ data: { role } })
+    // Sync role and companyType back to user_metadata
+    await supabase.auth.updateUser({ data: { role, companyType: rawCompanyType } })
 
     try {
       const meta = signInData.user.user_metadata || {}
@@ -55,7 +70,7 @@ export default function Login() {
         email: signInData.user.email,
         role: role,
         company_name: meta.companyName || profileData?.company_name || null,
-        company_type: meta.companyType || profileData?.company_type || null,
+        company_type: rawCompanyType,
         created_by: meta.created_by || profileData?.created_by || null,
         created_by_admin_id: meta.created_by_admin_id || profileData?.created_by_admin_id || null
       })

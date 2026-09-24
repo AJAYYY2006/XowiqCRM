@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { UploadCloud, FileSpreadsheet, Download, CheckCircle2, AlertTriangle, ArrowLeft, XCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { IMPORT_CONFIGS, BATCH_SIZE, ACCEPTED_EXTENSIONS, autoMapColumns } from '../../config/importConfigs'
+import { isValidEmail, isValidPhone } from '../../lib/validation'
 
 const PREVIEW_ROWS = 8
 const SKIP = ''
@@ -64,11 +65,14 @@ function coerceField(field, raw, ctx) {
   switch (field.type) {
     case 'email': {
       const v = String(raw).trim().toLowerCase()
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return { error: `Invalid email "${v}"` }
+      if (!isValidEmail(v)) return { error: `Invalid email "${v}". Must be a valid email format (e.g. user@gmail.com)` }
       return { value: v }
     }
-    case 'phone':
-      return { value: String(raw).trim() }
+    case 'phone': {
+      const digits = String(raw).replace(/\D/g, '')
+      if (digits.length !== 10) return { error: `${field.label} must be exactly 10 digits (got "${raw}")` }
+      return { value: digits }
+    }
     case 'number':
     case 'integer': {
       const cleaned = String(raw).replace(/[,\s]/g, '').replace(/^[^\d.-]+/, '')

@@ -30,6 +30,7 @@ import { useRole } from '../contexts/RoleContext'
 import { useTheme } from '../contexts/ThemeContext'
 import RoleGuard from '../components/auth/RoleGuard'
 import { ROLE_DEFINITIONS, ASSIGNABLE_ROLES } from '../config/roles'
+import { validateEmail, validateRequired } from '../lib/validation'
 
 // ─── KPI Panel ───────────────────────────────────────────────────────────────
 function KPIPanel({ session, profile }) {
@@ -445,10 +446,20 @@ function UserManagementPanel({ session, profile, onUserCreated }) {
   const handleCreate = async (e) => {
     e.preventDefault()
     setInlineError('')
-    const inputEmail = form.email.trim().toLowerCase()
 
-    if (!form.name.trim() || !inputEmail || !form.password.trim()) {
-      toast.error(t('userMgmt.nameEmailPasswordRequired'))
+    const nameCheck = validateRequired(form.name, 'Full Name')
+    if (!nameCheck.valid) { toast.error(nameCheck.error); return }
+
+    const inputEmail = form.email.trim().toLowerCase()
+    const emailCheck = validateEmail(inputEmail, { required: true, label: 'Email Address' })
+    if (!emailCheck.valid) {
+      setInlineError(emailCheck.error)
+      toast.error(emailCheck.error)
+      return
+    }
+
+    if (!form.password.trim()) {
+      toast.error('Password is required')
       return
     }
     if (form.password.length < 6) { toast.error(t('userMgmt.passwordShort')); return }
@@ -502,7 +513,7 @@ function UserManagementPanel({ session, profile, onUserCreated }) {
         options: {
           data: {
             name: form.name,
-            role: form.role,
+            role: form.companyType === 'B2C' ? 'b2c' : form.role,
             companyName,
             companyType: form.companyType,
             created_by: session.user.id,
@@ -540,7 +551,7 @@ function UserManagementPanel({ session, profile, onUserCreated }) {
           id: realUserId,
           name: form.name,
           email: form.email,
-          role: form.role,
+          role: form.companyType === 'B2C' ? 'b2c' : form.role,
           company_name: companyName,
           company_type: form.companyType,
           created_by: session.user.id,
@@ -1210,7 +1221,7 @@ export default function Dashboard({ session }) {
           {/* Protected Sub-routes via RoleGuard */}
           <Routes>
             <Route index element={
-              isAdmin 
+              isAdmin && !isB2C 
                 ? <KPIPanel session={session} profile={profile} />
                 : <DashboardHome session={session} profile={profile} />
             } />
@@ -1228,8 +1239,12 @@ export default function Dashboard({ session }) {
               </RoleGuard>
             } />
 
-            {/* KPI Dashboard — explicit path for sidebar link */}
-            <Route path="kpi" element={<KPIPanel session={session} profile={profile} />} />
+            {/* KPI Dashboard — explicit path for sidebar link (Super Admin only) */}
+            <Route path="kpi" element={
+              <RoleGuard moduleId="kpi">
+                <KPIPanel session={session} profile={profile} />
+              </RoleGuard>
+            } />
 
             {/* Common & Protected CRM modules */}
             <Route path="crm" element={<DashboardHome session={session} profile={profile} />} />
