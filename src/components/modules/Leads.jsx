@@ -27,6 +27,8 @@ export default function Leads({ session, profile }) {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
   const [taskFormData, setTaskFormData] = useState({ title: '', task_type: 'Call', status: 'Open', due_date: '', owner: '' })
   const [editingTaskId, setEditingTaskId] = useState(null)
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false)
+  const [activityFormData, setActivityFormData] = useState({ type: 'Call', description: '' })
   const location = useLocation()
   
   const [customFieldConfigs, setCustomFieldConfigs] = useState([])
@@ -35,7 +37,7 @@ export default function Leads({ session, profile }) {
 
   // Form State
   const [formData, setFormData] = useState({
-    name: '', company: '', email: '', contact_number: '', gender: '', lead_owner: '', status: 'new',
+    name: '', company: '', email: '', contact_number: '', gender: '', lead_owner: '', status: 'new', source: 'Website',
     custom_data: {}
   })
 
@@ -104,7 +106,7 @@ export default function Leads({ session, profile }) {
   }, [leads, location.state])
 
   useEffect(() => {
-    if (selectedLead) fetchLeadDetails(selectedLead.id, selectedLead.name)
+    if (selectedLead) fetchLeadDetails(selectedLead.id, selectedLead.unique_id)
   }, [selectedLead])
 
   const fetchLeads = async () => {
@@ -126,18 +128,20 @@ export default function Leads({ session, profile }) {
     }
   }
 
-  const fetchLeadDetails = async (id, name) => {
+  const fetchLeadDetails = async (id, uniqueId) => {
     const { data: tskData } = await supabase.from('tasks').select('*').eq('related_to', 'leads').eq('related_id', id)
-    const { data: aData } = await supabase.from('activities').select('*').in('user_id', userIds)
-    
-    const nameLower = (name || '').toLowerCase()
-    const filteredActs = (aData || []).filter(a => {
-      if (!a.description) return false
-      return a.description.toLowerCase().includes(nameLower)
-    })
+    // Strictly fetch activities for this unique lead record by unique ID / related_id (never by lead name)
+    const orFilter = uniqueId 
+      ? `related_id.eq.${id},related_id.eq.${uniqueId},description.ilike.%[${uniqueId}]%`
+      : `related_id.eq.${id}`
+    const { data: aData } = await supabase
+      .from('activities')
+      .select('*')
+      .eq('related_to', 'leads')
+      .or(orFilter)
 
     setLeadTasks(tskData || [])
-    setLeadActs(filteredActs.sort((x, y) => new Date(y.created_at) - new Date(x.created_at)))
+    setLeadActs((aData || []).sort((x, y) => new Date(y.created_at) - new Date(x.created_at)))
   }
 
   const handleSaveTask = async (e) => {
@@ -162,22 +166,50 @@ export default function Leads({ session, profile }) {
       }
       
       setIsTaskModalOpen(false)
-      fetchLeadDetails(selectedLead.id, selectedLead.name)
+      fetchLeadDetails(selectedLead.id, selectedLead.unique_id)
     } catch (error) {
       toast.error(error.message, { id: toastId })
     }
   }
 
   const handleDeleteTask = async (id, title) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete tasks')
+      return
+    }
     if (!window.confirm(`Delete task "${title}"?`)) return
     const toastId = toast.loading('Deleting task...')
     try {
       const { error } = await supabase.from('tasks').delete().eq('id', id)
       if (error) throw error
-      fetchLeadDetails(selectedLead.id, selectedLead.name)
+      fetchLeadDetails(selectedLead.id, selectedLead.unique_id)
       toast.success('Task deleted', { id: toastId })
     } catch (error) {
       toast.error(error.message, { id: toastId })
+    }
+  }
+
+  const handleSaveActivity = async (e) => {
+    e.preventDefault()
+    if (!selectedLead || !activityFormData.description.trim()) return
+    const toastId = toast.loading('Logging activity...')
+    try {
+      const leadUniqueRef = selectedLead.unique_id ? `[${selectedLead.unique_id}]` : `[ID: ${selectedLead.id}]`
+      const payload = {
+        user_id: session.user.id,
+        type: activityFormData.type || 'Note',
+        description: `${activityFormData.description.trim()} — Lead ${leadUniqueRef}`,
+        related_to: 'leads',
+        related_id: selectedLead.id
+      }
+      const { error } = await supabase.from('activities').insert([payload])
+      if (error) throw error
+      toast.success('Activity logged successfully', { id: toastId })
+      setIsActivityModalOpen(false)
+      setActivityFormData({ type: 'Call', description: '' })
+      fetchLeadDetails(selectedLead.id, selectedLead.unique_id)
+    } catch (err) {
+      toast.error(err.message || 'Failed to log activity', { id: toastId })
     }
   }
 
@@ -205,6 +237,7 @@ export default function Leads({ session, profile }) {
         contact_number: lead.contact_number || '',
         gender: lead.gender || lead.custom_data?.gender || '',
         lead_owner: lead.lead_owner || '',
+        source: lead.source || 'Website',
         status: lead.status || 'new',
         custom_data: seeded
       })
@@ -217,12 +250,14 @@ export default function Leads({ session, profile }) {
       setFormData({
         name: '', company: '', email: '', contact_number: '', gender: '',
         lead_owner: profile?.name || session.user.email,
+        source: 'Website',
         status: 'new',
         custom_data: initialCustom
       })
     }
     setIsModalOpen(true)
   }
+
 
   const convertLeadAction = async (leadData) => {
     if (isB2C) {
@@ -271,7 +306,9 @@ export default function Leads({ session, profile }) {
       await supabase.from('activities').insert([{
         user_id: session.user.id,
         type: 'Lead Converted',
-        description: `Lead ${leadData.name} was converted to Customer Profile`
+        description: `Lead ${leadData.name} [${leadData.unique_id || leadData.id}] was converted to Customer Profile`,
+        related_to: 'leads',
+        related_id: leadData.id
       }])
     } else {
       // B2B: Convert to Account & Contact (existing behavior)
@@ -315,12 +352,18 @@ export default function Leads({ session, profile }) {
       await supabase.from('activities').insert([{
         user_id: session.user.id,
         type: 'Lead Converted',
-        description: `Lead ${leadData.name} was converted to a Contact`
+        description: `Lead ${leadData.name} [${leadData.unique_id || leadData.id}] was converted to a Contact`,
+        related_to: 'leads',
+        related_id: leadData.id
       }])
     }
   }
 
   const handleDeleteLead = async (id, name) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete leads')
+      return false
+    }
     if (!window.confirm(`Are you sure you want to delete lead "${name}"?`)) return false
     const toastId = toast.loading('Deleting lead...')
     try {
@@ -334,7 +377,9 @@ export default function Leads({ session, profile }) {
       await supabase.from('activities').insert([{
         user_id: session.user.id,
         type: 'Lead Deleted',
-        description: `Deleted lead: ${name}`
+        description: `Deleted lead: ${name} [${id}]`,
+        related_to: 'leads',
+        related_id: id
       }])
 
       toast.success('Lead deleted', { id: toastId })
@@ -448,7 +493,9 @@ export default function Leads({ session, profile }) {
           await supabase.from('activities').insert([{
             user_id: session.user.id,
             type: 'Lead Updated',
-            description: `Updated details for ${dbSafe.name}`
+            description: `Updated details for ${dbSafe.name} [${editingLead.unique_id || editingLead.id}]`,
+            related_to: 'leads',
+            related_id: editingLead.id
           }])
         }
       } else {
@@ -467,16 +514,20 @@ export default function Leads({ session, profile }) {
             ...dbSafe,
             user_id: session.user.id
           }
-          const { error } = await supabase
+          const { data: insertedLead, error } = await supabase
             .from('leads')
             .insert([payload])
-            
+            .select()
+            .single()
+
           if (error) throw error
 
           await supabase.from('activities').insert([{
             user_id: session.user.id,
             type: 'New Lead',
-            description: `Added new lead: ${payload.name}`
+            description: `Added new lead: ${payload.name} [${insertedLead?.unique_id || insertedLead?.id}]`,
+            related_to: 'leads',
+            related_id: insertedLead?.id
           }])
         }
       }
@@ -499,7 +550,7 @@ export default function Leads({ session, profile }) {
 
   if (loading) return <div className="loading-container"><div className="spinner"/></div>
   
-  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
+  const isAdmin = (session?.user?.user_metadata?.role || profile?.role || '').toLowerCase() === 'admin'
 
   return (
     <div>
@@ -529,6 +580,9 @@ export default function Leads({ session, profile }) {
                     })}
                     session={session}
                     recordName={selectedLead.name}
+                    relatedTo="leads"
+                    relatedId={selectedLead.id}
+                    recordId={selectedLead.unique_id || selectedLead.id}
                   />
                 </div>
                 <div style={{ marginTop: 8 }}>
@@ -591,6 +645,10 @@ export default function Leads({ session, profile }) {
                 <span style={{ fontWeight: 600 }}>{selectedLead.gender || selectedLead.custom_data?.gender || '—'}</span>
               </div>
               <div className="detail-field">
+                <label>Source</label>
+                <span style={{ fontWeight: 600 }}>{selectedLead.source || '—'}</span>
+              </div>
+              <div className="detail-field">
                 <label>Created Date</label>
                 <span>{new Date(selectedLead.created_at).toLocaleDateString()}</span>
               </div>
@@ -640,7 +698,10 @@ export default function Leads({ session, profile }) {
                       ) : (
                         leadTasks.map(t => (
                           <tr key={t.id}>
-                            <td className="fw-bold">{t.title}</td>
+                            <td className="fw-bold">
+                              {t.title}
+                              {t.unique_id && <div style={{ fontFamily: 'monospace', fontSize: 11, opacity: 0.6, fontWeight: 400 }}>{t.unique_id}</div>}
+                            </td>
                             <td><span className="badge badge-normal">{t.task_type}</span></td>
                             <td><span className="fw-bold">{t.status}</span></td>
                             <td>{t.due_date ? new Date(t.due_date).toLocaleDateString() : '-'}</td>
@@ -669,17 +730,39 @@ export default function Leads({ session, profile }) {
             )}
 
             {activeTab === 'activities' && (
-              <div style={{ padding: 24 }}>
+              <div style={{ padding: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700 }}>Activity Timeline</h3>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                      Tracked strictly by unique Lead ID: <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--accent)' }}>{selectedLead.unique_id || selectedLead.id}</span>
+                    </div>
+                  </div>
+                  <button className="btn btn-primary btn-sm" onClick={() => {
+                    setActivityFormData({ type: 'Call', description: '' })
+                    setIsActivityModalOpen(true)
+                  }}>
+                    <Plus size={14} style={{ marginRight: 4 }} /> Add Activity
+                  </button>
+                </div>
+
                 {leadActs.length === 0 ? (
-                  <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No recent activities</div>
+                  <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)' }}>No recent activities recorded for this lead</div>
                 ) : (
                   <div className="activity-list">
                     {leadActs.map(a => (
                       <div key={a.id} className="activity-item">
                         <div className="activity-dot"></div>
                         <div className="activity-content">
-                          <div className="activity-type">{a.type}</div>
-                          <div className="activity-desc">{a.description}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                            <div className="activity-type">{a.type}</div>
+                            {selectedLead.unique_id && (
+                              <span style={{ fontSize: 10, fontFamily: 'monospace', padding: '2px 6px', background: 'var(--bg-secondary)', borderRadius: 4, color: 'var(--text-muted)' }}>
+                                {selectedLead.unique_id}
+                              </span>
+                            )}
+                          </div>
+                          <div className="activity-desc" style={{ marginTop: 4 }}>{a.description}</div>
                           <div className="activity-time">{new Date(a.created_at).toLocaleString()}</div>
                         </div>
                       </div>
@@ -1034,6 +1117,22 @@ export default function Leads({ session, profile }) {
                   />
                 </div>
                 <div className="form-group">
+                  <label className="form-label">Source</label>
+                  <select
+                    className="form-input"
+                    value={formData.source || 'Website'}
+                    onChange={e => setFormData({ ...formData, source: e.target.value })}
+                  >
+                    <option value="Website">Website</option>
+                    <option value="Phone">Phone</option>
+                    <option value="Email">Email</option>
+                    <option value="Social Media">Social Media</option>
+                    <option value="Referral">Referral</option>
+                    <option value="Trade Show">Trade Show</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div className="form-group">
                   <label className="form-label">Status</label>
                   <select
                     className="form-input"
@@ -1076,6 +1175,56 @@ export default function Leads({ session, profile }) {
           fetchCustomConfigs()
         }}
       />
+
+      {/* Activity Creation Modal */}
+      {isActivityModalOpen && selectedLead && (
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="modal" style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Log Lead Activity</h2>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                  Lead: <strong>{selectedLead.name}</strong> • ID: <span style={{ fontFamily: 'monospace' }}>{selectedLead.unique_id || selectedLead.id}</span>
+                </div>
+              </div>
+              <button className="modal-close" onClick={() => setIsActivityModalOpen(false)}>✕</button>
+            </div>
+            <form onSubmit={handleSaveActivity} style={{ padding: 20 }}>
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="form-label">Activity Type *</label>
+                <select 
+                  className="form-input" 
+                  value={activityFormData.type} 
+                  onChange={e => setActivityFormData({ ...activityFormData, type: e.target.value })}
+                >
+                  <option value="Call">📞 Phone Call</option>
+                  <option value="Meeting">🤝 Meeting</option>
+                  <option value="Email">✉️ Email</option>
+                  <option value="Note">📝 Note / Memo</option>
+                  <option value="Follow-up">⚡ Follow-up</option>
+                  <option value="WhatsApp">💬 WhatsApp</option>
+                  <option value="SMS">📱 SMS Message</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: 20 }}>
+                <label className="form-label">Activity Details / Notes *</label>
+                <textarea 
+                  required
+                  rows={4}
+                  className="form-input" 
+                  placeholder="Record summary of conversation, key decisions, or next steps..."
+                  value={activityFormData.description} 
+                  onChange={e => setActivityFormData({ ...activityFormData, description: e.target.value })}
+                />
+              </div>
+              <div className="form-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setIsActivityModalOpen(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">+ Save Activity</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

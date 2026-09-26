@@ -74,6 +74,7 @@ export default function AppSidebar({
             { id: 'tickets', path: 'tickets', label: t('sidebar.inbox', 'Tickets'), icon: <Ticket size={18} strokeWidth={1.75} />, badge: null },
             { id: 'quotes', path: 'quotes', label: t('sidebar.quotes', 'Quotes'), icon: <FileText size={18} strokeWidth={1.75} />, badge: null },
             { id: 'invoices', path: 'invoices', label: t('sidebar.invoices', 'Invoices'), icon: <Receipt size={18} strokeWidth={1.75} />, badge: null },
+            { id: 'reports', path: 'reports', label: t('sidebar.reports', 'Reports'), icon: <TrendingUp size={18} strokeWidth={1.75} />, badge: null },
             { id: 'team_records', path: 'team_records', label: t('dashboard.teamRecords', 'Team Stream'), icon: <ClipboardList size={18} strokeWidth={1.75} />, section: 'team_records', badge: null },
             { id: 'users', path: 'users', label: t('dashboard.userManagement', 'Team Users'), icon: <Users size={18} strokeWidth={1.75} />, section: 'users', badge: null },
           ]
@@ -87,7 +88,7 @@ export default function AppSidebar({
           title: 'DASHBOARD',
           items: [
             { id: 'kpis', path: '', label: t('dashboard.kpiDashboard', 'KPI Dashboard'), icon: <TrendingUp size={18} strokeWidth={1.75} />, badge: null },
-            { id: 'reports', path: 'reports', label: t('sidebar.analytics', 'Analytics'), icon: <BarChart3 size={18} strokeWidth={1.75} />, badge: null },
+            { id: 'reports', path: 'reports', label: t('sidebar.reports', 'Reports'), icon: <TrendingUp size={18} strokeWidth={1.75} />, badge: null },
           ].filter(item => hasAccess(item.id))
         },
         {
@@ -193,14 +194,14 @@ export default function AppSidebar({
   }
 
   const isItemActive = (item) => {
-    if (isAdmin) {
+    if (isAdmin && !isB2C) {
       if (item.id === 'overview' && !currentPath && activeSection === 'kpi') return true
-      if (item.id === 'kpis' && currentPath === 'kpi') return true
+      if (item.id === 'kpis' && (currentPath === 'kpi' || currentPath === 'kpis' || currentPath === 'analytics' || currentPath === 'analytical')) return true
       if (item.id === 'users' && currentPath === 'users') return true
       if (item.id === 'team_records' && currentPath === 'team_records') return true
       return currentPath === item.path
     }
-    return (!currentPath && item.path === '') || (currentPath === item.path) || (item.id === 'kpis' && (currentPath === 'kpi' || !currentPath))
+    return (!currentPath && item.path === '') || (currentPath === item.path) || (item.id === 'kpis' && (currentPath === 'kpi' || currentPath === 'kpis' || currentPath === 'analytics' || currentPath === 'analytical' || !currentPath))
   }
 
   const userName = profile?.name || session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'Alex Rivera'

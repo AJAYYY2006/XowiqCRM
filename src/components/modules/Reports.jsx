@@ -7,9 +7,12 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { Trash2, Edit2 } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
+import { useRole } from '../../contexts/RoleContext'
 
 export default function Reports({ session, profile }) {
   const { t } = useTranslation()
+  const roleContext = useRole?.()
+  const isAdmin = roleContext ? roleContext.isAdmin : (session?.user?.user_metadata?.role || profile?.role || '').toLowerCase() === 'admin'
   const userIds = profile?.teamUserIds || [session.user.id]
   const [reports, setReports] = useState([])
   const [loading, setLoading] = useState(true)
@@ -53,6 +56,7 @@ export default function Reports({ session, profile }) {
   }
 
   useEffect(() => {
+    document.title = 'Reports — XOWIQ CRM'
     fetchReports()
   }, [session, profile])
 
@@ -185,6 +189,10 @@ export default function Reports({ session, profile }) {
   }
 
   const handleDeleteReport = async (report) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete reports')
+      return
+    }
     if (!confirm(`Are you sure you want to delete the report "${report.report_name}"?`)) return
     
     const toastId = toast.loading('Deleting report...')
@@ -318,8 +326,6 @@ export default function Reports({ session, profile }) {
   }
 
   if (loading) return <div className="loading-container"><div className="spinner"/></div>
-  
-  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
 
   if (viewingData) {
     const { report, data } = viewingData

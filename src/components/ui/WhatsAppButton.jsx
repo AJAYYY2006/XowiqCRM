@@ -11,9 +11,12 @@ import toast from 'react-hot-toast'
  *   messageText   - pre-filled message for the wa.me link
  *   session       - Supabase session (for user_id)
  *   recordName    - name of the record (for activity description)
+ *   relatedTo     - module name (e.g. 'leads')
+ *   relatedId     - unique database id of the record
+ *   recordId      - human readable unique id (e.g. 'LED-1234')
  *   style         - optional override styles
  */
-export default function WhatsAppButton({ phone, messageText, session, recordName, style }) {
+export default function WhatsAppButton({ phone, messageText, session, recordName, relatedTo, relatedId, recordId, style }) {
   const cleanNumber = cleanPhoneNumber(phone)
   const isDisabled = !cleanNumber
 
@@ -23,10 +26,13 @@ export default function WhatsAppButton({ phone, messageText, session, recordName
 
     // 1. Log activity BEFORE opening the link
     try {
+      const descSuffix = recordId ? `[${recordId}]` : (recordName ? `(${recordName})` : '')
       await supabase.from('activities').insert([{
         user_id: session.user.id,
         type: 'WhatsApp',
-        description: `WhatsApp chat opened for ${recordName || 'a contact'}`
+        description: `WhatsApp chat opened for ${recordName || 'contact'} ${descSuffix}`.trim(),
+        related_to: relatedTo || null,
+        related_id: relatedId || null
       }])
     } catch (err) {
       console.error('Failed to log WhatsApp activity:', err)

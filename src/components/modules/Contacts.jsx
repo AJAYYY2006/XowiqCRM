@@ -10,9 +10,12 @@ import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../
 import { sanitizePhone, validatePhone, validateEmail, validateRequired } from '../../lib/validation'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
 import BulkUploadModal from '../ui/BulkUploadModal'
+import { useRole } from '../../contexts/RoleContext'
 
 export default function Contacts({ session, profile }) {
   const { t } = useTranslation()
+  const roleContext = useRole?.()
+  const isAdmin = roleContext ? roleContext.isAdmin : (session?.user?.user_metadata?.role || profile?.role || '').toLowerCase() === 'admin'
   const [contacts, setContacts] = useState([])
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -85,6 +88,10 @@ export default function Contacts({ session, profile }) {
   }
 
   const handleDeleteContact = async (id, name) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete contacts')
+      return
+    }
     if (!window.confirm(`Are you sure you want to delete contact "${name}"?`)) return
     const toastId = toast.loading('Deleting contact...')
     try {
@@ -151,6 +158,10 @@ export default function Contacts({ session, profile }) {
   }
 
   const handleDeleteTask = async (id, title) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete tasks')
+      return
+    }
     if (!window.confirm(`Delete task "${title}"?`)) return
     const toastId = toast.loading('Deleting task...')
     try {
@@ -252,8 +263,6 @@ export default function Contacts({ session, profile }) {
   }
 
   if (loading) return <div className="loading-container"><div className="spinner"/></div>
-  
-  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
 
   return (
     <div>
@@ -371,7 +380,10 @@ export default function Contacts({ session, profile }) {
                       ) : (
                         conTasks.map(t => (
                           <tr key={t.id}>
-                            <td className="fw-bold">{t.title}</td>
+                            <td className="fw-bold">
+                              {t.title}
+                              {t.unique_id && <div style={{ fontFamily: 'monospace', fontSize: 11, opacity: 0.6, fontWeight: 400 }}>{t.unique_id}</div>}
+                            </td>
                             <td><span className="badge badge-normal">{t.task_type}</span></td>
                             <td><span className="fw-bold">{t.status}</span></td>
                             <td>{t.due_date ? new Date(t.due_date).toLocaleDateString() : '-'}</td>

@@ -88,8 +88,18 @@ export const MODULE_PERMISSIONS = {
   },
   kpis: {
     name: 'Analytics Dashboard',
-    allowedRoles: ['admin', 'administrator', 'manager'],
-    minLevel: 70
+    allowedRoles: ['admin', 'administrator', 'manager', 'b2c'],
+    minLevel: 60
+  },
+  analytics: {
+    name: 'Analytics Dashboard',
+    allowedRoles: ['admin', 'administrator', 'manager', 'b2c'],
+    minLevel: 60
+  },
+  analytical: {
+    name: 'Analytics Dashboard',
+    allowedRoles: ['admin', 'administrator', 'manager', 'b2c'],
+    minLevel: 60
   },
   kpi: {
     name: 'Executive KPI Dashboard',
@@ -190,13 +200,20 @@ export function hasModuleAccess(role, moduleId) {
 export function canPerformAction(role, action) {
   const normRole = String(role || 'manager').toLowerCase().trim()
   
+  // Deletion is strictly restricted to Super Admin ('admin') ONLY
+  if (action === 'delete_records') {
+    return normRole === 'admin'
+  }
+
   if (normRole === 'admin' || normRole === 'administrator') return true
 
   switch (action) {
     case 'manage_users':
-    case 'delete_records':
     case 'edit_security':
       return ['admin', 'administrator'].includes(normRole)
+
+    case 'delete_records':
+      return normRole === 'admin'
     
     case 'export_data':
     case 'generate_quotes':

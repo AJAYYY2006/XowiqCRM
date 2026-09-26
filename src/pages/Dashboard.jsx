@@ -51,20 +51,33 @@ function KPIPanel({ session, profile }) {
   const companyName = profile?.company_name || session.user.user_metadata?.companyName || ''
   const companyType = profile?.company_type || session.user.user_metadata?.companyType || 'B2B'
 
-  // Helper: build monthly revenue array from deals with closed_date
-  const buildMonthlyRevenue = (deals) => {
+  // Helper: build monthly revenue array from deals and paid invoices
+  const buildMonthlyRevenue = (deals = [], invoices = []) => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     const now = new Date()
     const currentYear = now.getFullYear()
     const monthMap = {}
     months.forEach((m, i) => { monthMap[i] = { month: m, revenue: 0, deals: 0 } })
 
+    // 1. Closed deals revenue
     deals.forEach(d => {
       const date = new Date(d.closed_date || d.created_at)
       if (date.getFullYear() === currentYear) {
         const mi = date.getMonth()
         monthMap[mi].revenue += Number(d.amount || 0)
         monthMap[mi].deals += 1
+      }
+    })
+
+    // 2. Paid invoices revenue
+    invoices.forEach(inv => {
+      if (inv.status === 'Paid') {
+        const date = new Date(inv.created_at || inv.updated_at || Date.now())
+        if (date.getFullYear() === currentYear) {
+          const mi = date.getMonth()
+          monthMap[mi].revenue += Number(inv.total_price || 0)
+          monthMap[mi].deals += 1
+        }
       }
     })
 
@@ -155,23 +168,29 @@ function KPIPanel({ session, profile }) {
       }
 
       const teamUsers = (allProfiles || []).filter(p =>
-        ['user', 'manager'].includes((p.role || '').toLowerCase())
+        ['user', 'manager', 'sales_rep', 'agent', 'support_agent', 'b2c', 'admin'].includes((p.role || '').toLowerCase())
       )
       setUsers(teamUsers)
 
       // Collect all team user IDs (including admin) for aggregate queries
       const allUserIds = [session.user.id, ...teamUsers.map(u => u.id)]
 
+      // Include current user in KPI map so super admin's own operations are also tracked
+      const allUsersForKpi = [
+        { id: session.user.id, name: profile?.name || session.user.email, email: session.user.email, role: profile?.role || 'admin' },
+        ...teamUsers.filter(u => u.id !== session.user.id)
+      ]
+
       // ── Per-user KPIs ──
       const kpiMap = {}
-      await Promise.all(teamUsers.map(async (u) => {
+      await Promise.all(allUsersForKpi.map(async (u) => {
         const [leadsRes, customersRes, dealsRes, tasksRes, ticketsRes, activitiesRes, activityCountRes,
                contactsRes, accountsRes, invoicesPaidRes, quotesAccRes] = await Promise.all([
           supabase.from('leads').select('id', { count: 'exact', head: true }).eq('user_id', u.id),
-          supabase.from('leads').select('id', { count: 'exact', head: true }).eq('user_id', u.id).eq('status', 'converted'),
-          supabase.from('opportunities').select('amount').eq('user_id', u.id).eq('stage', 'closed'),
-          supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('user_id', u.id).eq('status', 'Completed'),
-          supabase.from('tickets').select('id', { count: 'exact', head: true }).eq('user_id', u.id).eq('status', 'resolved'),
+          supabase.from('leads').select('id', { count: 'exact', head: true }).eq('user_id', u.id).in('status', ['converted', 'Converted']),
+          supabase.from('opportunities').select('amount').eq('user_id', u.id).in('stage', ['Closed Won', 'closed won', 'Closed', 'closed', 'closed_won', 'won']),
+          supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('user_id', u.id).in('status', ['Completed', 'completed', 'Done']),
+          supabase.from('tickets').select('id', { count: 'exact', head: true }).eq('user_id', u.id).in('status', ['resolved', 'Resolved', 'closed', 'Closed']),
           supabase.from('activities').select('created_at').eq('user_id', u.id).order('created_at', { ascending: false }).limit(1),
           supabase.from('activities').select('id', { count: 'exact', head: true }).eq('user_id', u.id),
           // New: contacts & accounts count per user
@@ -180,7 +199,7 @@ function KPIPanel({ session, profile }) {
           // New: paid invoices per user (invoices stored in quotes table with status = 'Paid')
           supabase.from('quotes').select('total_price').eq('user_id', u.id).eq('status', 'Paid'),
           // New: accepted quotes count per user
-          supabase.from('quotes').select('id', { count: 'exact', head: true }).eq('user_id', u.id).eq('status', 'Accepted'),
+          supabase.from('quotes').select('id', { count: 'exact', head: true }).eq('user_id', u.id).in('status', ['Accepted', 'Approved']),
         ])
 
         const deals = dealsRes.data || []
@@ -192,8 +211,8 @@ function KPIPanel({ session, profile }) {
         kpiMap[u.id] = {
           leads: leadsRes.count || 0,
           customers: customersRes.count || 0,
-          dealsCount,
-          dealsValue,
+          dealsCount: dealsCount > 0 ? dealsCount : paidInvoices.length,
+          dealsValue: dealsValue > 0 ? dealsValue : invoiceRevenue,
           tasks: tasksRes.count || 0,
           tickets: ticketsRes.count || 0,
           lastActive: activitiesRes.data?.[0]?.created_at || null,
@@ -210,13 +229,21 @@ function KPIPanel({ session, profile }) {
 
       // ── Aggregate queries for dashboard charts ──
 
-      // 1. Monthly revenue: all closed opportunities across team
-      const { data: allDeals } = await supabase
-        .from('opportunities')
-        .select('amount, closed_date, created_at')
-        .in('user_id', allUserIds)
-        .eq('stage', 'closed')
-      setMonthlyRevenue(buildMonthlyRevenue(allDeals || []))
+      // 1. Monthly revenue & Invoices query
+      const [dealsRes, invsRes] = await Promise.all([
+        supabase
+          .from('opportunities')
+          .select('amount, closed_date, created_at')
+          .in('user_id', allUserIds)
+          .in('stage', ['Closed Won', 'closed won', 'Closed', 'closed', 'closed_won', 'won']),
+        supabase
+          .from('quotes')
+          .select('total_price, status, expires_at, created_at, updated_at')
+          .in('user_id', allUserIds)
+      ])
+      const allDeals = dealsRes.data || []
+      const allInvoices = invsRes.data || []
+      setMonthlyRevenue(buildMonthlyRevenue(allDeals, allInvoices))
 
       // 2. Activity heatmap: all activity timestamps across team
       const { data: allActivities } = await supabase
@@ -225,11 +252,7 @@ function KPIPanel({ session, profile }) {
         .in('user_id', allUserIds)
       setActivityHeatmap(buildActivityHeatmap((allActivities || []).map(a => a.created_at)))
 
-      // 3. Invoice stats: all invoices (quotes table) across team
-      const { data: allInvoices } = await supabase
-        .from('quotes')
-        .select('total_price, status, expires_at')
-        .in('user_id', allUserIds)
+      // 3. Invoice stats: all invoices across team
       const invs = allInvoices || []
       const paid = invs.filter(i => i.status === 'Paid')
       const unpaid = invs.filter(i => i.status === 'Unpaid')
@@ -282,7 +305,7 @@ function KPIPanel({ session, profile }) {
     refreshKPIs(true)
 
     // Real-time subscriptions — fire silent refresh when user data changes
-    const tables = ['leads', 'opportunities', 'tasks', 'tickets', 'activities', 'contacts', 'accounts', 'quotes']
+    const tables = ['leads', 'opportunities', 'tasks', 'tickets', 'activities', 'contacts', 'accounts', 'quotes', 'services', 'customer_services']
     const channels = tables.map(table =>
       supabase
         .channel(`kpi-${table}-watch`)
@@ -292,8 +315,8 @@ function KPIPanel({ session, profile }) {
         .subscribe()
     )
 
-    // Polling fallback every 30s — guarantees updates even if Realtime isn't enabled
-    const pollInterval = setInterval(() => refreshKPIs(false), 30000)
+    // Polling fallback every 15s — guarantees updates even if Realtime isn't enabled
+    const pollInterval = setInterval(() => refreshKPIs(false), 15000)
 
     return () => {
       channels.forEach(ch => supabase.removeChannel(ch))
@@ -415,6 +438,11 @@ function UserManagementPanel({ session, profile, onUserCreated }) {
   }
 
   const handleDeleteUser = async (userId, userEmail) => {
+    const isSuperAdmin = (session?.user?.user_metadata?.role || profile?.role || '').toLowerCase() === 'admin'
+    if (!isSuperAdmin) {
+      toast.error('Only Super Admin can delete team users')
+      return
+    }
     if (!window.confirm(`${t('userMgmt.confirmRemove')} ${userEmail || 'this user'}?`)) return
     
     const toastId = toast.loading(t('userMgmt.removingUser'))
@@ -1239,11 +1267,25 @@ export default function Dashboard({ session }) {
               </RoleGuard>
             } />
 
-            {/* KPI Dashboard — explicit path for sidebar link (Super Admin only) */}
+            {/* KPI / Analytical Dashboard — supports both paths and ensures B2C role renders Analytical Dashboard */}
+            <Route path="analytics" element={
+              <DashboardHome session={session} profile={profile} />
+            } />
+            <Route path="analytical" element={
+              <DashboardHome session={session} profile={profile} />
+            } />
             <Route path="kpi" element={
-              <RoleGuard moduleId="kpi">
-                <KPIPanel session={session} profile={profile} />
-              </RoleGuard>
+              isB2C ? (
+                <DashboardHome session={session} profile={profile} />
+              ) : (
+                <RoleGuard moduleId="kpi">
+                  <KPIPanel session={session} profile={profile} />
+                </RoleGuard>
+              )
+            } />
+
+            <Route path="kpis" element={
+              <DashboardHome session={session} profile={profile} />
             } />
 
             {/* Common & Protected CRM modules */}

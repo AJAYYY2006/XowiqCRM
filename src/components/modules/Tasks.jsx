@@ -11,6 +11,7 @@ import {
 import LocalSearch from '../ui/LocalSearch'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
 import BulkUploadModal from '../ui/BulkUploadModal'
+import { useRole } from '../../contexts/RoleContext'
 
 const TASK_TYPES = ['Follow-up', 'Demo', 'Onboarding', 'Renewal', 'Support', 'Email', 'Message', 'Call', 'Events']
 const STATUS_STAGES = ['Pending', 'In Progress', 'Completed', 'Overdue']
@@ -67,7 +68,8 @@ export default function Tasks({ session, profile }) {
   const [addingNote, setAddingNote] = useState(false)
   const [viewMode, setViewMode] = useState('active') // 'active' or 'history'
   
-  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
+  const roleContext = useRole?.()
+  const isAdmin = roleContext ? roleContext.isAdmin : (session?.user?.user_metadata?.role || profile?.role || '').toLowerCase() === 'admin'
   const companyType = session.user.user_metadata?.companyType || 'B2B'
   const isB2C = companyType === 'B2C'
 
@@ -479,6 +481,10 @@ export default function Tasks({ session, profile }) {
   }
 
   const handleDeleteTask = async (task) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete tasks')
+      return
+    }
     if (!confirm('Are you sure you want to delete this task?')) return
     const toastId = toast.loading('Deleting task...')
     try {
@@ -576,6 +582,7 @@ export default function Tasks({ session, profile }) {
                       return (
                         <td key={config.id}>
                           <div className="fw-bold" style={{ color: 'var(--text-primary)' }}>{task.title}</div>
+                          {task.unique_id && <div style={{ fontFamily: 'monospace', fontSize: 11, opacity: 0.6 }}>{task.unique_id}</div>}
                         </td>
                       )
                     }
@@ -726,6 +733,7 @@ export default function Tasks({ session, profile }) {
                     <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary, #0f172a)', margin: 0, wordBreak: 'break-word' }}>
                       {selectedTask.title}
                     </h1>
+                    {selectedTask.unique_id && <span style={{ fontFamily: 'monospace', fontSize: 12, opacity: 0.6 }}>{selectedTask.unique_id}</span>}
                     <span style={{ 
                       fontSize: 11, 
                       fontWeight: 800, 

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
+import { useRole } from '../../contexts/RoleContext'
 import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 
@@ -70,7 +71,8 @@ export default function Invoices({ session, profile }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [viewingInvoice, setViewingInvoice] = useState(null)
   const [statusFilter, setStatusFilter] = useState('All')
-  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
+  const roleContext = useRole?.()
+  const isAdmin = roleContext ? roleContext.isAdmin : (session?.user?.user_metadata?.role || profile?.role || '').toLowerCase() === 'admin'
   
   const [formData, setFormData] = useState({
     title: '', account_id: '', opportunity_id: '', quote_id: '', amount: 0, due_date: '', status: 'Unpaid'
@@ -170,12 +172,24 @@ export default function Invoices({ session, profile }) {
 
   // Handle deep-link openId from navigation
   useEffect(() => {
-    if (invoices.length > 0 && location.state?.openId) {
-      const target = invoices.find(i => i.id === location.state.openId)
-      if (target) {
-        setViewingInvoice(target)
-        window.history.replaceState({}, document.title)
-      }
+    if (!location.state?.openId) return
+    const targetId = location.state.openId
+    const target = invoices.find(i => i.id === targetId)
+    if (target) {
+      setViewingInvoice(target)
+      window.history.replaceState({}, document.title)
+    } else {
+      supabase
+        .from('quotes')
+        .select('*, accounts(id, account_name, contacts(phone, email)), opportunities(id, name, account_id, accounts(id, account_name, contacts(phone, email)))')
+        .eq('id', targetId)
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            setViewingInvoice(data)
+            window.history.replaceState({}, document.title)
+          }
+        })
     }
   }, [invoices, location.state])
 
@@ -340,6 +354,10 @@ export default function Invoices({ session, profile }) {
   }
 
   const handleDelete = async (inv) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete invoices')
+      return
+    }
     if (!confirm(`Delete invoice ${inv.invoice_number || parseInvoiceName(inv.quote_name)}?`)) return
     const toastId = toast.loading('Deleting...')
     try {
@@ -357,7 +375,7 @@ export default function Invoices({ session, profile }) {
     const customerName = inv.accounts?.account_name || inv.opportunities?.accounts?.account_name || 'Customer'
     const contact = inv.accounts?.contacts?.[0] || inv.opportunities?.accounts?.contacts?.[0]
     const amount = Number(inv.total_price).toLocaleString()
-    const invNumber = inv.invoice_number || `INV-${inv.id.slice(0,6).toUpperCase()}`
+    const invNumber = inv.invoice_number || inv.unique_id
     
     doc.setFontSize(22)
     doc.setTextColor(243, 122, 35) // XOWIQ Orange
@@ -495,7 +513,7 @@ export default function Invoices({ session, profile }) {
               ) : (
                 filteredInvoices.map(inv => {
                   const meta = parseInvoiceMeta(inv.quote_name)
-                  const invNo = inv.invoice_number || `INV-${inv.id.slice(0,6).toUpperCase()}`
+                  const invNo = inv.invoice_number || inv.unique_id
                   const linkedOpp = inv.opportunities || opportunities.find(o => o.id === inv.opportunity_id)
                   const linkedQuote = quotesList.find(q => q.id === meta.quote_id || (inv.opportunity_id && q.opportunity_id === inv.opportunity_id))
                   let qParsedName = ''
@@ -652,7 +670,7 @@ export default function Invoices({ session, profile }) {
                     background: 'rgba(255,255,255,0.2)', padding: '6px 10px', 
                     borderRadius: 8, fontFamily: 'monospace', fontWeight: 800, fontSize: 14 
                   }}>
-                    {viewingInvoice.invoice_number || `INV-${viewingInvoice.id.slice(0,6).toUpperCase()}`}
+                    {viewingInvoice.invoice_number || viewingInvoice.unique_id}
                   </div>
                   <span className={`badge badge-${(viewingInvoice.status || 'unpaid').toLowerCase()}`} style={{
                     padding: '4px 12px', fontSize: 12, fontWeight: 800,

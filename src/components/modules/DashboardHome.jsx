@@ -25,20 +25,33 @@ export default function DashboardHome({ session, profile }) {
 
   const companyName = profile?.company_name || session?.user?.user_metadata?.companyName || ''
 
-  // Helper: build monthly revenue array from deals with closed_date
-  const buildMonthlyRevenue = (deals) => {
+  // Helper: build monthly revenue array from deals and paid invoices
+  const buildMonthlyRevenue = (deals = [], invoices = []) => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     const now = new Date()
     const currentYear = now.getFullYear()
     const monthMap = {}
     months.forEach((m, i) => { monthMap[i] = { month: m, revenue: 0, deals: 0 } })
 
+    // 1. Closed deals revenue
     deals.forEach(d => {
       const date = new Date(d.closed_date || d.created_at)
       if (date.getFullYear() === currentYear) {
         const mi = date.getMonth()
         monthMap[mi].revenue += Number(d.amount || 0)
         monthMap[mi].deals += 1
+      }
+    })
+
+    // 2. Paid invoices revenue (crucial for B2C and service billing)
+    invoices.forEach(inv => {
+      if (inv.status === 'Paid') {
+        const date = new Date(inv.created_at)
+        if (date.getFullYear() === currentYear) {
+          const mi = date.getMonth()
+          monthMap[mi].revenue += Number(inv.total_price || 0)
+          monthMap[mi].deals += 1
+        }
       }
     })
 
@@ -95,12 +108,32 @@ export default function DashboardHome({ session, profile }) {
   }
 
   useEffect(() => {
-    fetchTeamAndKPIs()
+    // Initial load with spinner
+    fetchTeamAndKPIs(true)
+
+    // Real-time subscriptions — fire silent refresh when team data changes
+    const tables = ['leads', 'opportunities', 'tasks', 'tickets', 'activities', 'contacts', 'accounts', 'quotes', 'services', 'customer_services']
+    const channels = tables.map(table =>
+      supabase
+        .channel(`dashboard-home-${table}-watch`)
+        .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+          fetchTeamAndKPIs(false) // silent — no spinner, no flicker
+        })
+        .subscribe()
+    )
+
+    // Polling fallback every 15s — guarantees updates even if Realtime isn't enabled
+    const pollInterval = setInterval(() => fetchTeamAndKPIs(false), 15000)
+
+    return () => {
+      channels.forEach(ch => supabase.removeChannel(ch))
+      clearInterval(pollInterval)
+    }
   }, [session, profile])
 
-  const fetchTeamAndKPIs = async () => {
+  const fetchTeamAndKPIs = async (showSpinner = false) => {
     try {
-      setLoading(true)
+      if (showSpinner) setLoading(true)
       if (!session?.user?.id) return
 
       // Fetch team users
@@ -135,21 +168,27 @@ export default function DashboardHome({ session, profile }) {
       // Collect all user IDs including current user for aggregate queries
       const allUserIds = [session.user.id, ...teamUsers.map(u => u.id)]
 
+      // Fetch KPIs for all users: current session user + team members
+      const allUsersForKpi = [
+        { id: session.user.id, name: profile?.name || session.user.email, email: session.user.email },
+        ...teamUsers
+      ]
+
       // Fetch KPIs for team
       const kpiMap = {}
-      await Promise.all(teamUsers.map(async (u) => {
+      await Promise.all(allUsersForKpi.map(async (u) => {
         const [leadsRes, customersRes, dealsRes, tasksRes, ticketsRes, activitiesRes,
                contactsRes, accountsRes, invoicesPaidRes, quotesAccRes] = await Promise.all([
           supabase.from('leads').select('id', { count: 'exact', head: true }).eq('user_id', u.id),
-          supabase.from('leads').select('id', { count: 'exact', head: true }).eq('user_id', u.id).eq('status', 'converted'),
-          supabase.from('opportunities').select('amount').eq('user_id', u.id).eq('stage', 'closed'),
-          supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('user_id', u.id).eq('status', 'Completed'),
-          supabase.from('tickets').select('id', { count: 'exact', head: true }).eq('user_id', u.id).eq('status', 'resolved'),
+          supabase.from('leads').select('id', { count: 'exact', head: true }).eq('user_id', u.id).in('status', ['converted', 'Converted']),
+          supabase.from('opportunities').select('amount').eq('user_id', u.id).in('stage', ['Closed Won', 'closed won', 'Closed', 'closed', 'closed_won', 'won']),
+          supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('user_id', u.id).in('status', ['Completed', 'completed', 'Done']),
+          supabase.from('tickets').select('id', { count: 'exact', head: true }).eq('user_id', u.id).in('status', ['resolved', 'Resolved', 'closed', 'Closed']),
           supabase.from('activities').select('created_at').eq('user_id', u.id).order('created_at', { ascending: false }).limit(1),
           supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('user_id', u.id),
           supabase.from('accounts').select('id', { count: 'exact', head: true }).eq('user_id', u.id),
           supabase.from('quotes').select('total_price').eq('user_id', u.id).eq('status', 'Paid'),
-          supabase.from('quotes').select('id', { count: 'exact', head: true }).eq('user_id', u.id).eq('status', 'Accepted'),
+          supabase.from('quotes').select('id', { count: 'exact', head: true }).eq('user_id', u.id).in('status', ['Accepted', 'Approved']),
         ])
 
         const deals = dealsRes.data || []
@@ -161,8 +200,8 @@ export default function DashboardHome({ session, profile }) {
         kpiMap[u.id] = {
           leads: leadsRes.count || 0,
           customers: customersRes.count || 0,
-          dealsCount,
-          dealsValue,
+          dealsCount: dealsCount > 0 ? dealsCount : paidInvoices.length,
+          dealsValue: dealsValue > 0 ? dealsValue : invoiceRevenue,
           tasks: tasksRes.count || 0,
           tickets: ticketsRes.count || 0,
           lastActive: activitiesRes.data?.[0]?.created_at || null,
@@ -178,13 +217,23 @@ export default function DashboardHome({ session, profile }) {
 
       // ── Aggregate queries for dashboard charts ──
 
-      // 1. Monthly revenue
-      const { data: allDeals } = await supabase
-        .from('opportunities')
-        .select('amount, closed_date, created_at')
-        .in('user_id', allUserIds)
-        .eq('stage', 'closed')
-      setMonthlyRevenue(buildMonthlyRevenue(allDeals || []))
+      // 1. Monthly revenue & Invoices query
+      const [dealsRes, invsRes] = await Promise.all([
+        supabase
+          .from('opportunities')
+          .select('amount, closed_date, created_at')
+          .in('user_id', allUserIds)
+          .in('stage', ['Closed Won', 'closed won', 'Closed', 'closed', 'closed_won', 'won']),
+        supabase
+          .from('quotes')
+          .select('total_price, status, expires_at, created_at')
+          .in('user_id', allUserIds)
+      ])
+
+      const allDeals = dealsRes.data || []
+      const allInvoices = invsRes.data || []
+
+      setMonthlyRevenue(buildMonthlyRevenue(allDeals, allInvoices))
 
       // 2. Activity heatmap
       const { data: allActivities } = await supabase
@@ -192,12 +241,6 @@ export default function DashboardHome({ session, profile }) {
         .select('created_at')
         .in('user_id', allUserIds)
       setActivityHeatmap(buildActivityHeatmap((allActivities || []).map(a => a.created_at)))
-
-      // 3. Invoice stats
-      const { data: allInvoices } = await supabase
-        .from('quotes')
-        .select('total_price, status, expires_at')
-        .in('user_id', allUserIds)
       const invs = allInvoices || []
       const paid = invs.filter(i => i.status === 'Paid')
       const unpaid = invs.filter(i => i.status === 'Unpaid')

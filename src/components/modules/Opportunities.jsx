@@ -13,6 +13,7 @@ import WhatsAppButton from '../ui/WhatsAppButton'
 import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../lib/whatsapp'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
 import BulkUploadModal from '../ui/BulkUploadModal'
+import { useRole } from '../../contexts/RoleContext'
 
 // --- Constants ---
 const DEFAULT_STAGES = ['Prospecting', 'Scoping', 'Negotiation', 'Legal', 'Contract', 'Closed']
@@ -39,7 +40,7 @@ export default function Opportunities({ session, profile }) {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('products')
   const [formData, setFormData] = useState({
-    name: '', account_id: '', amount: 0, stage: stages[0] || 'Prospecting', closed_date: '', owner: 'Ajay'
+    name: '', account_id: '', amount: 0, stage: stages[0] || 'Prospecting', closed_date: '', owner: 'Ajay', custom_data: {}
   })
   const [productForm, setProductForm] = useState({ name: '', qty: 1, price: 0 })
   const [products, setProducts] = useState([])
@@ -47,11 +48,29 @@ export default function Opportunities({ session, profile }) {
   const [linkedAccountName, setLinkedAccountName] = useState('')
   const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const [customConfigs, setCustomConfigs] = useState([])
 
   // --- Effects ---
   useEffect(() => {
     fetchData()
+    fetchCustomConfigs()
   }, [session])
+
+  const fetchCustomConfigs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('custom_field_configs')
+        .select('*')
+        .eq('business_id', session.user.id)
+        .eq('module', 'opportunity')
+        .order('display_order', { ascending: true })
+      if (!error && data) {
+        setCustomConfigs(data.filter(f => !f.is_archived))
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   const fetchData = async () => {
     try {
@@ -162,13 +181,15 @@ export default function Opportunities({ session, profile }) {
         amount: opp.amount || 0,
         stage: opp.stage || stages[0] || 'Prospecting',
         closed_date: opp.closed_date || '',
-        owner: opp.owner || profile?.name || session.user.email
+        owner: opp.owner || profile?.name || session.user.email,
+        custom_data: opp.custom_data || {}
       })
     } else {
       setSelectedOpp(null)
       setFormData({
         name: '', account_id: '', amount: 0, stage: stages[0] || 'Prospecting', closed_date: '', 
-        owner: profile?.name || session.user.email
+        owner: profile?.name || session.user.email,
+        custom_data: {}
       })
     }
     setIsModalOpen(true)
@@ -178,14 +199,20 @@ export default function Opportunities({ session, profile }) {
     e.preventDefault()
     const loadingToast = toast.loading(selectedOpp ? 'Updating deal...' : 'Adding deal...')
     try {
-      const data = { 
-        ...formData, 
-        user_id: session.user.id,
+      // Base payload shared between insert and update
+      const baseData = {
+        name: formData.name,
         account_id: formData.account_id || null,
-        closed_date: formData.closed_date || null
+        amount: Number(formData.amount) || 0,
+        stage: formData.stage,
+        closed_date: formData.closed_date || null,
+        owner: formData.owner,
+        custom_data: formData.custom_data || {}
       }
+
       if (selectedOpp) {
-        const { error } = await supabase.from('opportunities').update(data).eq('id', selectedOpp.id)
+        // UPDATE: do NOT include user_id — it's immutable and causes RLS violations
+        const { error } = await supabase.from('opportunities').update(baseData).eq('id', selectedOpp.id)
         if (error) throw error
 
         if (viewingOpp && viewingOpp.id === selectedOpp.id) {
@@ -197,7 +224,8 @@ export default function Opportunities({ session, profile }) {
           if (updatedOpp) setViewingOpp(updatedOpp)
         }
       } else {
-        const { error } = await supabase.from('opportunities').insert([data])
+        // INSERT: include user_id only on create
+        const { error } = await supabase.from('opportunities').insert([{ ...baseData, user_id: session.user.id }])
         if (error) throw error
       }
       setIsModalOpen(false)
@@ -210,6 +238,10 @@ export default function Opportunities({ session, profile }) {
   }
 
   const handleDelete = async (id) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete deals')
+      return
+    }
     if (!window.confirm('Are you sure you want to delete this deal?')) return
     const loadingToast = toast.loading('Deleting...')
     try {
@@ -250,7 +282,8 @@ export default function Opportunities({ session, profile }) {
 
   if (loading) return <div className="loading-container"><div className="spinner"/></div>
 
-  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
+  const roleContext = useRole?.()
+  const isAdmin = roleContext ? roleContext.isAdmin : (session?.user?.user_metadata?.role || profile?.role || '').toLowerCase() === 'admin'
 
   return (
     <div>
@@ -269,6 +302,7 @@ export default function Opportunities({ session, profile }) {
               <div className="detail-info">
                 <h1 className="detail-name">{viewingOpp.name}</h1>
                 <div className="detail-meta">
+                   {viewingOpp.unique_id && <span style={{ fontFamily: 'monospace', opacity: 0.7 }}>{viewingOpp.unique_id} • </span>}
                    {viewingOpp.accounts?.account_name || 'No Account'} • {profile?.currency || '$'}{Number(viewingOpp.amount).toLocaleString()}
                 </div>
                 <div className={`badge badge-${viewingOpp.stage.toLowerCase()} mt-2`}>{viewingOpp.stage}</div>
@@ -580,7 +614,7 @@ export default function Opportunities({ session, profile }) {
                             {oppInvoices.map(inv => {
                               let invName = inv.quote_name
                               try { const p = JSON.parse(inv.quote_name); if (p.name) invName = p.name } catch {}
-                              const invNo = inv.invoice_number || `INV-${inv.id.slice(0,6).toUpperCase()}`
+                              const invNo = inv.invoice_number || inv.unique_id
                               const isPaid = inv.status === 'Paid'
 
                               return (
@@ -701,7 +735,10 @@ export default function Opportunities({ session, profile }) {
                   ) : (
                     opportunities.map(opp => (
                       <tr key={opp.id} className="clickable-row" onClick={() => setViewingOpp(opp)}>
-                        <td className="fw-bold">{opp.name}</td>
+                        <td className="fw-bold">
+                          {opp.name}
+                          {opp.unique_id && <div style={{ fontFamily: 'monospace', fontSize: 11, opacity: 0.6, fontWeight: 400 }}>{opp.unique_id}</div>}
+                        </td>
                         <td className="text-primary fw-bold" style={{ textDecoration: 'underline' }}>
                            {opp.accounts?.account_name || '-'}
                         </td>
@@ -740,9 +777,19 @@ export default function Opportunities({ session, profile }) {
       {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="modal">
+          <div className="modal" style={{ maxWidth: 650 }}>
             <div className="modal-header">
-              <h2 className="modal-title">{selectedOpp ? 'Edit Deal' : 'New Deal'}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <h2 className="modal-title">{selectedOpp ? 'Edit Deal' : 'New Deal'}</h2>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  style={{ padding: '4px 10px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }} 
+                  onClick={() => setIsFieldBuilderOpen(true)}
+                >
+                  <Settings size={14} /> Edit Fields
+                </button>
+              </div>
               <button className="modal-close" onClick={() => setIsModalOpen(false)}>✕</button>
             </div>
             <form onSubmit={handleSubmit}>
@@ -776,6 +823,53 @@ export default function Opportunities({ session, profile }) {
                   <label className="form-label">Deal Owner</label>
                   <input className="form-input" value={formData.owner} onChange={e => setFormData({...formData, owner: e.target.value})} />
                 </div>
+
+                {/* Dynamic Custom Fields */}
+                {customConfigs.filter(f => !f.is_core).map(f => (
+                  <div key={f.id} className="form-group" style={{ gridColumn: f.field_type === 'long_text' ? '1 / -1' : 'auto' }}>
+                    <label className="form-label">
+                      {f.label} {f.is_required && <span style={{ color: '#ef4444' }}>*</span>}
+                    </label>
+                    {f.field_type === 'dropdown' ? (
+                      <select
+                        required={f.is_required}
+                        className="form-input"
+                        value={formData.custom_data?.[f.field_key] || ''}
+                        onChange={e => setFormData({
+                          ...formData,
+                          custom_data: { ...(formData.custom_data || {}), [f.field_key]: e.target.value }
+                        })}
+                      >
+                        <option value="">-- Select {f.label} --</option>
+                        {(f.options || []).map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    ) : f.field_type === 'long_text' ? (
+                      <textarea
+                        required={f.is_required}
+                        className="form-input"
+                        rows={3}
+                        value={formData.custom_data?.[f.field_key] || ''}
+                        onChange={e => setFormData({
+                          ...formData,
+                          custom_data: { ...(formData.custom_data || {}), [f.field_key]: e.target.value }
+                        })}
+                      />
+                    ) : (
+                      <input
+                        type={f.field_type === 'number' ? 'number' : f.field_type === 'date' ? 'date' : 'text'}
+                        required={f.is_required}
+                        className="form-input"
+                        value={formData.custom_data?.[f.field_key] || ''}
+                        onChange={e => setFormData({
+                          ...formData,
+                          custom_data: { ...(formData.custom_data || {}), [f.field_key]: e.target.value }
+                        })}
+                      />
+                    )}
+                  </div>
+                ))}
               </div>
               <div className="form-actions">
                 <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
@@ -790,7 +884,10 @@ export default function Opportunities({ session, profile }) {
         module="opportunity"
         businessId={session.user.id}
         isOpen={isFieldBuilderOpen}
-        onClose={() => setIsFieldBuilderOpen(false)}
+        onClose={() => {
+          setIsFieldBuilderOpen(false)
+          fetchCustomConfigs()
+        }}
       />
 
       <BulkUploadModal

@@ -10,11 +10,24 @@ import WhatsAppButton from '../ui/WhatsAppButton'
 import { getWhatsAppMessage, formatPhoneDisplay, cleanPhoneNumber } from '../../lib/whatsapp'
 import { sanitizePhone, validatePhone, validateEmail, validateWebsite, validateRequired } from '../../lib/validation'
 import { useTranslation } from 'react-i18next'
+import { useRole } from '../../contexts/RoleContext'
 import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 
 const labelStyle = { color: 'var(--text-muted)', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }
 const detailFieldStyle = { fontSize: '14px', color: 'var(--text-primary)' }
+
+// Safely parse invoice/quote name (may be stored as JSON or plain text)
+function parseQName(rawName) {
+  if (!rawName) return '—'
+  try {
+    const parsed = JSON.parse(rawName)
+    return parsed.name || parsed.quote_name || rawName
+  } catch {
+    return rawName
+  }
+}
+
 
 async function handleFileUpload(file, businessId) {
   const fileName = `${businessId}/${Date.now()}-${file.name}`
@@ -151,7 +164,8 @@ export default function Accounts({ session, profile }) {
   
   const companyType = session.user.user_metadata?.companyType || 'B2B'
   const isB2C = companyType === 'B2C'
-  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
+  const roleContext = useRole?.()
+  const isAdmin = roleContext ? roleContext.isAdmin : ((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase() === 'admin' && !isB2C)
   // Stage tracking is now per-service (service_type field), always fetch stages
   const hasMultiStageServices = (svcList) => (svcList || []).some(s => s.service_type === 'Multi-Stage')
 
@@ -217,6 +231,7 @@ export default function Accounts({ session, profile }) {
   const [isServiceFieldBuilderOpen, setIsServiceFieldBuilderOpen] = useState(false)
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false)
   const [editingInvoice, setEditingInvoice] = useState(null)
+  const [viewingInvoice, setViewingInvoice] = useState(null)
   const [invoiceForm, setInvoiceForm] = useState({ quote_name: '', total_price: 0, status: 'Unpaid', created_at: '' })
 
   const handleOpenInvoiceModal = (inv) => {
@@ -354,6 +369,10 @@ export default function Accounts({ session, profile }) {
   }
 
   const handleDeleteOpportunity = async (oppId, oppName) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete opportunities')
+      return
+    }
     if (!window.confirm(`Are you sure you want to delete opportunity "${oppName}"?`)) return
     const toastId = toast.loading('Deleting opportunity...')
     try {
@@ -511,6 +530,9 @@ export default function Accounts({ session, profile }) {
       const account = accounts.find(a => a.id === location.state.openId)
       if (account) {
         setSelectedAccount(account)
+        if (location.state?.tab) {
+          setActiveTab(location.state.tab)
+        }
         window.history.replaceState({}, document.title)
       }
     }
@@ -580,8 +602,21 @@ export default function Accounts({ session, profile }) {
       return { ...cs, services: match || null, currentStage: latestStage?.stageDetail || null, stageFromServiceId: !!latestByService }
     })
 
+    const oppInvoices = (oppRes.data || []).flatMap(o => o.quotes || [])
+    const allAccountInvoices = [...(iRes.data || []), ...oppInvoices]
+    const seenInvIds = new Set()
+    const uniqueInvoices = allAccountInvoices.filter(i => {
+      if (!i?.id || seenInvIds.has(i.id)) return false
+      seenInvIds.add(i.id)
+      return true
+    })
+    const invRows = uniqueInvoices.filter(row => {
+      if (row.invoice_number) return true
+      try { return !!JSON.parse(row.quote_name).is_invoice } catch { return true }
+    })
+
     setAccContacts(cRes.data || [])
-    setAccInvoices(iRes.data || [])
+    setAccInvoices(invRows)
     setAccTasks(tRes.data || [])
     setAccServices(mySvcs)
     setAvailableServices(sRes.data || [])
@@ -809,6 +844,10 @@ export default function Accounts({ session, profile }) {
   }
 
   const handleDeleteServiceEntry = async (entry) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete service entries')
+      return
+    }
     if (!confirm('Delete this service entry and its linked invoice?')) return
     const toastId = toast.loading('Deleting service, invoice, and reminder...')
     try {
@@ -825,6 +864,10 @@ export default function Accounts({ session, profile }) {
   }
 
   const handleDeleteAccount = async (acc) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete customer profiles')
+      return
+    }
     if (!confirm(`Are you sure you want to delete "${acc.account_name}"? All service history and invoices will be permanently removed.`)) return
     const toastId = toast.loading('Deleting customer profile...')
     try {
@@ -854,7 +897,7 @@ export default function Accounts({ session, profile }) {
 
   const downloadInvoicePDF = (inv) => {
     const doc = new jsPDF()
-    const invNo = inv.invoice_number || `INV-${inv.id.slice(0,6).toUpperCase()}`
+    const invNo = inv.invoice_number || inv.unique_id
     doc.setFillColor(243, 122, 35)
     doc.rect(0, 0, 210, 40, 'F')
     doc.setTextColor(255, 255, 255)
@@ -931,6 +974,7 @@ export default function Accounts({ session, profile }) {
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <h1 style={{ margin: 0, fontSize: 32, fontWeight: 900, color: 'var(--text-primary)' }}>{selectedAccount.account_name}</h1>
+                {selectedAccount.unique_id && <span style={{ fontFamily: 'monospace', fontSize: 13, opacity: 0.6 }}>{selectedAccount.unique_id}</span>}
                 <span className={`badge badge-${(selectedAccount.status || '').toLowerCase()}`}>{selectedAccount.status}</span>
                 {isB2C && b2cStages.length > 0 && (() => {
                   const currentStg = b2cStages.find(st => st.id === selectedAccount.b2c_stage_id)
@@ -1041,7 +1085,7 @@ export default function Accounts({ session, profile }) {
             </button>
           )}
           <button className={`tab ${activeTab === 'services' ? 'active' : ''}`} onClick={() => setActiveTab('services')}><Package size={16} /> Service History</button>
-          <button className={`tab ${activeTab === 'invoices' ? 'active' : ''}`} onClick={() => setActiveTab('invoices')}><CreditCard size={16} /> Invoices</button>
+          <button className={`tab ${activeTab === 'invoices' ? 'active' : ''}`} onClick={() => setActiveTab('invoices')}><CreditCard size={16} /> Invoices {accInvoices.length > 0 && <span className="tab-badge">{accInvoices.length}</span>}</button>
           <button className={`tab ${activeTab === 'reminders' ? 'active' : ''}`} onClick={() => setActiveTab('reminders')}><Calendar size={16} /> Reminders {activeTasks.length > 0 && <span className="tab-badge">{activeTasks.length}</span>}</button>
           <button className={`tab ${activeTab === 'interactions' ? 'active' : ''}`} onClick={() => setActiveTab('interactions')}><FileText size={16} /> Interactions</button>
         </div>
@@ -1174,25 +1218,31 @@ export default function Accounts({ session, profile }) {
                               </span>
                             </td>
                             <td style={{ textAlign: 'right' }}>
-                              <button
-                                className="btn btn-secondary"
-                                style={{ padding: '6px 10px', color: '#ef4444', borderColor: '#fecaca', background: '#fff' }}
-                                title="Remove contact"
-                                onClick={async () => {
-                                  if (!window.confirm(`Delete contact "${c.name}" from this account?`)) return
-                                  const tId = toast.loading('Deleting contact...')
-                                  try {
-                                    const { error } = await supabase.from('contacts').delete().eq('id', c.id)
-                                    if (error) throw error
-                                    setAccContacts(prev => prev.filter(x => x.id !== c.id))
-                                    toast.success('Contact deleted', { id: tId })
-                                  } catch (err) {
-                                    toast.error(err.message || 'Failed to delete contact', { id: tId })
-                                  }
-                                }}
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                              {isAdmin && (
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: '6px 10px', color: '#ef4444', borderColor: '#fecaca', background: '#fff' }}
+                                  title="Remove contact"
+                                  onClick={async () => {
+                                    if (!isAdmin) {
+                                      toast.error('Only Super Admin can delete contacts')
+                                      return
+                                    }
+                                    if (!window.confirm(`Delete contact "${c.name}" from this account?`)) return
+                                    const tId = toast.loading('Deleting contact...')
+                                    try {
+                                      const { error } = await supabase.from('contacts').delete().eq('id', c.id)
+                                      if (error) throw error
+                                      setAccContacts(prev => prev.filter(x => x.id !== c.id))
+                                      toast.success('Contact deleted', { id: tId })
+                                    } catch (err) {
+                                      toast.error(err.message || 'Failed to delete contact', { id: tId })
+                                    }
+                                  }}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -1423,10 +1473,10 @@ export default function Accounts({ session, profile }) {
                                         <div style={{ display: 'grid', gap: 8 }}>
                                           {linkedInvoices.map(inv => {
                                             const invName = parseQName(inv.quote_name)
-                                            const invNo = inv.invoice_number || `INV-${inv.id.slice(0,6).toUpperCase()}`
+                                            const invNo = inv.invoice_number || inv.unique_id
                                             return (
                                               <div key={inv.id}
-                                                onClick={() => navigate('/dashboard/invoices', { state: { openId: inv.id } })}
+                                                onClick={() => setViewingInvoice(inv)}
                                                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'all 0.15s' }}
                                                 onMouseEnter={e => { e.currentTarget.style.borderColor = '#10b981'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(16, 185, 129, 0.15)' }}
                                                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = 'none' }}
@@ -1562,6 +1612,13 @@ export default function Accounts({ session, profile }) {
           )}
 
           {activeTab === 'invoices' && (
+            accInvoices.length === 0 ? (
+              <div className="card" style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>
+                <CreditCard size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+                <div style={{ fontSize: 15, fontWeight: 600 }}>No invoices found for this account.</div>
+                <div style={{ fontSize: 13, marginTop: 4 }}>Invoices generated from services or opportunities will appear here.</div>
+              </div>
+            ) : (
             <div className="card" style={{ padding: 0 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
@@ -1575,22 +1632,30 @@ export default function Accounts({ session, profile }) {
                 </thead>
                 <tbody>
                   {accInvoices.map(inv => (
-                    <tr key={inv.id} style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                      <td style={{ padding: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{inv.invoice_number || `INV-${inv.id.slice(0,6).toUpperCase()}`}</td>
+                    <tr 
+                      key={inv.id} 
+                      style={{ borderTop: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'background 0.15s' }}
+                      onClick={() => setViewingInvoice(inv)}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary, #f8fafc)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      title="Click to open invoice details"
+                    >
+                      <td style={{ padding: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{inv.invoice_number || inv.unique_id}</td>
                       <td style={{ padding: 15, color: 'var(--text-primary)' }}>{parseQName(inv.quote_name)}</td>
                       <td style={{ padding: 15, fontWeight: 800, color: 'var(--text-primary)' }}>{profile?.currency || '$'}{Number(inv.total_price).toLocaleString()}</td>
                       <td style={{ padding: 15 }}>
-                        <button onClick={() => handleStatusToggle(inv)} className={`badge badge-${(inv.status || 'unpaid').toLowerCase()}`} style={{ border: 'none', cursor: 'pointer' }}>{inv.status || 'Unpaid'}</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleStatusToggle(inv); }} className={`badge badge-${(inv.status || 'unpaid').toLowerCase()}`} style={{ border: 'none', cursor: 'pointer' }}>{inv.status || 'Unpaid'}</button>
                       </td>
                       <td style={{ padding: 15, textAlign: 'right' }}>
-                        <button className="btn-icon" style={{ marginRight: 8, color: '#2563eb' }} onClick={() => handleOpenInvoiceModal(inv)} title="Open Invoice"><Eye size={16} /></button>
-                        <button className="btn-icon" onClick={() => downloadInvoicePDF(inv)} title="Download PDF"><Download size={18} /></button>
+                        <button className="btn-icon" style={{ marginRight: 8, color: '#2563eb' }} onClick={(e) => { e.stopPropagation(); setViewingInvoice(inv); }} title="Open Invoice"><Eye size={16} /></button>
+                        <button className="btn-icon" onClick={(e) => { e.stopPropagation(); downloadInvoicePDF(inv); }} title="Download PDF"><Download size={18} /></button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            )
           )}
 
           {activeTab === 'reminders' && (
@@ -2173,8 +2238,9 @@ export default function Accounts({ session, profile }) {
                       <div>
                         <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{acc.account_name}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
-                          {isB2C 
-                            ? (acc.phone || acc.email || 'No contact info') 
+                          {acc.unique_id && <span style={{ fontFamily: 'monospace' }}>{acc.unique_id} • </span>}
+                          {isB2C
+                            ? (acc.phone || acc.email || 'No contact info')
                             : (acc.website || acc.domain || acc.custom_data?.website || acc.phone || 'No website')}
                         </div>
                       </div>
@@ -2537,6 +2603,161 @@ export default function Accounts({ session, profile }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- INVOICE PREVIEW / DETAIL MODAL --- */}
+      {viewingInvoice && (
+        <div className="modal-overlay" onClick={() => setViewingInvoice(null)} style={{ zIndex: 1100 }}>
+          <div 
+            className="modal" 
+            style={{ width: 680, maxWidth: '95vw', padding: 0, overflow: 'hidden' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{ 
+              background: 'linear-gradient(135deg, #ff5900 0%, #ea580c 100%)', 
+              color: '#fff', padding: '24px 28px', display: 'flex', 
+              justifyContent: 'space-between', alignItems: 'flex-start' 
+            }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ 
+                    background: 'rgba(255,255,255,0.2)', padding: '6px 10px', 
+                    borderRadius: 8, fontFamily: 'monospace', fontWeight: 800, fontSize: 14 
+                  }}>
+                    {viewingInvoice.invoice_number || viewingInvoice.unique_id || 'INV-DRAFT'}
+                  </div>
+                  <span className={`badge badge-${(viewingInvoice.status || 'unpaid').toLowerCase()}`} style={{
+                    padding: '4px 12px', fontSize: 12, fontWeight: 800,
+                    background: viewingInvoice.status === 'Paid' ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.25)',
+                    color: '#fff'
+                  }}>
+                    {viewingInvoice.status || 'Unpaid'}
+                  </span>
+                </div>
+                <h2 style={{ margin: '12px 0 4px', fontSize: 20, fontWeight: 800, color: '#fff' }}>
+                  {parseQName(viewingInvoice.quote_name)}
+                </h2>
+                <div style={{ fontSize: 12, opacity: 0.9 }}>
+                  Issued: {new Date(viewingInvoice.created_at || Date.now()).toLocaleDateString()} • Due: {viewingInvoice.expires_at ? new Date(viewingInvoice.expires_at).toLocaleDateString() : 'Upon receipt'}
+                </div>
+              </div>
+              <button 
+                onClick={() => setViewingInvoice(null)} 
+                style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', opacity: 0.8 }}
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{ padding: 24, display: 'grid', gap: 20 }}>
+              <div style={{ 
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+                gap: 12, background: 'var(--bg-secondary)', padding: 16, borderRadius: 12, border: '1px solid var(--border-subtle)' 
+              }}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Billed Account</div>
+                  <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 14 }}>
+                    {selectedAccount?.account_name || 'Customer'}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Total Invoiced</div>
+                  <div style={{ fontWeight: 800, color: '#ff5900', fontSize: 18 }}>
+                    {profile?.currency || '$'}{Number(viewingInvoice.total_price || 0).toLocaleString()}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Status</div>
+                  <button 
+                    onClick={async () => {
+                      await handleStatusToggle(viewingInvoice)
+                      const nextSt = viewingInvoice.status === 'Paid' ? 'Unpaid' : 'Paid'
+                      setViewingInvoice({ ...viewingInvoice, status: nextSt })
+                    }}
+                    className={`badge badge-${(viewingInvoice.status || 'unpaid').toLowerCase()}`}
+                    style={{ cursor: 'pointer', border: 'none' }}
+                  >
+                    {viewingInvoice.status || 'Unpaid'} (Click to toggle)
+                  </button>
+                </div>
+              </div>
+
+              {/* Line items if available */}
+              {(() => {
+                let items = []
+                try {
+                  const meta = JSON.parse(viewingInvoice.quote_name)
+                  if (meta.items) items = meta.items
+                } catch (e) {}
+                if (viewingInvoice.line_items) items = viewingInvoice.line_items
+
+                if (items && items.length > 0) {
+                  return (
+                    <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 10, overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--bg-secondary)' }}>
+                            <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12 }}>Item</th>
+                            <th style={{ padding: '10px 14px', textAlign: 'center', fontSize: 12 }}>Qty</th>
+                            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 12 }}>Price</th>
+                            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 12 }}>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((it, idx) => (
+                            <tr key={idx} style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                              <td style={{ padding: '10px 14px', fontSize: 13 }}>{it.desc || it.name || 'Service item'}</td>
+                              <td style={{ padding: '10px 14px', textAlign: 'center', fontSize: 13 }}>{it.qty || 1}</td>
+                              <td style={{ padding: '10px 14px', textAlign: 'right', fontSize: 13 }}>{profile?.currency || '$'}{Number(it.price || 0).toLocaleString()}</td>
+                              <td style={{ padding: '10px 14px', textAlign: 'right', fontSize: 13, fontWeight: 700 }}>{profile?.currency || '$'}{(Number(it.qty || 1) * Number(it.price || 0)).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={() => downloadInvoicePDF(viewingInvoice)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Download size={16} /> Download PDF
+                </button>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button 
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      const target = viewingInvoice
+                      setViewingInvoice(null)
+                      handleOpenInvoiceModal(target)
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <Edit2 size={15} /> Edit Details
+                  </button>
+                  <button 
+                    className="btn btn-primary"
+                    onClick={() => {
+                      navigate('/dashboard/invoices', { state: { openId: viewingInvoice.id } })
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <Receipt size={16} /> Open in Invoices
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

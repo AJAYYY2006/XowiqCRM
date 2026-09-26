@@ -5,9 +5,11 @@ import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 import { 
   Trash2, Edit2, Download, Plus, Minus, Send, CheckCircle, XCircle, 
-  Eye, Receipt, ExternalLink, TrendingUp, Building2, X, ArrowRight
+  Eye, Receipt, ExternalLink, TrendingUp, Building2, X, ArrowRight, Settings
 } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
+import FieldBuilderModal from '../ui/FieldBuilderModal'
+import { useRole } from '../../contexts/RoleContext'
 import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 
@@ -20,15 +22,20 @@ export default function Quotes({ session, profile }) {
   const [quotes, setQuotes] = useState([])
   const [invoices, setInvoices] = useState([])
   const [opportunities, setOpportunities] = useState([])
+  const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [viewingQuote, setViewingQuote] = useState(null)
-  
+
   const [formData, setFormData] = useState({
-    quote_name: '', opportunity_id: '', expires_at: '', total_price: 0,
-    status: 'Draft', terms: '', items: [{ desc: '', qty: 1, price: 0 }]
+    quote_name: '', opportunity_id: '', account_id: '', expires_at: '', total_price: 0,
+    tax_rate: 18, discount: 0,
+    status: 'Draft', terms: '', items: [{ desc: '', qty: 1, price: 0 }],
+    custom_data: {}
   })
   const [editingQuote, setEditingQuote] = useState(null)
+  const [isFieldBuilderOpen, setIsFieldBuilderOpen] = useState(false)
+  const [quoteConfigs, setQuoteConfigs] = useState([])
 
   const parseQuoteData = (str) => {
     try {
@@ -41,12 +48,29 @@ export default function Quotes({ session, profile }) {
 
   useEffect(() => {
     fetchData()
+    fetchQuoteConfigs()
   }, [session, profile])
+
+  const fetchQuoteConfigs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('custom_field_configs')
+        .select('*')
+        .eq('business_id', session.user.id)
+        .eq('module', 'quote')
+        .order('display_order', { ascending: true })
+      if (!error && data) {
+        setQuoteConfigs(data.filter(f => !f.is_archived))
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [quotesRes, oppsRes] = await Promise.all([
+      const [quotesRes, oppsRes, accountsRes] = await Promise.all([
         supabase
           .from('quotes')
           .select('*, opportunities(id, name, account_id, accounts(id, account_name))')
@@ -56,7 +80,12 @@ export default function Quotes({ session, profile }) {
           .from('opportunities')
           .select('id, name, account_id, accounts(id, account_name)')
           .in('user_id', userIds)
-          .order('name')
+          .order('name'),
+        supabase
+          .from('accounts')
+          .select('id, account_name')
+          .in('user_id', userIds)
+          .order('account_name')
       ])
       
       const allRows = quotesRes.data || []
@@ -83,6 +112,7 @@ export default function Quotes({ session, profile }) {
       setQuotes(qRows)
       setInvoices(invRows)
       setOpportunities(oppsRes.data || [])
+      setAccounts(accountsRes.data || [])
     } catch (error) {
       toast.error('Failed to load quotes')
     } finally {
@@ -104,6 +134,12 @@ export default function Quotes({ session, profile }) {
     }
   }, [quotes, location.state])
 
+  const calcTotal = (items, discount, taxRate) => {
+    const subtotal = items.reduce((acc, item) => acc + (Number(item.qty) * Number(item.price)), 0)
+    const afterDiscount = Math.max(subtotal - Number(discount || 0), 0)
+    return afterDiscount * (1 + Number(taxRate || 0) / 100)
+  }
+
   const handleOpenModal = (quote = null, defaultOppId = '') => {
     if (quote) {
       setEditingQuote(quote)
@@ -111,34 +147,59 @@ export default function Quotes({ session, profile }) {
       setFormData({
         quote_name: meta.name,
         opportunity_id: quote.opportunity_id || '',
+        account_id: quote.account_id || '',
         expires_at: quote.expires_at ? quote.expires_at.slice(0, 10) : '',
         total_price: quote.total_price || 0,
+        tax_rate: quote.tax_rate ?? 18,
+        discount: quote.discount ?? 0,
         status: meta.status || 'Draft',
         terms: meta.terms || '',
-        items: meta.items?.length ? meta.items : [{ desc: '', qty: 1, price: 0 }]
+        items: meta.items?.length ? meta.items : [{ desc: '', qty: 1, price: 0 }],
+        custom_data: quote.custom_data || {}
       })
     } else {
+      const defaultOpp = opportunities.find(o => o.id === defaultOppId)
       setEditingQuote(null)
       setFormData({
-        quote_name: '', 
-        opportunity_id: defaultOppId || '', 
-        expires_at: '', 
+        quote_name: '',
+        opportunity_id: defaultOppId || '',
+        account_id: defaultOpp?.account_id || '',
+        expires_at: '',
         total_price: 0,
-        status: 'Draft', 
-        terms: 'Net 30. Validity is subject to final scoping.', 
-        items: [{ desc: '', qty: 1, price: 0 }]
+        tax_rate: 18,
+        discount: 0,
+        status: 'Draft',
+        terms: 'Net 30. Validity is subject to final scoping.',
+        items: [{ desc: '', qty: 1, price: 0 }],
+        custom_data: {}
       })
     }
     setIsModalOpen(true)
   }
 
-  const addItem = () => setFormData({ ...formData, items: [...formData.items, { desc: '', qty: 1, price: 0 }] })
-  const removeItem = (index) => setFormData({ ...formData, items: formData.items.filter((_, i) => i !== index) })
+  const handleOpportunityChange = (opportunityId) => {
+    const opp = opportunities.find(o => o.id === opportunityId)
+    setFormData(prev => ({ ...prev, opportunity_id: opportunityId, account_id: opp?.account_id || prev.account_id }))
+  }
+
+  const addItem = () => {
+    const newItems = [...formData.items, { desc: '', qty: 1, price: 0 }]
+    setFormData({ ...formData, items: newItems, total_price: calcTotal(newItems, formData.discount, formData.tax_rate) })
+  }
+  const removeItem = (index) => {
+    const newItems = formData.items.filter((_, i) => i !== index)
+    setFormData({ ...formData, items: newItems, total_price: calcTotal(newItems, formData.discount, formData.tax_rate) })
+  }
   const updateItem = (index, field, value) => {
     const newItems = [...formData.items]
     newItems[index][field] = value
-    const total = newItems.reduce((acc, item) => acc + (Number(item.qty) * Number(item.price)), 0)
-    setFormData({ ...formData, items: newItems, total_price: total })
+    setFormData({ ...formData, items: newItems, total_price: calcTotal(newItems, formData.discount, formData.tax_rate) })
+  }
+  const updateTaxOrDiscount = (field, value) => {
+    setFormData(prev => {
+      const next = { ...prev, [field]: value }
+      return { ...next, total_price: calcTotal(next.items, next.discount, next.tax_rate) }
+    })
   }
 
   const handleSelectQuote = (quote) => {
@@ -159,17 +220,21 @@ export default function Quotes({ session, profile }) {
       })
 
       const opp = opportunities.find(o => o.id === formData.opportunity_id)
-      const accId = opp?.account_id || null
+      const accId = formData.account_id || opp?.account_id || null
 
       if (editingQuote) {
         const { error } = await supabase
           .from('quotes')
-          .update({ 
+          .update({
             quote_name: payloadString,
             opportunity_id: formData.opportunity_id || null,
             account_id: accId,
             expires_at: formData.expires_at || null,
-            total_price: formData.total_price
+            total_price: formData.total_price,
+            tax_rate: formData.tax_rate,
+            discount: formData.discount,
+            line_items: formData.items,
+            custom_data: formData.custom_data || {}
           })
           .eq('id', editingQuote.id)
           
@@ -185,13 +250,17 @@ export default function Quotes({ session, profile }) {
       } else {
         const { error } = await supabase
           .from('quotes')
-          .insert([{ 
-            quote_name: payloadString, 
+          .insert([{
+            quote_name: payloadString,
             opportunity_id: formData.opportunity_id || null,
             account_id: accId,
             expires_at: formData.expires_at || null,
             total_price: formData.total_price,
-            user_id: session.user.id 
+            tax_rate: formData.tax_rate,
+            discount: formData.discount,
+            line_items: formData.items,
+            custom_data: formData.custom_data || {},
+            user_id: session.user.id
           }])
           
         if (error) throw error
@@ -270,6 +339,10 @@ export default function Quotes({ session, profile }) {
   }
 
   const handleDeleteQuote = async (quote) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete quotes')
+      return
+    }
     const meta = parseQuoteData(quote.quote_name)
     if (!confirm(`Are you sure you want to delete the quote "${meta.name}"?`)) return
     
@@ -379,7 +452,8 @@ export default function Quotes({ session, profile }) {
 
   if (loading) return <div className="loading-container"><div className="spinner"/></div>
 
-  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
+  const roleContext = useRole?.()
+  const isAdmin = roleContext ? roleContext.isAdmin : (session?.user?.user_metadata?.role || profile?.role || '').toLowerCase() === 'admin'
   const currency = profile?.currency || '₹'
 
   return (
@@ -389,9 +463,14 @@ export default function Quotes({ session, profile }) {
           <h1 className="page-title">{t('modules.quotes.title', 'Proposals & Quotes')}</h1>
           <p className="page-subtitle">{t('modules.quotes.subtitle', 'Build and send enterprise pricing proposals to clients')}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-          <span style={{ fontSize: 18 }}>+</span> {t('modules.quotes.createQuote', 'Create Proposal')}
-        </button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button className="btn btn-secondary" onClick={() => setIsFieldBuilderOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Settings size={16} /> Edit Fields
+          </button>
+          <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+            <span style={{ fontSize: 18 }}>+</span> {t('modules.quotes.createQuote', 'Create Proposal')}
+          </button>
+        </div>
       </div>
 
       <div className="table-container">
@@ -479,6 +558,7 @@ export default function Quotes({ session, profile }) {
                           </span>
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
+                          {quote.unique_id && <span style={{ fontFamily: 'monospace' }}>{quote.unique_id} • </span>}
                           Created: {new Date(quote.created_at).toLocaleDateString()}
                         </div>
                       </td>
@@ -630,6 +710,7 @@ export default function Quotes({ session, profile }) {
                       </div>
                       <h2 style={{ margin: '10px 0 4px', fontSize: 22, fontWeight: 800, color: '#fff' }}>
                         {meta.name || viewingQuote.quote_name}
+                        {viewingQuote.unique_id && <span style={{ fontFamily: 'monospace', fontSize: 13, opacity: 0.7, marginLeft: 10 }}>{viewingQuote.unique_id}</span>}
                       </h2>
                       <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                         Client: {accName} {opp ? `• Opportunity: ${opp.name}` : ''}
@@ -786,7 +867,17 @@ export default function Quotes({ session, profile }) {
         <div className="modal-overlay">
           <div className="modal" style={{ width: 700, maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-header">
-              <h2 className="modal-title">{editingQuote ? 'Edit Proposal' : 'Draft Enterprise Proposal'}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <h2 className="modal-title">{editingQuote ? 'Edit Proposal' : 'Draft Enterprise Proposal'}</h2>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  style={{ padding: '4px 10px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }} 
+                  onClick={() => setIsFieldBuilderOpen(true)}
+                >
+                  <Settings size={14} /> Edit Fields
+                </button>
+              </div>
               <button className="modal-close" onClick={() => setIsModalOpen(false)}>✕</button>
             </div>
             
@@ -798,10 +889,19 @@ export default function Quotes({ session, profile }) {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Related Opportunity</label>
-                  <select className="form-input" value={formData.opportunity_id} onChange={e => setFormData({...formData, opportunity_id: e.target.value})}>
+                  <select className="form-input" value={formData.opportunity_id} onChange={e => handleOpportunityChange(e.target.value)}>
                     <option value="">-- No Opportunity --</option>
                     {opportunities.map(o => (
                       <option key={o.id} value={o.id}>{o.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Account</label>
+                  <select className="form-input" value={formData.account_id} onChange={e => setFormData({...formData, account_id: e.target.value})}>
+                    <option value="">-- No Account --</option>
+                    {accounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.account_name}</option>
                     ))}
                   </select>
                 </div>
@@ -814,9 +914,17 @@ export default function Quotes({ session, profile }) {
                     <option value="Rejected">Rejected</option>
                   </select>
                 </div>
-                <div className="form-group full-width">
+                <div className="form-group">
                   <label className="form-label">Validity Date</label>
                   <input type="date" className="form-input" value={formData.expires_at} onChange={e => setFormData({...formData, expires_at: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Tax Rate (%)</label>
+                  <input type="number" min="0" step="0.01" className="form-input" value={formData.tax_rate} onChange={e => updateTaxOrDiscount('tax_rate', e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Discount ({currency})</label>
+                  <input type="number" min="0" step="0.01" className="form-input" value={formData.discount} onChange={e => updateTaxOrDiscount('discount', e.target.value)} />
                 </div>
               </div>
 
@@ -856,6 +964,60 @@ export default function Quotes({ session, profile }) {
                 <label className="form-label">Terms & Conditions</label>
                 <textarea className="form-input" style={{ minHeight: 100 }} value={formData.terms} onChange={e => setFormData({...formData, terms: e.target.value})} placeholder="Net 30. Validity is subject to final scoping." />
               </div>
+
+              {/* Dynamic Custom Fields */}
+              {quoteConfigs.filter(f => !f.is_core).length > 0 && (
+                <div style={{ marginTop: 24, padding: 16, background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: 'var(--text-primary)' }}>Additional Custom Fields</div>
+                  <div className="form-grid">
+                    {quoteConfigs.filter(f => !f.is_core).map(f => (
+                      <div key={f.id} className="form-group" style={{ gridColumn: f.field_type === 'long_text' ? '1 / -1' : 'auto' }}>
+                        <label className="form-label">
+                          {f.label} {f.is_required && <span style={{ color: '#ef4444' }}>*</span>}
+                        </label>
+                        {f.field_type === 'dropdown' ? (
+                          <select
+                            required={f.is_required}
+                            className="form-input"
+                            value={formData.custom_data?.[f.field_key] || ''}
+                            onChange={e => setFormData({
+                              ...formData,
+                              custom_data: { ...(formData.custom_data || {}), [f.field_key]: e.target.value }
+                            })}
+                          >
+                            <option value="">-- Select {f.label} --</option>
+                            {(f.options || []).map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        ) : f.field_type === 'long_text' ? (
+                          <textarea
+                            required={f.is_required}
+                            className="form-input"
+                            rows={3}
+                            value={formData.custom_data?.[f.field_key] || ''}
+                            onChange={e => setFormData({
+                              ...formData,
+                              custom_data: { ...(formData.custom_data || {}), [f.field_key]: e.target.value }
+                            })}
+                          />
+                        ) : (
+                          <input
+                            type={f.field_type === 'number' ? 'number' : f.field_type === 'date' ? 'date' : 'text'}
+                            required={f.is_required}
+                            className="form-input"
+                            value={formData.custom_data?.[f.field_key] || ''}
+                            onChange={e => setFormData({
+                              ...formData,
+                              custom_data: { ...(formData.custom_data || {}), [f.field_key]: e.target.value }
+                            })}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               
               <div className="form-actions" style={{ marginTop: 24 }}>
                 <button type="button" className="btn btn-secondary" onClick={() => { setIsModalOpen(false); setEditingQuote(null) }}>Cancel</button>
@@ -865,6 +1027,16 @@ export default function Quotes({ session, profile }) {
           </div>
         </div>
       )}
+
+      <FieldBuilderModal 
+        module="quote"
+        businessId={session.user.id}
+        isOpen={isFieldBuilderOpen}
+        onClose={() => {
+          setIsFieldBuilderOpen(false)
+          fetchQuoteConfigs()
+        }}
+      />
     </div>
   )
 }

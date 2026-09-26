@@ -2,6 +2,74 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 import { Trash2, Edit2, Plus, Settings, ArrowUp, ArrowDown, X } from 'lucide-react'
+import { useRole } from '../../contexts/RoleContext'
+
+const CORE_FIELDS_BY_MODULE = {
+  opportunity: [
+    { label: 'Deal Name', field_key: 'name', field_type: 'text', is_required: true, is_core: true, display_order: 0 },
+    { label: 'Account', field_key: 'account_id', field_type: 'dropdown', is_required: true, is_core: true, display_order: 1 },
+    { label: 'Deal Value', field_key: 'amount', field_type: 'number', is_required: true, is_core: true, display_order: 2 },
+    { label: 'Stage', field_key: 'stage', field_type: 'dropdown', options: ['Prospecting', 'Qualification', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost'], is_required: true, is_core: true, display_order: 3 },
+    { label: 'Expected Close Date', field_key: 'closed_date', field_type: 'date', is_required: false, is_core: true, display_order: 4 },
+    { label: 'Owner', field_key: 'owner', field_type: 'text', is_required: false, is_core: true, display_order: 5 },
+    { label: 'Probability (%)', field_key: 'probability', field_type: 'number', is_required: false, is_core: true, display_order: 6 }
+  ],
+  quote: [
+    { label: 'Proposal Name', field_key: 'quote_name', field_type: 'text', is_required: true, is_core: true, display_order: 0 },
+    { label: 'Related Opportunity', field_key: 'opportunity_id', field_type: 'dropdown', is_required: false, is_core: true, display_order: 1 },
+    { label: 'Account', field_key: 'account_id', field_type: 'dropdown', is_required: false, is_core: true, display_order: 2 },
+    { label: 'Workflow Status', field_key: 'status', field_type: 'dropdown', options: ['Draft', 'Sent', 'Approved', 'Rejected'], is_required: false, is_core: true, display_order: 3 },
+    { label: 'Validity Date', field_key: 'expires_at', field_type: 'date', is_required: false, is_core: true, display_order: 4 },
+    { label: 'Total Value', field_key: 'total_price', field_type: 'number', is_required: true, is_core: true, display_order: 5 },
+    { label: 'Tax Rate (%)', field_key: 'tax_rate', field_type: 'number', is_required: false, is_core: true, display_order: 6 },
+    { label: 'Discount', field_key: 'discount', field_type: 'number', is_required: false, is_core: true, display_order: 7 }
+  ],
+  lead: [
+    { label: 'Lead Name', field_key: 'lead_name', field_type: 'text', is_required: true, is_core: true, display_order: 0 },
+    { label: 'Contact Number', field_key: 'contact_number', field_type: 'text', is_required: true, is_core: true, display_order: 1 },
+    { label: 'Email Address', field_key: 'email', field_type: 'text', is_required: false, is_core: true, display_order: 2 },
+    { label: 'Company Name', field_key: 'company', field_type: 'text', is_required: false, is_core: true, display_order: 3 }
+  ],
+  customer_profile: [
+    { label: 'Customer Name', field_key: 'customer_name', field_type: 'text', is_required: true, is_core: true, display_order: 0 },
+    { label: 'Contact Number', field_key: 'contact_number', field_type: 'text', is_required: true, is_core: true, display_order: 1 },
+    { label: 'Email ID', field_key: 'email_id', field_type: 'text', is_required: false, is_core: true, display_order: 2 },
+    { label: 'Gender', field_key: 'gender', field_type: 'dropdown', options: ['Male', 'Female', 'Other'], is_required: false, is_core: true, display_order: 3 },
+    { label: 'Notes', field_key: 'notes', field_type: 'long_text', is_required: false, is_core: true, display_order: 4 }
+  ],
+  ticket: [
+    { label: 'Ticket No.', field_key: 'ticket_no', field_type: 'text', is_required: false, is_core: true, display_order: 0 },
+    { label: 'Subject', field_key: 'subject', field_type: 'text', is_required: true, is_core: true, display_order: 1 },
+    { label: 'Description', field_key: 'description', field_type: 'long_text', is_required: false, is_core: true, display_order: 2 },
+    { label: 'Contact', field_key: 'contact', field_type: 'text', is_required: false, is_core: true, display_order: 3 },
+    { label: 'Account', field_key: 'account', field_type: 'text', is_required: false, is_core: true, display_order: 4 },
+    { label: 'Priority', field_key: 'priority', field_type: 'dropdown', options: ['low', 'medium', 'high'], is_core: true, display_order: 5 },
+    { label: 'Status', field_key: 'status', field_type: 'dropdown', options: ['open', 'pending', 'closed'], is_core: true, display_order: 6 },
+    { label: 'Owner', field_key: 'owner', field_type: 'text', is_required: false, is_core: true, display_order: 7 }
+  ],
+  task: [
+    { label: 'Task Name', field_key: 'task_name', field_type: 'text', is_required: true, is_core: true, display_order: 0 },
+    { label: 'Description', field_key: 'description', field_type: 'long_text', is_required: false, is_core: true, display_order: 1 },
+    { label: 'Due Date', field_key: 'due_date', field_type: 'date', is_required: false, is_core: true, display_order: 2 },
+    { label: 'Priority', field_key: 'priority', field_type: 'dropdown', options: ['Low', 'Medium', 'High'], is_required: false, is_core: true, display_order: 3 },
+    { label: 'Status', field_key: 'status', field_type: 'dropdown', options: ['Pending', 'In Progress', 'Completed'], is_required: false, is_core: true, display_order: 4 },
+    { label: 'Assignee', field_key: 'assigned_to', field_type: 'text', is_required: false, is_core: true, display_order: 5 }
+  ],
+  invoice: [
+    { label: 'Invoice Number', field_key: 'invoice_number', field_type: 'text', is_required: true, is_core: true, display_order: 0 },
+    { label: 'Client / Account', field_key: 'account_id', field_type: 'dropdown', is_required: true, is_core: true, display_order: 1 },
+    { label: 'Total Amount', field_key: 'amount', field_type: 'number', is_required: true, is_core: true, display_order: 2 },
+    { label: 'Payment Status', field_key: 'status', field_type: 'dropdown', options: ['Unpaid', 'Paid', 'Overdue', 'Cancelled'], is_required: true, is_core: true, display_order: 3 },
+    { label: 'Due Date', field_key: 'due_date', field_type: 'date', is_required: false, is_core: true, display_order: 4 }
+  ],
+  account: [
+    { label: 'Account Name', field_key: 'account_name', field_type: 'text', is_required: true, is_core: true, display_order: 0 },
+    { label: 'Industry', field_key: 'industry', field_type: 'text', is_required: false, is_core: true, display_order: 1 },
+    { label: 'Website', field_key: 'website', field_type: 'url', is_required: false, is_core: true, display_order: 2 },
+    { label: 'Phone', field_key: 'phone', field_type: 'text', is_required: false, is_core: true, display_order: 3 },
+    { label: 'Account Owner', field_key: 'account_owner', field_type: 'text', is_required: false, is_core: true, display_order: 4 }
+  ]
+}
 
 export default function FieldBuilderModal({ module, businessId, isOpen, onClose }) {
   const [allCustomFields, setAllCustomFields] = useState([])
@@ -15,6 +83,9 @@ export default function FieldBuilderModal({ module, businessId, isOpen, onClose 
     is_required: false,
     show_in_list: true
   })
+
+  const roleContext = useRole?.()
+  const isAdmin = roleContext ? roleContext.isAdmin : true
 
   useEffect(() => {
     if (isOpen) fetchConfigs()
@@ -30,7 +101,32 @@ export default function FieldBuilderModal({ module, businessId, isOpen, onClose 
         .order('display_order', { ascending: true })
       
       if (error) throw error
-      setAllCustomFields(data || [])
+
+      let currentFields = data || []
+      const defaultCore = CORE_FIELDS_BY_MODULE[module]
+      if (defaultCore && defaultCore.length > 0) {
+        const missingCore = defaultCore.filter(c => !currentFields.some(f => f.field_key === c.field_key))
+        if (missingCore.length > 0) {
+          const toInsert = missingCore.map(c => ({
+            business_id: businessId,
+            module: module,
+            field_key: c.field_key,
+            label: c.label,
+            field_type: c.field_type,
+            options: c.options || null,
+            is_required: c.is_required || false,
+            is_core: true,
+            show_in_list: true,
+            display_order: c.display_order
+          }))
+          const { data: inserted } = await supabase.from('custom_field_configs').insert(toInsert).select()
+          if (inserted) {
+            currentFields = [...currentFields, ...inserted].sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+          }
+        }
+      }
+
+      setAllCustomFields(currentFields)
     } catch (err) {
       console.error('Error loading custom fields:', err)
     }
@@ -108,13 +204,26 @@ export default function FieldBuilderModal({ module, businessId, isOpen, onClose 
   }
 
   const handleArchiveField = async (field) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can modify or archive fields')
+      return
+    }
     if (field.is_core) {
       toast.error('System mandatory fields cannot be archived')
       return
     }
 
     const actionText = field.is_archived ? 'restore' : 'archive'
-    const moduleName = module === 'lead' ? 'Leads' : 'Customers'
+    const moduleName = 
+      module === 'lead' ? 'Leads' :
+      module === 'opportunity' ? 'Opportunities' :
+      module === 'quote' ? 'Quotes' :
+      module === 'invoice' ? 'Invoices' :
+      module === 'ticket' ? 'Tickets' :
+      module === 'task' ? 'Tasks' :
+      module === 'account' ? 'Accounts' :
+      module === 'contact' ? 'Contacts' :
+      'Customers'
     const confirmMessage = field.is_archived 
       ? `Are you sure you want to restore "${field.label}"? It will reappear on all ${moduleName} forms.`
       : `This will hide "${field.label}" from ${moduleName} forms. Existing data won't be deleted. Continue?`
@@ -163,7 +272,27 @@ export default function FieldBuilderModal({ module, businessId, isOpen, onClose 
 
   if (!isOpen) return null
 
-  const displayTitle = module === 'lead' ? 'Leads Form Builder' : 'Customer Profile Builder'
+  const displayTitle = 
+    module === 'lead' ? 'Leads Form Builder' :
+    module === 'opportunity' ? 'Opportunities Form Builder' :
+    module === 'quote' ? 'Quotes Form Builder' :
+    module === 'invoice' ? 'Invoices Form Builder' :
+    module === 'ticket' ? 'Tickets Form Builder' :
+    module === 'task' ? 'Tasks Form Builder' :
+    module === 'account' ? 'Accounts Form Builder' :
+    module === 'contact' ? 'Contacts Form Builder' :
+    'Customer Profile Builder'
+
+  const moduleDescription = 
+    module === 'lead' ? 'leads' :
+    module === 'opportunity' ? 'opportunities' :
+    module === 'quote' ? 'quotes' :
+    module === 'invoice' ? 'invoices' :
+    module === 'ticket' ? 'tickets' :
+    module === 'task' ? 'tasks' :
+    module === 'account' ? 'accounts' :
+    module === 'contact' ? 'contacts' :
+    'customers'
 
   return (
     <div className="modal-overlay" style={{ zIndex: 1000 }}>
@@ -172,7 +301,7 @@ export default function FieldBuilderModal({ module, businessId, isOpen, onClose 
         <div className="modal-header" style={{ padding: '30px 40px', background: '#fff', borderBottom: '1px solid #f1f5f9' }}>
           <div>
             <h2 className="modal-title" style={{ fontSize: 24, fontWeight: 900, color: '#1e293b' }}>{displayTitle}</h2>
-            <p style={{ margin: '4px 0 0', fontSize: 14, color: '#64748b' }}>Configure dynamic fields for your {module.replace('_', ' ')}s.</p>
+            <p style={{ margin: '4px 0 0', fontSize: 14, color: '#64748b' }}>Configure dynamic fields for your {moduleDescription}.</p>
           </div>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
@@ -238,7 +367,7 @@ export default function FieldBuilderModal({ module, businessId, isOpen, onClose 
                       <td style={{ textAlign: 'right', padding: '12px 20px', borderTop: '1px solid #f1f5f9' }}>
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                           <button className="btn-icon" onClick={() => handleOpenEditor(f)}><Edit2 size={16} /></button>
-                          {!f.is_core && (
+                          {!f.is_core && isAdmin && (
                             <button 
                               className={`btn-icon ${f.is_archived ? 'text-primary' : 'text-danger'}`} 
                               onClick={() => handleArchiveField(f)}

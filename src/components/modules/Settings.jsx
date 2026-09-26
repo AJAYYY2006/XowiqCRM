@@ -1187,6 +1187,10 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
   }
 
   const handleRemove = async (userId, userName) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can remove team members')
+      return
+    }
     if (!window.confirm(`${t('settings.team.confirmRemove')} ${userName || 'this user'}?`)) return
     const tid = toast.loading(t('settings.team.removingMember'))
     try {
@@ -1318,7 +1322,9 @@ function TeamSection({ session, profile, onBack, isAdmin }) {
                                 {ROLE_OPTIONS.find(r => r.value === user.role)?.label || user.role}
                               </span>
                               <button onClick={() => startEdit(user)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a78bfa', padding: 6 }} title={t('settings.team.edit')}><Edit3 size={15} /></button>
-                              <button onClick={() => handleRemove(user.id, user.name)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', padding: 6 }} title={t('settings.team.remove')}><Trash2 size={15} /></button>
+                              {isAdmin && (
+                                <button onClick={() => handleRemove(user.id, user.name)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', padding: 6 }} title={t('settings.team.remove')}><Trash2 size={15} /></button>
+                              )}
                             </div>
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '6px 16px', fontSize: 12, color: 'var(--text-muted)' }}>

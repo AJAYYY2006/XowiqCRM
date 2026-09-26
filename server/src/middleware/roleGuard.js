@@ -6,8 +6,8 @@ export function requireRole(allowedRoles = []) {
 
     const currentRole = String(req.userRole || req.user.user_metadata?.role || 'user').toLowerCase()
     
-    // Super admin bypass
-    if (['admin', 'administrator'].includes(currentRole)) {
+    // Super admin ('admin') bypass
+    if (currentRole === 'admin') {
       return next()
     }
 

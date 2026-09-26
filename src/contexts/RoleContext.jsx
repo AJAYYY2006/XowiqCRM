@@ -7,7 +7,9 @@ const RoleContext = createContext(null)
 export function RoleProvider({ children, session, profile }) {
   // Check if the current account/profile is B2C
   const rawCompanyType = profile?.company_type || session?.user?.user_metadata?.companyType || ''
-  const isB2CAccount = String(rawCompanyType).toUpperCase() === 'B2C' || String(profile?.role || '').toLowerCase() === 'b2c'
+  const isB2CAccount = String(rawCompanyType).toUpperCase() === 'B2C' || 
+                       String(profile?.role || '').toLowerCase() === 'b2c' ||
+                       String(session?.user?.user_metadata?.role || '').toLowerCase() === 'b2c'
 
   // If the user's company is B2C or role is b2c, they are strictly locked to 'b2c' role:
   // they cannot be super admin or switch to B2B or any other role!
@@ -16,6 +18,9 @@ export function RoleProvider({ children, session, profile }) {
 
   // Only B2B Super Admins may switch roles. B2C users are strictly restricted.
   const canSwitchRole = !isB2CAccount && ['admin', 'administrator'].includes(String(baseRole).toLowerCase())
+
+  // Dynamic B2C check: true if account is B2C OR currently previewing/active as B2C
+  const isB2C = isB2CAccount || String(activeRole).toLowerCase() === 'b2c'
 
   // Sync activeRole whenever session/profile changes
   useEffect(() => {
@@ -27,16 +32,16 @@ export function RoleProvider({ children, session, profile }) {
   }, [baseRole, isB2CAccount])
 
   const roleInfo = useMemo(() => {
-    if (isB2CAccount) return ROLE_DEFINITIONS.b2c
+    if (isB2C) return ROLE_DEFINITIONS.b2c
     const norm = String(activeRole).toLowerCase()
     return ROLE_DEFINITIONS[norm] || ROLE_DEFINITIONS.admin
-  }, [activeRole, isB2CAccount])
+  }, [activeRole, isB2C])
 
   const checkModuleAccess = (moduleId) => {
-    if (isB2CAccount) {
+    if (isB2C) {
       // Strict B2C whitelist: B2C cannot access B2B deals/opportunities, quotes, users, team_records, or executive super admin kpi
       const B2C_ALLOWED_MODULES = [
-        'dashboard', 'accounts', 'contacts', 'leads', 
+        'dashboard', 'kpis', 'analytics', 'analytical', 'accounts', 'contacts', 'leads',
         'services', 'invoices', 'tickets', 'tasks', 'reports', 'settings'
       ]
       return B2C_ALLOWED_MODULES.includes(moduleId)
@@ -45,7 +50,11 @@ export function RoleProvider({ children, session, profile }) {
   }
 
   const checkActionPermission = (action) => {
-    if (isB2CAccount) {
+    // Record deletion is strictly and exclusively restricted to the Super Admin ('admin') role
+    if (action === 'delete_records') {
+      return !isB2C && String(activeRole).toLowerCase() === 'admin'
+    }
+    if (isB2C) {
       if (['manage_users', 'edit_security'].includes(action)) return false
     }
     return canPerformAction(activeRole, action)
@@ -65,10 +74,11 @@ export function RoleProvider({ children, session, profile }) {
   const value = {
     role: isB2CAccount ? 'b2c' : activeRole,
     roleInfo,
-    isAdmin: !isB2CAccount && ['admin', 'administrator'].includes(String(activeRole).toLowerCase()),
-    isManager: !isB2CAccount && ['admin', 'administrator', 'manager'].includes(String(activeRole).toLowerCase()),
-    isSupport: !isB2CAccount && ['admin', 'administrator', 'agent', 'support_agent'].includes(String(activeRole).toLowerCase()),
-    isB2C: isB2CAccount,
+    isAdmin: !isB2C && String(activeRole).toLowerCase() === 'admin',
+    isSuperAdmin: !isB2C && String(activeRole).toLowerCase() === 'admin',
+    isManager: !isB2C && ['admin', 'administrator', 'manager'].includes(String(activeRole).toLowerCase()),
+    isSupport: !isB2C && ['admin', 'administrator', 'agent', 'support_agent'].includes(String(activeRole).toLowerCase()),
+    isB2C,
     hasAccess: checkModuleAccess,
     can: checkActionPermission,
     canSwitchRole: !isB2CAccount && canSwitchRole,

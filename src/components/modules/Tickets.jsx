@@ -7,6 +7,7 @@ import { Trash2, Edit2, Settings, Save, UploadCloud } from 'lucide-react'
 import LocalSearch from '../ui/LocalSearch'
 import FieldBuilderModal from '../ui/FieldBuilderModal'
 import BulkUploadModal from '../ui/BulkUploadModal'
+import { useRole } from '../../contexts/RoleContext'
 
 function renderCustomFieldInput(config, value, onChange) {
   const commonProps = {
@@ -331,6 +332,10 @@ export default function Tickets({ session, profile }) {
   }
 
   const handleDeleteTicket = async (id, subject) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete tickets')
+      return false
+    }
     if (!window.confirm(`Are you sure you want to delete ticket "${subject}"?`)) return false
     const toastId = toast.loading('Deleting ticket...')
     try {
@@ -360,7 +365,8 @@ export default function Tickets({ session, profile }) {
 
   if (loading) return <div className="loading-container"><div className="spinner"/></div>
   
-  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
+  const roleContext = useRole?.()
+  const isAdmin = roleContext ? roleContext.isAdmin : (session?.user?.user_metadata?.role || profile?.role || '').toLowerCase() === 'admin'
 
   const TICKET_STAGES = ['open', 'pending', 'closed']
   const TICKET_STAGE_LABELS = { open: 'Open', pending: 'Pending', closed: 'Closed' }

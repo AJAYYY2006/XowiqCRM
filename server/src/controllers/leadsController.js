@@ -67,7 +67,7 @@ export async function getLeadById(req, res, next) {
 export async function createLead(req, res, next) {
   try {
     const userId = req.userId
-    const { name, company, email, contact_number, contactNumber, status = 'new', source = 'API', custom_data, customData = {} } = req.body
+    const { name, company, email, contact_number, contactNumber, status = 'new', source = 'Website', custom_data, customData = {}, leadOwner, lead_owner, gender, score } = req.body
 
     if (!name) {
       return res.status(400).json({ success: false, error: 'Lead name is required' })
@@ -81,7 +81,10 @@ export async function createLead(req, res, next) {
         email: email || null,
         contactNumber: contactNumber || contact_number || '',
         status,
-        source,
+        source: source || 'Website',
+        leadOwner: leadOwner || lead_owner || null,
+        gender: gender || null,
+        score: score ? Number(score) : 0,
         customData: customData || custom_data || {}
       }
     })
@@ -98,7 +101,7 @@ export async function createLead(req, res, next) {
 export async function updateLead(req, res, next) {
   try {
     const { id } = req.params
-    const { name, company, email, contactNumber, contact_number, status, source, score, customData, custom_data } = req.body
+    const { name, company, email, contactNumber, contact_number, status, source, score, customData, custom_data, leadOwner, lead_owner, gender } = req.body
 
     const existing = await prisma.lead.findFirst({
       where: { id, userId: req.userId }
@@ -118,6 +121,10 @@ export async function updateLead(req, res, next) {
           : {}),
         ...(status !== undefined ? { status } : {}),
         ...(source !== undefined ? { source } : {}),
+        ...(leadOwner !== undefined || lead_owner !== undefined
+          ? { leadOwner: leadOwner ?? lead_owner }
+          : {}),
+        ...(gender !== undefined ? { gender } : {}),
         ...(score !== undefined ? { score: Number(score) } : {}),
         ...(customData !== undefined || custom_data !== undefined
           ? { customData: customData ?? custom_data }

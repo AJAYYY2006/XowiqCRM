@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import BulkUploadModal from '../ui/BulkUploadModal'
 import { useTheme } from '../../contexts/ThemeContext'
+import { useRole } from '../../contexts/RoleContext'
 
 // ── Currency conversion ────────────────────────────────────────────────────
 // All prices are stored in the DB in INR (the app's default base currency).
@@ -72,7 +73,8 @@ export default function Services({ session, profile }) {
   const [animatingCards, setAnimatingCards] = useState({})
   const [stageHistory, setStageHistory] = useState([])
 
-  const isAdmin = ['admin', 'administrator'].includes((session?.user?.user_metadata?.role || profile?.role || '').toLowerCase())
+  const roleContext = useRole?.()
+  const isAdmin = roleContext ? roleContext.isAdmin : (session?.user?.user_metadata?.role || profile?.role || '').toLowerCase() === 'admin'
 
   useEffect(() => {
     fetchServices()
@@ -255,6 +257,10 @@ export default function Services({ session, profile }) {
   }
 
   const handleDelete = async (service) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete services')
+      return
+    }
     if (!confirm(`Delete service "${service.service_name}"? This might affect existing customer history.`)) return
     const toastId = toast.loading('Deleting...')
     try {
@@ -314,6 +320,10 @@ export default function Services({ session, profile }) {
   }
 
   const handleDeleteStage = async (stage) => {
+    if (!isAdmin) {
+      toast.error('Only Super Admin can delete stages')
+      return
+    }
     if (!confirm(`Delete stage "${stage.name}"? Customers in this stage will lose their specific tracking stage.`)) return
     const toastId = toast.loading('Deleting...')
     try {
